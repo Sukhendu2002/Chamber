@@ -1,0 +1,54 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model UserSettings {
+  id             String   @id @default(uuid())
+  userId         String   @unique // Clerk User ID
+  telegramChatId String?  @unique // Linked Telegram Chat ID
+  monthlyBudget  Float    @default(0)
+  currency       String   @default("INR")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+model Expense {
+  id          String   @id @default(uuid())
+  userId      String   // Clerk User ID
+  amount      Float
+  category    String   @default("General")
+  merchant    String?
+  description String?
+  source      Source   @default(WEB)
+  date        DateTime @default(now())
+  isVerified  Boolean  @default(false) // True if matched with Bank Statement
+  metadata    Json?    // Stores raw OCR text or debug info
+  createdAt   DateTime @default(now())
+
+  @@index([userId])
+  @@index([date])
+}
+
+model LinkingCode {
+  id        String   @id @default(uuid())
+  userId    String   // Clerk User ID
+  code      String   @unique
+  expiresAt DateTime
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([code])
+}
+
+enum Source {
+  TELEGRAM
+  STATEMENT
+  WEB
+}

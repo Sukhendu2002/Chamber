@@ -4,6 +4,18 @@ import { auth } from "@clerk/nextjs/server";
 import { db } from "@/lib/db";
 import { revalidatePath } from "next/cache";
 
+// Free exchange rate API (no API key needed for basic usage)
+async function getExchangeRate(from: string, to: string): Promise<number> {
+  try {
+    const response = await fetch(`https://api.exchangerate-api.com/v4/latest/${from}`);
+    const data = await response.json();
+    return data.rates[to] || 1;
+  } catch (error) {
+    console.error("Failed to fetch exchange rate:", error);
+    return 1; // Fallback to 1:1 if API fails
+  }
+}
+
 export async function getUserSettings() {
   const { userId } = await auth();
   if (!userId) throw new Error("Unauthorized");
@@ -32,6 +44,41 @@ export async function updateUserSettings(input: {
   const { userId } = await auth();
   if (!userId) throw new Error("Unauthorized");
 
+  const currentSettings = await db.userSettings.findUnique({
+    where: { userId },
+  });
+
+  const oldCurrency = currentSettings?.currency || "INR";
+  const newCurrency = input.currency;
+
+  // If currency is changing, convert all expenses
+  if (newCurrency && newCurrency !== oldCurrency) {
+    const exchangeRate = await getExchangeRate(oldCurrency, newCurrency);
+    
+    // Get all user's expenses
+    const expenses = await db.expense.findMany({
+      where: { userId },
+    });
+
+    // Update each expense with converted amount
+    for (const expense of expenses) {
+      const convertedAmount = Math.round(expense.amount * exchangeRate * 100) / 100;
+      await db.expense.update({
+        where: { id: expense.id },
+        data: {
+          amount: convertedAmount,
+          metadata: {
+            ...((expense.metadata as object) || {}),
+            originalAmount: expense.amount,
+            originalCurrency: oldCurrency,
+            exchangeRate,
+            convertedAt: new Date().toISOString(),
+          },
+        },
+      });
+    }
+  }
+
   const settings = await db.userSettings.upsert({
     where: { userId },
     update: input,
@@ -44,6 +91,7 @@ export async function updateUserSettings(input: {
 
   revalidatePath("/settings");
   revalidatePath("/dashboard");
+  revalidatePath("/expenses");
   return settings;
 }
 

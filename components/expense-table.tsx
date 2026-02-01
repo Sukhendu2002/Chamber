@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import {
@@ -43,6 +43,9 @@ import {
   IconTrash,
   IconArrowUp,
   IconArrowDown,
+  IconReceipt,
+  IconUpload,
+  IconPhoto,
 } from "@tabler/icons-react";
 import { updateExpense, deleteExpense } from "@/lib/actions/expenses";
 
@@ -72,6 +75,7 @@ type Expense = {
   source: string;
   date: Date;
   isVerified: boolean;
+  receiptUrl: string | null;
 };
 
 type SortField = "date" | "amount" | "category";
@@ -87,6 +91,11 @@ export function ExpenseTable({ expenses: initialExpenses, currency }: ExpenseTab
   const [expenses, setExpenses] = useState(initialExpenses);
   const [sortField, setSortField] = useState<SortField>("date");
   const [sortOrder, setSortOrder] = useState<SortOrder>("desc");
+
+  // Sync state with props when they change (e.g., from SSE refresh)
+  useEffect(() => {
+    setExpenses(initialExpenses);
+  }, [initialExpenses]);
   
   // Edit state
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
@@ -100,6 +109,37 @@ export function ExpenseTable({ expenses: initialExpenses, currency }: ExpenseTab
   // Delete state
   const [deletingExpense, setDeletingExpense] = useState<Expense | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
+
+  // Receipt state
+  const [viewingReceipt, setViewingReceipt] = useState<string | null>(null);
+  const [uploadingExpenseId, setUploadingExpenseId] = useState<string | null>(null);
+  const fileInputRef = useState<HTMLInputElement | null>(null);
+
+  const handleReceiptUpload = async (expenseId: string, file: File) => {
+    setUploadingExpenseId(expenseId);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("expenseId", expenseId);
+
+      const response = await fetch("/api/upload", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (response.ok) {
+        router.refresh();
+      } else {
+        const errorData = await response.json();
+        console.error("Upload failed:", errorData);
+        alert(`Upload failed: ${errorData.details || errorData.error}`);
+      }
+    } catch (error) {
+      console.error("Upload error:", error);
+    } finally {
+      setUploadingExpenseId(null);
+    }
+  };
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat("en-IN", {
@@ -243,6 +283,48 @@ export function ExpenseTable({ expenses: initialExpenses, currency }: ExpenseTab
               </TableCell>
               <TableCell className="text-right">
                 <div className="flex justify-end gap-1">
+                  {expense.receiptUrl ? (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 text-blue-600 hover:text-blue-700"
+                      onClick={() => {
+                        const isPdf = expense.receiptUrl?.endsWith('.pdf');
+                        setViewingReceipt(`/api/receipt/${expense.id}${isPdf ? '?type=pdf' : ''}`);
+                      }}
+                      title={expense.receiptUrl?.endsWith('.pdf') ? "View PDF" : "View Receipt"}
+                    >
+                      {expense.receiptUrl?.endsWith('.pdf') ? (
+                        <IconReceipt className="h-4 w-4" />
+                      ) : (
+                        <IconPhoto className="h-4 w-4" />
+                      )}
+                    </Button>
+                  ) : (
+                    <label className="cursor-pointer">
+                      <input
+                        type="file"
+                        accept="image/*,.pdf"
+                        className="hidden"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) handleReceiptUpload(expense.id, file);
+                        }}
+                        disabled={uploadingExpenseId === expense.id}
+                      />
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8"
+                        disabled={uploadingExpenseId === expense.id}
+                        asChild
+                      >
+                        <span title="Upload Receipt">
+                          <IconUpload className="h-4 w-4" />
+                        </span>
+                      </Button>
+                    </label>
+                  )}
                   <Button
                     variant="ghost"
                     size="icon"
@@ -360,6 +442,32 @@ export function ExpenseTable({ expenses: initialExpenses, currency }: ExpenseTab
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Receipt Viewer */}
+      <Dialog open={!!viewingReceipt} onOpenChange={() => setViewingReceipt(null)}>
+        <DialogContent className="max-w-4xl max-h-[90vh]">
+          <DialogHeader>
+            <DialogTitle>{viewingReceipt?.includes('type=pdf') ? 'PDF Invoice' : 'Receipt'}</DialogTitle>
+          </DialogHeader>
+          {viewingReceipt && (
+            <div className="flex items-center justify-center">
+              {viewingReceipt.includes('type=pdf') ? (
+                <iframe
+                  src={viewingReceipt.replace('?type=pdf', '')}
+                  className="w-full h-[70vh] rounded-lg border"
+                  title="PDF Receipt"
+                />
+              ) : (
+                <img
+                  src={viewingReceipt}
+                  alt="Receipt"
+                  className="max-h-[70vh] max-w-full object-contain rounded-lg"
+                />
+              )}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

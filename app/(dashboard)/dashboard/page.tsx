@@ -1,7 +1,10 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
+  IconCurrencyRupee,
   IconCurrencyDollar,
+  IconCurrencyEuro,
+  IconCurrencyPound,
   IconReceipt,
   IconWallet,
   IconTrendingUp,
@@ -34,12 +37,29 @@ export default async function DashboardPage() {
     }).format(amount);
   };
 
+  // Select icon based on currency
+  const getCurrencyIcon = () => {
+    switch (settings.currency) {
+      case "INR":
+        return IconCurrencyRupee;
+      case "EUR":
+        return IconCurrencyEuro;
+      case "GBP":
+        return IconCurrencyPound;
+      case "USD":
+      default:
+        return IconCurrencyDollar;
+    }
+  };
+
+  const CurrencyIcon = getCurrencyIcon();
+
   const statsData = [
     {
       title: "Total Spent",
       value: formatCurrency(stats.totalSpent),
       subtitle: "This month",
-      icon: IconCurrencyDollar,
+      icon: CurrencyIcon,
     },
     {
       title: "Transactions",
@@ -120,7 +140,7 @@ export default async function DashboardPage() {
           <CardContent>
             {Object.keys(stats.categoryBreakdown).length > 0 ? (
               <div className="space-y-3">
-                {Object.entries(stats.categoryBreakdown).map(([category, amount]) => (
+                {Object.entries(stats.categoryBreakdown as Record<string, number>).map(([category, amount]) => (
                   <div key={category} className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <div
@@ -154,7 +174,7 @@ export default async function DashboardPage() {
           <CardContent>
             {stats.expenses.length > 0 ? (
               <div className="space-y-3">
-                {stats.expenses.map((expense) => (
+                {stats.expenses.map((expense: { id: string; description: string | null; merchant: string | null; category: string; date: Date; amount: number }) => (
                   <div
                     key={expense.id}
                     className="flex items-center justify-between border-b pb-2 last:border-0"

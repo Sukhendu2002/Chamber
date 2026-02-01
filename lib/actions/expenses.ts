@@ -39,6 +39,7 @@ export async function getExpenses(options?: {
   startDate?: Date;
   endDate?: Date;
   category?: string;
+  search?: string;
 }) {
   const { userId } = await auth();
   if (!userId) throw new Error("Unauthorized");
@@ -55,6 +56,14 @@ export async function getExpenses(options?: {
     where.category = options.category;
   }
 
+  if (options?.search) {
+    where.OR = [
+      { description: { contains: options.search, mode: "insensitive" } },
+      { merchant: { contains: options.search, mode: "insensitive" } },
+      { category: { contains: options.search, mode: "insensitive" } },
+    ];
+  }
+
   const expenses = await db.expense.findMany({
     where,
     orderBy: { date: "desc" },
@@ -63,6 +72,39 @@ export async function getExpenses(options?: {
   });
 
   return expenses;
+}
+
+export async function getExpensesCount(options?: {
+  startDate?: Date;
+  endDate?: Date;
+  category?: string;
+  search?: string;
+}) {
+  const { userId } = await auth();
+  if (!userId) throw new Error("Unauthorized");
+
+  const where: Record<string, unknown> = { userId };
+
+  if (options?.startDate || options?.endDate) {
+    where.date = {};
+    if (options.startDate) (where.date as Record<string, Date>).gte = options.startDate;
+    if (options.endDate) (where.date as Record<string, Date>).lte = options.endDate;
+  }
+
+  if (options?.category) {
+    where.category = options.category;
+  }
+
+  if (options?.search) {
+    where.OR = [
+      { description: { contains: options.search, mode: "insensitive" } },
+      { merchant: { contains: options.search, mode: "insensitive" } },
+      { category: { contains: options.search, mode: "insensitive" } },
+    ];
+  }
+
+  const count = await db.expense.count({ where });
+  return count;
 }
 
 export async function getExpenseById(id: string) {
@@ -121,6 +163,9 @@ export async function getMonthlyStats() {
         lte: endOfMonth,
       },
     },
+    orderBy: {
+      date: "desc",
+    },
   });
 
   const totalSpent = expenses.reduce((sum: number, e) => sum + e.amount, 0);
@@ -138,7 +183,7 @@ export async function getMonthlyStats() {
     totalSpent,
     transactionCount,
     categoryBreakdown,
-    expenses: expenses.slice(0, 5),
+    expenses: expenses.slice(0, 5), // Already sorted by date desc, so these are the 5 most recent
   };
 }
 

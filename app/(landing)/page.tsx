@@ -93,7 +93,7 @@ export default function LandingPage() {
 
         {/* Footer */}
         <footer className="border-t py-8 text-center text-sm text-muted-foreground">
-          Built with TanStack Start, Prisma, and Gemini AI
+          Build by Sukhendu
         </footer>
       </main>
     </div>

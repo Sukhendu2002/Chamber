@@ -30,6 +30,7 @@ model Expense {
   date        DateTime @default(now())
   isVerified  Boolean  @default(false) // True if matched with Bank Statement
   metadata    Json?    // Stores raw OCR text or debug info
+  receiptUrl  String?  // URL to receipt/invoice stored in Cloudflare R2
   createdAt   DateTime @default(now())
 
   @@index([userId])

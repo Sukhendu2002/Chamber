@@ -24,7 +24,7 @@ type AIResponse = {
 
 const TEXT_SYSTEM_PROMPT = `You are an expense parsing assistant. Extract expense information from user messages.
 
-Categories available: Food, Travel, Entertainment, Bills, Shopping, Health, Education, General
+Categories available: Food, Travel, Entertainment, Bills, Shopping, Health, Education, Investments, Subscription, General
 
 For text messages like "Lunch 450" or "Uber to airport 250":
 - Extract the amount (number)
@@ -39,7 +39,7 @@ If you cannot parse the expense, respond with:
 
 const VISION_SYSTEM_PROMPT = `You are an expense parsing assistant. Extract payment/expense information from UPI payment screenshots, receipts, or transaction confirmations.
 
-Categories available: Food, Travel, Entertainment, Bills, Shopping, Health, Education, General
+Categories available: Food, Travel, Entertainment, Bills, Shopping, Health, Education, Investments, Subscription, General
 
 Look for:
 - Amount paid (₹ symbol, numbers)

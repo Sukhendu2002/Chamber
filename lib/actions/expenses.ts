@@ -3,6 +3,7 @@
 import { auth } from "@clerk/nextjs/server";
 import { db } from "@/lib/db";
 import { revalidatePath } from "next/cache";
+import { checkAndSendSubscriptionAlerts } from "@/lib/subscription-alerts";
 
 export type CreateExpenseInput = {
   amount: number;
@@ -10,6 +11,8 @@ export type CreateExpenseInput = {
   merchant?: string;
   description?: string;
   date?: Date;
+  paymentMethod?: string;
+  receiptUrl?: string;
 };
 
 export async function createExpense(input: CreateExpenseInput) {
@@ -25,11 +28,17 @@ export async function createExpense(input: CreateExpenseInput) {
       description: input.description,
       date: input.date || new Date(),
       source: "WEB",
+      paymentMethod: input.paymentMethod as "PNB" | "SBI" | "CASH" | "CREDIT" | undefined,
+      receiptUrl: input.receiptUrl,
     },
   });
 
   revalidatePath("/dashboard");
   revalidatePath("/expenses");
+
+  // Check and send subscription alerts (non-blocking)
+  checkAndSendSubscriptionAlerts(userId).catch(console.error);
+
   return expense;
 }
 
@@ -67,8 +76,8 @@ export async function getExpenses(options?: {
   const expenses = await db.expense.findMany({
     where,
     orderBy: [
-      { date: "desc" },
       { createdAt: "desc" },
+      { id: "desc" },
     ],
     take: options?.limit,
     skip: options?.offset,
@@ -130,11 +139,18 @@ export async function updateExpense(
 
   const expense = await db.expense.updateMany({
     where: { id, userId },
-    data: input,
+    data: {
+      ...input,
+      paymentMethod: input.paymentMethod as "PNB" | "SBI" | "CASH" | "CREDIT" | undefined,
+    },
   });
 
   revalidatePath("/dashboard");
   revalidatePath("/expenses");
+
+  // Check and send subscription alerts (non-blocking)
+  checkAndSendSubscriptionAlerts(userId).catch(console.error);
+
   return expense;
 }
 
@@ -158,7 +174,8 @@ export async function getMonthlyStats() {
   const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
   const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
 
-  const expenses = await db.expense.findMany({
+  // Get expenses for current month (for stats)
+  const monthlyExpenses = await db.expense.findMany({
     where: {
       userId,
       date: {
@@ -167,15 +184,25 @@ export async function getMonthlyStats() {
       },
     },
     orderBy: [
-      { date: "desc" },
       { createdAt: "desc" },
+      { id: "desc" },
     ],
   });
 
-  const totalSpent = expenses.reduce((sum: number, e) => sum + e.amount, 0);
-  const transactionCount = expenses.length;
+  // Get 5 most recent expenses overall (same query as expense list)
+  const recentExpenses = await db.expense.findMany({
+    where: { userId },
+    orderBy: [
+      { createdAt: "desc" },
+      { id: "desc" },
+    ],
+    take: 5,
+  });
 
-  const categoryBreakdown = expenses.reduce<Record<string, number>>(
+  const totalSpent = monthlyExpenses.reduce((sum: number, e) => sum + e.amount, 0);
+  const transactionCount = monthlyExpenses.length;
+
+  const categoryBreakdown = monthlyExpenses.reduce<Record<string, number>>(
     (acc, e) => {
       acc[e.category] = (acc[e.category] || 0) + e.amount;
       return acc;
@@ -187,7 +214,7 @@ export async function getMonthlyStats() {
     totalSpent,
     transactionCount,
     categoryBreakdown,
-    expenses: expenses.slice(0, 5), // Already sorted by date desc, so these are the 5 most recent
+    expenses: recentExpenses, // 5 most recent expenses overall
   };
 }
 

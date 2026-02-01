@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
-import { S3Client, GetObjectCommand } from "@aws-sdk/client-s3";
+import { S3Client, GetObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
 import { db } from "@/lib/db";
 
 function getR2Client() {
@@ -33,19 +33,39 @@ export async function GET(
 
   try {
     const { id: expenseId } = await params;
+    const { searchParams } = new URL(request.url);
+    const indexParam = searchParams.get("index");
 
     // Get expense and verify ownership
     const expense = await db.expense.findFirst({
       where: { id: expenseId, userId },
     });
 
-    if (!expense || !expense.receiptUrl) {
-      return NextResponse.json({ error: "Receipt not found" }, { status: 404 });
+    if (!expense) {
+      return NextResponse.json({ error: "Expense not found" }, { status: 404 });
+    }
+
+    // Get all receipts (combining legacy receiptUrl and new receiptUrls array)
+    const receipts: string[] = [...(expense.receiptUrls || [])];
+    if (expense.receiptUrl && !receipts.includes(expense.receiptUrl)) {
+      receipts.unshift(expense.receiptUrl);
+    }
+
+    if (receipts.length === 0) {
+      return NextResponse.json({ error: "No receipts found" }, { status: 404 });
+    }
+
+    // Get the specific receipt by index, or first one if no index
+    const index = indexParam !== null ? parseInt(indexParam, 10) : 0;
+    const receiptUrl = receipts[index];
+
+    if (!receiptUrl) {
+      return NextResponse.json({ error: "Receipt not found at index" }, { status: 404 });
     }
 
     // If receiptUrl is a full URL, redirect to it
-    if (expense.receiptUrl.startsWith("http")) {
-      return NextResponse.redirect(expense.receiptUrl);
+    if (receiptUrl.startsWith("http")) {
+      return NextResponse.redirect(receiptUrl);
     }
 
     // Otherwise, fetch from R2
@@ -55,7 +75,7 @@ export async function GET(
     const response = await r2Client.send(
       new GetObjectCommand({
         Bucket: bucketName,
-        Key: expense.receiptUrl,
+        Key: receiptUrl,
       })
     );
 
@@ -85,6 +105,82 @@ export async function GET(
     console.error("Receipt fetch error:", error);
     return NextResponse.json(
       { error: "Failed to fetch receipt" },
+      { status: 500 }
+    );
+  }
+}
+
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const { userId } = await auth();
+  if (!userId) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  try {
+    const { id: expenseId } = await params;
+    const { searchParams } = new URL(request.url);
+    const indexParam = searchParams.get("index");
+
+    // Get expense and verify ownership
+    const expense = await db.expense.findFirst({
+      where: { id: expenseId, userId },
+    });
+
+    if (!expense) {
+      return NextResponse.json({ error: "Expense not found" }, { status: 404 });
+    }
+
+    // Get all receipts (combining legacy receiptUrl and new receiptUrls array)
+    const receipts: string[] = [...(expense.receiptUrls || [])];
+    if (expense.receiptUrl && !receipts.includes(expense.receiptUrl)) {
+      receipts.unshift(expense.receiptUrl);
+    }
+
+    if (receipts.length === 0) {
+      return NextResponse.json({ error: "No receipts found" }, { status: 404 });
+    }
+
+    // Get the specific receipt by index
+    const index = indexParam !== null ? parseInt(indexParam, 10) : 0;
+    const receiptUrl = receipts[index];
+
+    if (!receiptUrl) {
+      return NextResponse.json({ error: "Receipt not found at index" }, { status: 404 });
+    }
+
+    // Delete from R2
+    const r2Client = getR2Client();
+    const bucketName = process.env.R2_BUCKET_NAME;
+
+    await r2Client.send(
+      new DeleteObjectCommand({
+        Bucket: bucketName,
+        Key: receiptUrl,
+      })
+    );
+
+    // Update database - remove from receiptUrls array or clear receiptUrl
+    const newReceiptUrls = expense.receiptUrls?.filter((url: string) => url !== receiptUrl) || [];
+    
+    // If it was the legacy receiptUrl, clear it
+    const newReceiptUrl = expense.receiptUrl === receiptUrl ? null : expense.receiptUrl;
+
+    await db.expense.update({
+      where: { id: expenseId },
+      data: {
+        receiptUrls: newReceiptUrls,
+        receiptUrl: newReceiptUrl,
+      },
+    });
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error("Receipt delete error:", error);
+    return NextResponse.json(
+      { error: "Failed to delete receipt" },
       { status: 500 }
     );
   }

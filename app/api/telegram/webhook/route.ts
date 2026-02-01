@@ -4,6 +4,7 @@ import { parseExpenseWithAI, parseReceiptWithAI } from "@/lib/ai";
 import { notifyUser } from "@/app/api/events/route";
 import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 import pdfParse from "pdf-parse";
+import { checkAndSendSubscriptionAlerts } from "@/lib/subscription-alerts";
 
 const TELEGRAM_WEBHOOK_SECRET = process.env.TELEGRAM_WEBHOOK_SECRET;
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
@@ -615,40 +616,12 @@ export async function POST(request: NextRequest) {
       const data = callbackQuery.data;
 
       if (chatId && messageId) {
-        // Handle payment method selection
+        // Handle payment method selection - save directly without extra confirmation
         if (data?.startsWith("pay_")) {
-          const paymentMethod = data.replace("pay_", "");
+          const paymentMethod = data.replace("pay_", "") as "PNB" | "SBI" | "CASH" | "CREDIT";
           const pending = pendingExpenses.get(chatId);
           if (pending && pending.expiresAt > Date.now()) {
-            pending.paymentMethod = paymentMethod;
-            pendingExpenses.set(chatId, pending);
-            
-            // Now show final confirmation
-            const keyboard = {
-              inline_keyboard: [
-                [
-                  { text: "✅ Confirm", callback_data: "confirm_yes" },
-                  { text: "❌ Cancel", callback_data: "confirm_no" },
-                ],
-              ],
-            };
-            
-            let confirmMsg = `📋 <b>Confirm expense:</b>\n\n`;
-            if (pending.merchant) confirmMsg += `🏪 ${pending.merchant}\n`;
-            confirmMsg += `💰 ₹${pending.amount.toFixed(2)}\n`;
-            confirmMsg += `📁 ${pending.category}\n`;
-            confirmMsg += `💳 <b>${paymentMethod}</b>\n`;
-            confirmMsg += `📝 ${pending.description}`;
-            
-            await editMessageText(chatId, messageId, confirmMsg, keyboard);
-            await answerCallbackQuery(callbackQuery.id, `Selected: ${paymentMethod}`);
-          } else {
-            await editMessageText(chatId, messageId, "⏰ Expired. Please send the expense again.");
-            await answerCallbackQuery(callbackQuery.id, "Expired");
-          }
-        } else if (data === "confirm_yes") {
-          const pending = pendingExpenses.get(chatId);
-          if (pending && pending.expiresAt > Date.now()) {
+            // Save expense directly with payment method
             await db.expense.create({
               data: {
                 userId: pending.userId,
@@ -658,19 +631,24 @@ export async function POST(request: NextRequest) {
                 merchant: pending.merchant,
                 receiptUrl: pending.receiptUrl,
                 source: "TELEGRAM",
+                paymentMethod: paymentMethod,
                 date: new Date(),
-                metadata: pending.paymentMethod ? { paymentMethod: pending.paymentMethod } : undefined,
               },
             });
             // Notify web UI to refresh
             notifyUser(pending.userId);
+            
+            // Check and send subscription alerts (non-blocking)
+            checkAndSendSubscriptionAlerts(pending.userId).catch(console.error);
+            
             pendingExpenses.delete(chatId);
-            const paymentInfo = pending.paymentMethod ? ` (${pending.paymentMethod})` : "";
-            await editMessageText(chatId, messageId, `✅ <b>Saved!</b> ₹${pending.amount.toFixed(2)} - ${pending.category}${paymentInfo}`);
+            
+            await editMessageText(chatId, messageId, `✅ <b>Saved!</b>\n\n💰 ₹${pending.amount.toFixed(2)}\n📁 ${pending.category}\n💳 ${paymentMethod}`);
+            await answerCallbackQuery(callbackQuery.id, "Saved!");
           } else {
-            await editMessageText(chatId, messageId, "⏰ Confirmation expired. Please send the expense again.");
+            await editMessageText(chatId, messageId, "⏰ Expired. Please send the expense again.");
+            await answerCallbackQuery(callbackQuery.id, "Expired");
           }
-          await answerCallbackQuery(callbackQuery.id, "Saved!");
         } else if (data === "confirm_no") {
           pendingExpenses.delete(chatId);
           await editMessageText(chatId, messageId, "❌ Cancelled. Send another expense or receipt.");

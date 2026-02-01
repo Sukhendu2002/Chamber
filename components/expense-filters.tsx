@@ -22,6 +22,8 @@ const categories = [
   "Shopping",
   "Health",
   "Education",
+  "Investments",
+  "Subscription",
   "General",
 ];
 

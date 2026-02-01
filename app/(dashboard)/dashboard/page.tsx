@@ -12,6 +12,7 @@ import {
 import { AddExpenseDialog } from "@/components/add-expense-dialog";
 import { getMonthlyStats } from "@/lib/actions/expenses";
 import { getUserSettings } from "@/lib/actions/settings";
+import { ExpenseCalendarWidget } from "@/components/expense-calendar-widget";
 
 export default async function DashboardPage() {
   const [stats, settings] = await Promise.all([
@@ -129,7 +130,20 @@ export default async function DashboardPage() {
       </div>
 
       {/* Charts Section */}
-      <div className="grid gap-6 md:grid-cols-2">
+      <div className="grid gap-6 md:grid-cols-3">
+        {/* Expense Calendar */}
+        <ExpenseCalendarWidget 
+          expenses={stats.expenses.map((e: { id: string; amount: number; category: string; merchant: string | null; description: string | null; date: Date }) => ({
+            id: e.id,
+            amount: e.amount,
+            category: e.category,
+            merchant: e.merchant,
+            description: e.description,
+            date: e.date,
+          }))} 
+          currency={settings.currency} 
+        />
+        
         {/* Spending by Category */}
         <Card className="border">
           <CardHeader>

@@ -46,6 +46,7 @@ import {
   IconReceipt,
   IconUpload,
   IconPhoto,
+  IconX,
 } from "@tabler/icons-react";
 import { updateExpense, deleteExpense } from "@/lib/actions/expenses";
 
@@ -57,6 +58,8 @@ const categories = [
   "Shopping",
   "Health",
   "Education",
+  "Investments",
+  "Subscription",
   "General",
 ];
 
@@ -73,9 +76,11 @@ type Expense = {
   merchant: string | null;
   description: string | null;
   source: string;
+  paymentMethod: string | null;
   date: Date;
   isVerified: boolean;
-  receiptUrl: string | null;
+  receiptUrl: string | null;  // Legacy single receipt
+  receiptUrls: string[];      // Multiple receipts array
 };
 
 type SortField = "date" | "amount" | "category";
@@ -104,6 +109,8 @@ export function ExpenseTable({ expenses: initialExpenses, currency }: ExpenseTab
   const [editDescription, setEditDescription] = useState("");
   const [editMerchant, setEditMerchant] = useState("");
   const [editDate, setEditDate] = useState("");
+  const [editPaymentMethod, setEditPaymentMethod] = useState("");
+  const [editReceipt, setEditReceipt] = useState<File | null>(null);
   const [editLoading, setEditLoading] = useState(false);
   
   // Delete state
@@ -113,7 +120,32 @@ export function ExpenseTable({ expenses: initialExpenses, currency }: ExpenseTab
   // Receipt state
   const [viewingReceipt, setViewingReceipt] = useState<string | null>(null);
   const [uploadingExpenseId, setUploadingExpenseId] = useState<string | null>(null);
-  const fileInputRef = useState<HTMLInputElement | null>(null);
+
+  // Track which dialog is active to prevent stacking
+  type ActiveDialog = 'none' | 'edit' | 'delete' | 'receipt';
+  const [activeDialog, setActiveDialog] = useState<ActiveDialog>('none');
+
+  // Custom setters to ensure only one dialog is open at a time
+  const openReceiptViewer = (expenseId: string) => {
+    setEditingExpense(null);
+    setDeletingExpense(null);
+    setViewingReceipt(expenseId);
+    setActiveDialog('receipt');
+  };
+
+  const openEditDialogSafe = (expense: Expense) => {
+    setViewingReceipt(null);
+    setDeletingExpense(null);
+    openEditDialog(expense);
+    setActiveDialog('edit');
+  };
+
+  const closeAllDialogs = () => {
+    setEditingExpense(null);
+    setDeletingExpense(null);
+    setViewingReceipt(null);
+    setActiveDialog('none');
+  };
 
   const handleReceiptUpload = async (expenseId: string, file: File) => {
     setUploadingExpenseId(expenseId);
@@ -149,6 +181,15 @@ export function ExpenseTable({ expenses: initialExpenses, currency }: ExpenseTab
     }).format(amount);
   };
 
+  // Get all receipts for an expense (combining legacy receiptUrl and new receiptUrls array)
+  const getReceipts = (expense: Expense): string[] => {
+    const receipts: string[] = [...(expense.receiptUrls || [])];
+    if (expense.receiptUrl && !receipts.includes(expense.receiptUrl)) {
+      receipts.unshift(expense.receiptUrl);
+    }
+    return receipts;
+  };
+
   const handleSort = (field: SortField) => {
     if (sortField === field) {
       setSortOrder(sortOrder === "asc" ? "desc" : "asc");
@@ -175,12 +216,15 @@ export function ExpenseTable({ expenses: initialExpenses, currency }: ExpenseTab
   });
 
   const openEditDialog = (expense: Expense) => {
+    setViewingReceipt(null); // Close receipt viewer if open
     setEditingExpense(expense);
     setEditAmount(expense.amount.toString());
     setEditCategory(expense.category);
     setEditDescription(expense.description || "");
     setEditMerchant(expense.merchant || "");
     setEditDate(new Date(expense.date).toISOString().split("T")[0]);
+    setEditPaymentMethod(expense.paymentMethod || "");
+    setEditReceipt(null);
   };
 
   const handleEdit = async () => {
@@ -193,7 +237,20 @@ export function ExpenseTable({ expenses: initialExpenses, currency }: ExpenseTab
         description: editDescription || undefined,
         merchant: editMerchant || undefined,
         date: new Date(editDate),
+        paymentMethod: editPaymentMethod || undefined,
       });
+
+      // If there's a new receipt, upload it
+      if (editReceipt) {
+        const formData = new FormData();
+        formData.append("file", editReceipt);
+        formData.append("expenseId", editingExpense.id);
+        await fetch("/api/upload", {
+          method: "POST",
+          body: formData,
+        });
+      }
+
       setEditingExpense(null);
       router.refresh();
     } catch (error) {
@@ -245,6 +302,7 @@ export function ExpenseTable({ expenses: initialExpenses, currency }: ExpenseTab
               Category <SortIcon field="category" />
             </TableHead>
             <TableHead>Source</TableHead>
+            <TableHead>Payment</TableHead>
             <TableHead
               className="cursor-pointer hover:bg-muted text-right"
               onClick={() => handleSort("amount")}
@@ -278,58 +336,98 @@ export function ExpenseTable({ expenses: initialExpenses, currency }: ExpenseTab
                   {expense.source}
                 </span>
               </TableCell>
+              <TableCell>
+                {expense.paymentMethod ? (
+                  <span className="inline-flex items-center rounded-full bg-slate-100 px-2 py-1 text-xs font-medium text-slate-700 dark:bg-slate-800 dark:text-slate-300">
+                    {expense.paymentMethod}
+                  </span>
+                ) : (
+                  <span className="text-muted-foreground">-</span>
+                )}
+              </TableCell>
               <TableCell className="text-right font-medium">
                 {formatCurrency(expense.amount)}
               </TableCell>
               <TableCell className="text-right">
                 <div className="flex justify-end gap-1">
-                  {expense.receiptUrl ? (
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8 text-blue-600 hover:text-blue-700"
-                      onClick={() => {
-                        const isPdf = expense.receiptUrl?.endsWith('.pdf');
-                        setViewingReceipt(`/api/receipt/${expense.id}${isPdf ? '?type=pdf' : ''}`);
-                      }}
-                      title={expense.receiptUrl?.endsWith('.pdf') ? "View PDF" : "View Receipt"}
-                    >
-                      {expense.receiptUrl?.endsWith('.pdf') ? (
-                        <IconReceipt className="h-4 w-4" />
-                      ) : (
-                        <IconPhoto className="h-4 w-4" />
-                      )}
-                    </Button>
-                  ) : (
-                    <label className="cursor-pointer">
-                      <input
-                        type="file"
-                        accept="image/*,.pdf"
-                        className="hidden"
-                        onChange={(e) => {
-                          const file = e.target.files?.[0];
-                          if (file) handleReceiptUpload(expense.id, file);
-                        }}
-                        disabled={uploadingExpenseId === expense.id}
-                      />
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8"
-                        disabled={uploadingExpenseId === expense.id}
-                        asChild
-                      >
-                        <span title="Upload Receipt">
-                          <IconUpload className="h-4 w-4" />
-                        </span>
-                      </Button>
-                    </label>
-                  )}
+                  {(() => {
+                    const receipts = getReceipts(expense);
+                    if (receipts.length > 0) {
+                      return (
+                        <>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-blue-600 hover:text-blue-700"
+                            onClick={() => openReceiptViewer(expense.id)}
+                            title={`View ${receipts.length} receipt(s)`}
+                          >
+                            <span className="relative">
+                              <IconPhoto className="h-4 w-4" />
+                              {receipts.length > 1 && (
+                                <span className="absolute -right-1 -top-1 flex h-3 w-3 items-center justify-center rounded-full bg-blue-600 text-[8px] text-white">
+                                  {receipts.length}
+                                </span>
+                              )}
+                            </span>
+                          </Button>
+                          <label className="cursor-pointer">
+                            <input
+                              type="file"
+                              accept="image/*,.pdf"
+                              className="hidden"
+                              onChange={(e) => {
+                                const file = e.target.files?.[0];
+                                if (file) handleReceiptUpload(expense.id, file);
+                              }}
+                              disabled={uploadingExpenseId === expense.id}
+                            />
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8"
+                              disabled={uploadingExpenseId === expense.id}
+                              asChild
+                            >
+                              <span title="Add Receipt">
+                                <IconUpload className="h-4 w-4" />
+                              </span>
+                            </Button>
+                          </label>
+                        </>
+                      );
+                    }
+                    return (
+                      <label className="cursor-pointer">
+                        <input
+                          type="file"
+                          accept="image/*,.pdf"
+                          className="hidden"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) handleReceiptUpload(expense.id, file);
+                          }}
+                          disabled={uploadingExpenseId === expense.id}
+                        />
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8"
+                          disabled={uploadingExpenseId === expense.id}
+                          asChild
+                        >
+                          <span title="Upload Receipt">
+                            <IconUpload className="h-4 w-4" />
+                          </span>
+                        </Button>
+                      </label>
+                    );
+                  })()}
                   <Button
                     variant="ghost"
                     size="icon"
                     className="h-8 w-8"
-                    onClick={() => openEditDialog(expense)}
+                    onClick={() => openEditDialogSafe(expense)}
                   >
                     <IconEdit className="h-4 w-4" />
                   </Button>
@@ -349,6 +447,7 @@ export function ExpenseTable({ expenses: initialExpenses, currency }: ExpenseTab
       </Table>
 
       {/* Edit Dialog */}
+      {!viewingReceipt && (
       <Dialog open={!!editingExpense} onOpenChange={() => setEditingExpense(null)}>
         <DialogContent>
           <DialogHeader>
@@ -409,6 +508,70 @@ export function ExpenseTable({ expenses: initialExpenses, currency }: ExpenseTab
                 />
               </div>
             </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="edit-payment">Payment Method</Label>
+                <Select value={editPaymentMethod} onValueChange={setEditPaymentMethod}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select method" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="PNB">PNB</SelectItem>
+                    <SelectItem value="SBI">SBI</SelectItem>
+                    <SelectItem value="CASH">Cash</SelectItem>
+                    <SelectItem value="CREDIT">Credit</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Receipts</Label>
+                {(() => {
+                  const receipts = editingExpense ? getReceipts(editingExpense) : [];
+                  return (
+                    <div className="space-y-2">
+                      {receipts.length > 0 && (
+                        <div className="flex items-center gap-2">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="flex-1"
+                            onClick={() => openReceiptViewer(editingExpense!.id)}
+                          >
+                            View {receipts.length} Receipt{receipts.length > 1 ? 's' : ''}
+                          </Button>
+                        </div>
+                      )}
+                      {editReceipt ? (
+                        <div className="flex items-center gap-2 rounded-md border p-2">
+                          <span className="flex-1 truncate text-sm">{editReceipt.name}</span>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="h-6 w-6"
+                            onClick={() => setEditReceipt(null)}
+                          >
+                            <IconX className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      ) : (
+                        <label className="flex cursor-pointer items-center justify-center gap-2 rounded-md border border-dashed p-2 hover:bg-muted/50">
+                          <IconUpload className="h-4 w-4" />
+                          <span className="text-sm">{receipts.length > 0 ? 'Add More' : 'Upload'}</span>
+                          <input
+                            type="file"
+                            accept="image/*,.pdf"
+                            className="hidden"
+                            onChange={(e) => setEditReceipt(e.target.files?.[0] || null)}
+                          />
+                        </label>
+                      )}
+                    </div>
+                  );
+                })()}
+              </div>
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setEditingExpense(null)}>
@@ -420,6 +583,7 @@ export function ExpenseTable({ expenses: initialExpenses, currency }: ExpenseTab
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      )}
 
       {/* Delete Confirmation */}
       <AlertDialog open={!!deletingExpense} onOpenChange={() => setDeletingExpense(null)}>
@@ -445,27 +609,88 @@ export function ExpenseTable({ expenses: initialExpenses, currency }: ExpenseTab
 
       {/* Receipt Viewer */}
       <Dialog open={!!viewingReceipt} onOpenChange={() => setViewingReceipt(null)}>
-        <DialogContent className="max-w-4xl max-h-[90vh]">
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>{viewingReceipt?.includes('type=pdf') ? 'PDF Invoice' : 'Receipt'}</DialogTitle>
+            <DialogTitle>Receipts</DialogTitle>
           </DialogHeader>
-          {viewingReceipt && (
-            <div className="flex items-center justify-center">
-              {viewingReceipt.includes('type=pdf') ? (
-                <iframe
-                  src={viewingReceipt.replace('?type=pdf', '')}
-                  className="w-full h-[70vh] rounded-lg border"
-                  title="PDF Receipt"
-                />
-              ) : (
-                <img
-                  src={viewingReceipt}
-                  alt="Receipt"
-                  className="max-h-[70vh] max-w-full object-contain rounded-lg"
-                />
-              )}
-            </div>
-          )}
+          {viewingReceipt && (() => {
+            // Find the expense by ID to get all receipts
+            const expense = expenses.find(e => e.id === viewingReceipt);
+            if (!expense) return null;
+            const receipts = getReceipts(expense);
+            
+            return (
+              <div className="space-y-4">
+                {receipts.length === 0 ? (
+                  <p className="text-center text-muted-foreground">No receipts</p>
+                ) : (
+                  <div className="grid gap-4">
+                    {receipts.map((url, index) => {
+                      const isPdf = url.endsWith('.pdf');
+                      return (
+                        <div key={index} className="border rounded-lg p-2">
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="text-sm font-medium">Receipt {index + 1}</span>
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs text-muted-foreground">{isPdf ? 'PDF' : 'Image'}</span>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-6 w-6 text-destructive hover:text-destructive"
+                                onClick={async () => {
+                                  if (confirm('Delete this receipt?')) {
+                                    await fetch(`/api/receipt/${expense.id}?index=${index}`, { method: 'DELETE' });
+                                    router.refresh();
+                                  }
+                                }}
+                              >
+                                <IconTrash className="h-3 w-3" />
+                              </Button>
+                            </div>
+                          </div>
+                          {isPdf ? (
+                            <iframe
+                              src={`/api/receipt/${expense.id}?index=${index}`}
+                              className="w-full h-[50vh] rounded border"
+                              title={`Receipt ${index + 1}`}
+                            />
+                          ) : (
+                            <img
+                              src={`/api/receipt/${expense.id}?index=${index}`}
+                              alt={`Receipt ${index + 1}`}
+                              className="max-h-[50vh] w-full object-contain rounded"
+                            />
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+                <div className="flex justify-center">
+                  <label className="cursor-pointer">
+                    <input
+                      type="file"
+                      accept="image/*,.pdf"
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) {
+                          handleReceiptUpload(expense.id, file);
+                          setViewingReceipt(null);
+                        }
+                      }}
+                    />
+                    <Button variant="outline" asChild>
+                      <span>
+                        <IconUpload className="mr-2 h-4 w-4" />
+                        Add Another Receipt
+                      </span>
+                    </Button>
+                  </label>
+                </div>
+              </div>
+            );
+          })()}
         </DialogContent>
       </Dialog>
     </>

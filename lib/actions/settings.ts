@@ -2,7 +2,8 @@
 
 import { auth } from "@clerk/nextjs/server";
 import { db } from "@/lib/db";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
+import { unstable_cache } from "next/cache";
 
 // Free exchange rate API (no API key needed for basic usage)
 async function getExchangeRate(from: string, to: string): Promise<number> {
@@ -16,25 +17,34 @@ async function getExchangeRate(from: string, to: string): Promise<number> {
   }
 }
 
+// Cached settings fetch
+const getCachedSettings = unstable_cache(
+  async (userId: string) => {
+    let settings = await db.userSettings.findUnique({
+      where: { userId },
+    });
+
+    if (!settings) {
+      settings = await db.userSettings.create({
+        data: {
+          userId,
+          monthlyBudget: 0,
+          currency: "INR",
+        },
+      });
+    }
+
+    return settings;
+  },
+  ["user-settings"],
+  { revalidate: 60, tags: ["user-settings"] } // Cache for 60 seconds
+);
+
 export async function getUserSettings() {
   const { userId } = await auth();
   if (!userId) throw new Error("Unauthorized");
 
-  let settings = await db.userSettings.findUnique({
-    where: { userId },
-  });
-
-  if (!settings) {
-    settings = await db.userSettings.create({
-      data: {
-        userId,
-        monthlyBudget: 0,
-        currency: "INR",
-      },
-    });
-  }
-
-  return settings;
+  return getCachedSettings(userId);
 }
 
 export async function updateUserSettings(input: {
@@ -89,6 +99,7 @@ export async function updateUserSettings(input: {
     },
   });
 
+  revalidateTag("user-settings", "max"); // Invalidate cached settings with SWR behavior
   revalidatePath("/settings");
   revalidatePath("/dashboard");
   revalidatePath("/expenses");
@@ -145,4 +156,92 @@ export async function unlinkTelegram() {
   });
 
   revalidatePath("/telegram");
+}
+
+export async function exportExpensesCSV() {
+  const { userId } = await auth();
+  if (!userId) throw new Error("Unauthorized");
+
+  const expenses = await db.expense.findMany({
+    where: { userId },
+    orderBy: { date: "desc" },
+  });
+
+  const subscriptions = await db.subscription.findMany({
+    where: { userId },
+    orderBy: { nextBillingDate: "asc" },
+  });
+
+  // Create CSV for expenses
+  const expenseHeaders = ["Date", "Description", "Merchant", "Category", "Amount", "Payment Method", "Source"];
+  const expenseRows = expenses.map((e) => [
+    new Date(e.date).toISOString().split("T")[0],
+    e.description || "",
+    e.merchant || "",
+    e.category,
+    e.amount.toString(),
+    e.paymentMethod || "",
+    e.source,
+  ]);
+
+  const expenseCSV = [
+    expenseHeaders.join(","),
+    ...expenseRows.map((row) => row.map((cell) => `"${cell.replace(/"/g, '""')}"`).join(",")),
+  ].join("\n");
+
+  // Create CSV for subscriptions
+  const subHeaders = ["Name", "Amount", "Billing Cycle", "Next Billing Date", "Payment Method", "Active", "Alert Days Before"];
+  const subRows = subscriptions.map((s) => [
+    s.name,
+    s.amount.toString(),
+    s.billingCycle,
+    new Date(s.nextBillingDate).toISOString().split("T")[0],
+    s.paymentMethod || "",
+    s.isActive ? "Yes" : "No",
+    s.alertDaysBefore.toString(),
+  ]);
+
+  const subscriptionCSV = [
+    subHeaders.join(","),
+    ...subRows.map((row) => row.map((cell) => `"${cell.replace(/"/g, '""')}"`).join(",")),
+  ].join("\n");
+
+  return {
+    expenses: expenseCSV,
+    subscriptions: subscriptionCSV,
+  };
+}
+
+export async function deleteAllUserData() {
+  const { userId } = await auth();
+  if (!userId) throw new Error("Unauthorized");
+
+  // Delete all user's expenses
+  await db.expense.deleteMany({
+    where: { userId },
+  });
+
+  // Delete all user's subscriptions
+  await db.subscription.deleteMany({
+    where: { userId },
+  });
+
+  // Delete all user's linking codes
+  await db.linkingCode.deleteMany({
+    where: { userId },
+  });
+
+  // Reset user settings (keep the record but reset values)
+  await db.userSettings.update({
+    where: { userId },
+    data: {
+      monthlyBudget: 0,
+      telegramChatId: null,
+    },
+  });
+
+  revalidatePath("/dashboard");
+  revalidatePath("/expenses");
+  revalidatePath("/subscriptions");
+  revalidatePath("/settings");
 }

@@ -6,7 +6,7 @@ import { Pagination } from "@/components/pagination";
 import { getExpenses, getExpensesCount } from "@/lib/actions/expenses";
 import { getUserSettings } from "@/lib/actions/settings";
 
-const ITEMS_PER_PAGE = 20;
+const ITEMS_PER_PAGE = 10;
 
 export default async function ExpensesPage({
   searchParams,

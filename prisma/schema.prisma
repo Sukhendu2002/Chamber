@@ -20,21 +20,30 @@ model UserSettings {
 }
 
 model Expense {
-  id          String   @id @default(uuid())
-  userId      String   // Clerk User ID
-  amount      Float
-  category    String   @default("General")
-  merchant    String?
-  description String?
-  source      Source   @default(WEB)
-  date        DateTime @default(now())
-  isVerified  Boolean  @default(false) // True if matched with Bank Statement
-  metadata    Json?    // Stores raw OCR text or debug info
-  receiptUrl  String?  // URL to receipt/invoice stored in Cloudflare R2
-  createdAt   DateTime @default(now())
+  id            String         @id @default(uuid())
+  userId        String         // Clerk User ID
+  amount        Float
+  category      String         @default("General")
+  merchant      String?
+  description   String?
+  source        Source         @default(WEB)
+  paymentMethod PaymentMethod?
+  date          DateTime       @default(now())
+  isVerified    Boolean        @default(false) // True if matched with Bank Statement
+  metadata      Json?          // Stores raw OCR text or debug info
+  receiptUrl    String?        // Legacy single receipt URL (deprecated)
+  receiptUrls   String[]       @default([]) // URLs to receipts/invoices stored in Cloudflare R2
+  createdAt     DateTime       @default(now())
 
   @@index([userId])
   @@index([date])
+}
+
+enum PaymentMethod {
+  PNB
+  SBI
+  CASH
+  CREDIT
 }
 
 model LinkingCode {
@@ -52,4 +61,32 @@ enum Source {
   TELEGRAM
   STATEMENT
   WEB
+}
+
+enum BillingCycle {
+  ONCE
+  WEEKLY
+  MONTHLY
+  QUARTERLY
+  YEARLY
+}
+
+model Subscription {
+  id            String       @id @default(uuid())
+  userId        String       // Clerk User ID
+  name          String       // e.g., "Netflix", "Spotify"
+  amount        Float
+  billingCycle  BillingCycle @default(MONTHLY)
+  nextBillingDate DateTime
+  paymentMethod PaymentMethod?
+  category      String       @default("Subscription")
+  description   String?
+  isActive      Boolean      @default(true)
+  alertDaysBefore Int        @default(3) // Days before to send reminder
+  lastAlertSent DateTime?    // Track when last alert was sent
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  @@index([userId])
+  @@index([nextBillingDate])
 }

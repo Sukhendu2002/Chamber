@@ -13,8 +13,19 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
-import { IconDeviceFloppy } from "@tabler/icons-react";
-import { updateUserSettings } from "@/lib/actions/settings";
+import { IconDeviceFloppy, IconDownload, IconTrash } from "@tabler/icons-react";
+import { updateUserSettings, exportExpensesCSV, deleteAllUserData } from "@/lib/actions/settings";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
 const currencies = [
   { value: "INR", label: "Indian Rupee (₹)" },
@@ -48,6 +59,49 @@ export function SettingsForm({ initialSettings }: SettingsFormProps) {
   const [currency, setCurrency] = useState(initialSettings.currency);
   const [loading, setLoading] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  const handleExport = async () => {
+    setExporting(true);
+    try {
+      const data = await exportExpensesCSV();
+      
+      // Download expenses CSV
+      const expenseBlob = new Blob([data.expenses], { type: "text/csv" });
+      const expenseUrl = URL.createObjectURL(expenseBlob);
+      const expenseLink = document.createElement("a");
+      expenseLink.href = expenseUrl;
+      expenseLink.download = `expenses_${new Date().toISOString().split("T")[0]}.csv`;
+      expenseLink.click();
+      URL.revokeObjectURL(expenseUrl);
+
+      // Download subscriptions CSV
+      const subBlob = new Blob([data.subscriptions], { type: "text/csv" });
+      const subUrl = URL.createObjectURL(subBlob);
+      const subLink = document.createElement("a");
+      subLink.href = subUrl;
+      subLink.download = `subscriptions_${new Date().toISOString().split("T")[0]}.csv`;
+      subLink.click();
+      URL.revokeObjectURL(subUrl);
+    } catch (error) {
+      console.error("Failed to export data:", error);
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const handleDeleteAll = async () => {
+    setDeleting(true);
+    try {
+      await deleteAllUserData();
+      window.location.reload();
+    } catch (error) {
+      console.error("Failed to delete data:", error);
+    } finally {
+      setDeleting(false);
+    }
+  };
 
   const handleSave = async () => {
     setLoading(true);
@@ -138,11 +192,12 @@ export function SettingsForm({ initialSettings }: SettingsFormProps) {
             <div>
               <p className="font-medium">Export Data</p>
               <p className="text-sm text-muted-foreground">
-                Download all your expenses as CSV
+                Download all your expenses and subscriptions as CSV
               </p>
             </div>
-            <Button variant="outline" size="sm">
-              Export CSV
+            <Button variant="outline" size="sm" onClick={handleExport} disabled={exporting}>
+              <IconDownload className="mr-2 h-4 w-4" />
+              {exporting ? "Exporting..." : "Export CSV"}
             </Button>
           </div>
           <Separator />
@@ -150,12 +205,32 @@ export function SettingsForm({ initialSettings }: SettingsFormProps) {
             <div>
               <p className="font-medium text-destructive">Delete All Data</p>
               <p className="text-sm text-muted-foreground">
-                Permanently delete all your expenses and settings
+                Permanently delete all your expenses and subscriptions
               </p>
             </div>
-            <Button variant="destructive" size="sm">
-              Delete
-            </Button>
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button variant="destructive" size="sm" disabled={deleting}>
+                  <IconTrash className="mr-2 h-4 w-4" />
+                  {deleting ? "Deleting..." : "Delete"}
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This action cannot be undone. This will permanently delete all your
+                    expenses, subscriptions, and reset your settings.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction onClick={handleDeleteAll} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+                    Delete Everything
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
           </div>
         </CardContent>
       </Card>

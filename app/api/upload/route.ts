@@ -72,13 +72,17 @@ export async function POST(request: NextRequest) {
       })
     );
 
-    // Build the public URL
-    const receiptUrl = publicUrl ? `${publicUrl}/${key}` : key;
+    // Build the URL (just the key, we serve via API)
+    const receiptUrl = key;
 
-    // Update expense with receipt URL
+    // Add to receiptUrls array (support multiple receipts)
     await db.expense.update({
       where: { id: expenseId },
-      data: { receiptUrl },
+      data: {
+        receiptUrls: {
+          push: receiptUrl,
+        },
+      },
     });
 
     return NextResponse.json({ success: true, receiptUrl });

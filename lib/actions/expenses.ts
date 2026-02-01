@@ -66,7 +66,10 @@ export async function getExpenses(options?: {
 
   const expenses = await db.expense.findMany({
     where,
-    orderBy: { date: "desc" },
+    orderBy: [
+      { date: "desc" },
+      { createdAt: "desc" },
+    ],
     take: options?.limit,
     skip: options?.offset,
   });
@@ -163,9 +166,10 @@ export async function getMonthlyStats() {
         lte: endOfMonth,
       },
     },
-    orderBy: {
-      date: "desc",
-    },
+    orderBy: [
+      { date: "desc" },
+      { createdAt: "desc" },
+    ],
   });
 
   const totalSpent = expenses.reduce((sum: number, e) => sum + e.amount, 0);

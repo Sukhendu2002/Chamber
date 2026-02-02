@@ -19,7 +19,7 @@ type AccountInfo = {
 
 type BalanceHistoryChartProps = {
   accounts: AccountInfo[];
-  timeline: Record<string, number | string>[];
+  timeline: Record<string, number | string | null>[];
   currency: string;
 };
 

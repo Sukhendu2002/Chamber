@@ -201,9 +201,7 @@ export async function getMonthlyStats() {
 
   let totalSpent = 0;
   for (const e of monthlyExpenses) {
-    if (e.category !== "Investment") {
-      totalSpent += e.amount;
-    }
+    totalSpent += e.amount;
   }
   const transactionCount = monthlyExpenses.length;
 
@@ -249,9 +247,7 @@ export async function getAnalyticsData() {
   }
   let analyticsTotalSpent = 0;
   for (const exp of currentMonthExpenses) {
-    if (exp.category !== "Investment") {
-      analyticsTotalSpent += exp.amount;
-    }
+    analyticsTotalSpent += exp.amount;
   }
 
   // Category breakdown for current month
@@ -277,9 +273,7 @@ export async function getAnalyticsData() {
     
     let spent = 0;
     for (const exp of monthExpenses) {
-      if (exp.category !== "Investment") {
-        spent += exp.amount;
-      }
+      spent += exp.amount;
     }
     monthlyData.push({ month: monthName, spent });
   }

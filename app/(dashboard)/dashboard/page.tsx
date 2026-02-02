@@ -186,7 +186,7 @@ export default async function DashboardPage() {
       <div className="grid gap-6 md:grid-cols-3">
         {/* Expense Calendar */}
         <ExpenseCalendarWidget 
-          expenses={stats.expenses.map((e: { id: string; amount: number; category: string; merchant: string | null; description: string | null; date: Date }) => ({
+          expenses={stats.calendarExpenses.map((e: { id: string; amount: number; category: string; merchant: string | null; description: string | null; date: Date }) => ({
             id: e.id,
             amount: e.amount,
             category: e.category,

@@ -189,7 +189,7 @@ export async function getMonthlyStats() {
     ],
   });
 
-  // Get 5 most recent expenses overall (same query as expense list)
+  // Get 5 most recent expenses overall (for recent expenses widget)
   const recentExpenses = await db.expense.findMany({
     where: { userId },
     orderBy: [
@@ -197,6 +197,24 @@ export async function getMonthlyStats() {
       { id: "desc" },
     ],
     take: 5,
+  });
+
+  // Get ALL expenses for current month (for calendar widget)
+  // Need to fetch a wider range for calendar to work correctly with timezone differences
+  const calendarStartDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+  const calendarEndDate = new Date(now.getFullYear(), now.getMonth() + 2, 0);
+  const calendarExpenses = await db.expense.findMany({
+    where: {
+      userId,
+      date: {
+        gte: calendarStartDate,
+        lte: calendarEndDate,
+      },
+    },
+    orderBy: [
+      { date: "desc" },
+      { id: "desc" },
+    ],
   });
 
   let totalSpent = 0;
@@ -220,6 +238,7 @@ export async function getMonthlyStats() {
     transactionCount,
     categoryBreakdown,
     expenses: recentExpenses, // 5 most recent expenses overall
+    calendarExpenses, // All expenses for calendar widget (wider date range)
   };
 }
 

@@ -63,19 +63,28 @@ export async function GET(
       return NextResponse.json({ error: "Receipt not found at index" }, { status: 404 });
     }
 
-    // If receiptUrl is a full URL, redirect to it
+    // Extract R2 key from the URL if it's a full URL
+    let r2Key = receiptUrl;
     if (receiptUrl.startsWith("http")) {
-      return NextResponse.redirect(receiptUrl);
+      // Extract the key from the full URL (e.g., https://bucket.r2.cloudflarestorage.com/receipts/...)
+      try {
+        const url = new URL(receiptUrl);
+        // Remove leading slash from pathname
+        r2Key = url.pathname.startsWith("/") ? url.pathname.slice(1) : url.pathname;
+      } catch {
+        // If URL parsing fails, use the original value
+        r2Key = receiptUrl;
+      }
     }
 
-    // Otherwise, fetch from R2
+    // Always fetch from R2 to ensure proper authorization
     const r2Client = getR2Client();
     const bucketName = process.env.R2_BUCKET_NAME;
 
     const response = await r2Client.send(
       new GetObjectCommand({
         Bucket: bucketName,
-        Key: receiptUrl,
+        Key: r2Key,
       })
     );
 

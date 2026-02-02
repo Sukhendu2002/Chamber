@@ -203,7 +203,7 @@ export async function getMonthlyStats() {
   let spentExcludingInvestment = 0;
   for (const e of monthlyExpenses) {
     totalSpent += e.amount;
-    if (e.category !== "Investment") {
+    if (e.category !== "Investments") {
       spentExcludingInvestment += e.amount;
     }
   }

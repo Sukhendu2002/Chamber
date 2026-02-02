@@ -101,7 +101,7 @@ export async function GET(
     return new NextResponse(buffer, {
       headers: {
         "Content-Type": response.ContentType || "image/jpeg",
-        "Cache-Control": "public, max-age=31536000",
+        "Cache-Control": "private, no-store, must-revalidate",
       },
     });
   } catch (error) {

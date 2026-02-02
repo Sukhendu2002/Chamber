@@ -24,6 +24,8 @@ import {
   IconLogout,
   IconUser,
   IconCalendarRepeat,
+  IconCash,
+  IconBuildingBank,
 } from "@tabler/icons-react";
 
 const navItems = [
@@ -41,6 +43,16 @@ const navItems = [
     title: "Subscriptions",
     href: "/subscriptions",
     icon: IconCalendarRepeat,
+  },
+  {
+    title: "Lent Money",
+    href: "/loans",
+    icon: IconCash,
+  },
+  {
+    title: "Accounts",
+    href: "/accounts",
+    icon: IconBuildingBank,
   },
   {
     title: "Analytics",

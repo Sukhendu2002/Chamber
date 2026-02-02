@@ -90,3 +90,81 @@ model Subscription {
   @@index([userId])
   @@index([nextBillingDate])
 }
+
+enum LoanStatus {
+  PENDING      // Not yet fully repaid
+  PARTIAL      // Partially repaid
+  COMPLETED    // Fully repaid
+}
+
+model Loan {
+  id            String       @id @default(uuid())
+  userId        String       // Clerk User ID (lender)
+  borrowerName  String       // Name of person who borrowed
+  borrowerPhone String?      // Optional contact
+  amount        Float        // Total amount lent
+  amountRepaid  Float        @default(0) // Amount repaid so far
+  status        LoanStatus   @default(PENDING)
+  lendDate      DateTime     @default(now())
+  dueDate       DateTime?    // Optional due date
+  description   String?      // Notes about the loan
+  receiptUrls   String[]     @default([]) // Receipts/proof
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+  repayments    Repayment[]
+
+  @@index([userId])
+  @@index([borrowerName])
+}
+
+model Repayment {
+  id          String   @id @default(uuid())
+  loanId      String
+  loan        Loan     @relation(fields: [loanId], references: [id], onDelete: Cascade)
+  amount      Float
+  date        DateTime @default(now())
+  note        String?
+  receiptUrls String[] @default([]) // Receipts for this repayment
+  createdAt   DateTime @default(now())
+
+  @@index([loanId])
+}
+
+enum AccountType {
+  BANK
+  INVESTMENT
+  WALLET
+  CASH
+  OTHER
+}
+
+model Account {
+  id            String          @id @default(uuid())
+  userId        String          // Clerk User ID
+  name          String          // e.g., "SBI Savings", "Zerodha", "PPF"
+  type          AccountType     @default(BANK)
+  currentBalance Float          @default(0)
+  description   String?
+  icon          String?         // Optional icon identifier
+  color         String?         // Optional color for UI
+  isActive      Boolean         @default(true)
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+  balanceHistory BalanceHistory[]
+
+  @@index([userId])
+  @@index([type])
+}
+
+model BalanceHistory {
+  id        String   @id @default(uuid())
+  accountId String
+  account   Account  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  balance   Float
+  note      String?  // Optional note for this update
+  date      DateTime @default(now())
+  createdAt DateTime @default(now())
+
+  @@index([accountId])
+  @@index([date])
+}

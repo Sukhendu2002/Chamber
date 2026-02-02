@@ -199,16 +199,16 @@ export async function getMonthlyStats() {
     take: 5,
   });
 
-  const totalSpent = monthlyExpenses.reduce((sum: number, e) => sum + e.amount, 0);
+  let totalSpent = 0;
+  for (const e of monthlyExpenses) {
+    totalSpent += e.amount;
+  }
   const transactionCount = monthlyExpenses.length;
 
-  const categoryBreakdown = monthlyExpenses.reduce<Record<string, number>>(
-    (acc, e) => {
-      acc[e.category] = (acc[e.category] || 0) + e.amount;
-      return acc;
-    },
-    {}
-  );
+  const categoryBreakdown: Record<string, number> = {};
+  for (const e of monthlyExpenses) {
+    categoryBreakdown[e.category] = (categoryBreakdown[e.category] || 0) + e.amount;
+  }
 
   return {
     totalSpent,
@@ -239,19 +239,22 @@ export async function getAnalyticsData() {
 
   // Current month stats
   const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-  const currentMonthExpenses = expenses.filter(
-    (e) => new Date(e.date) >= startOfMonth
-  );
-  const totalSpent = currentMonthExpenses.reduce((sum, e) => sum + e.amount, 0);
+  const currentMonthExpenses: typeof expenses = [];
+  for (const exp of expenses) {
+    if (new Date(exp.date) >= startOfMonth) {
+      currentMonthExpenses.push(exp);
+    }
+  }
+  let analyticsTotalSpent = 0;
+  for (const exp of currentMonthExpenses) {
+    analyticsTotalSpent += exp.amount;
+  }
 
   // Category breakdown for current month
-  const categoryBreakdown = currentMonthExpenses.reduce<Record<string, number>>(
-    (acc, e) => {
-      acc[e.category] = (acc[e.category] || 0) + e.amount;
-      return acc;
-    },
-    {}
-  );
+  const analyticsCategoryBreakdown: Record<string, number> = {};
+  for (const exp of currentMonthExpenses) {
+    analyticsCategoryBreakdown[exp.category] = (analyticsCategoryBreakdown[exp.category] || 0) + exp.amount;
+  }
 
   // Monthly spending trend (last 6 months)
   const monthlyData: { month: string; spent: number }[] = [];
@@ -260,12 +263,18 @@ export async function getAnalyticsData() {
     const monthEnd = new Date(now.getFullYear(), now.getMonth() - i + 1, 0);
     const monthName = monthDate.toLocaleDateString("en-US", { month: "short" });
     
-    const monthExpenses = expenses.filter((e) => {
-      const expenseDate = new Date(e.date);
-      return expenseDate >= monthDate && expenseDate <= monthEnd;
-    });
+    const monthExpenses: typeof expenses = [];
+    for (const exp of expenses) {
+      const expenseDate = new Date(exp.date);
+      if (expenseDate >= monthDate && expenseDate <= monthEnd) {
+        monthExpenses.push(exp);
+      }
+    }
     
-    const spent = monthExpenses.reduce((sum, e) => sum + e.amount, 0);
+    let spent = 0;
+    for (const exp of monthExpenses) {
+      spent += exp.amount;
+    }
     monthlyData.push({ month: monthName, spent });
   }
 
@@ -281,15 +290,15 @@ export async function getAnalyticsData() {
     General: "#95A5A6",
   };
 
-  const categoryData = Object.entries(categoryBreakdown).map(([name, value]) => ({
+  const categoryData = Object.entries(analyticsCategoryBreakdown).map(([name, value]) => ({
     name,
     value,
     color: categoryColors[name] || "#95A5A6",
   }));
 
   return {
-    totalSpent,
-    categoryBreakdown,
+    totalSpent: analyticsTotalSpent,
+    categoryBreakdown: analyticsCategoryBreakdown,
     categoryData,
     monthlyData,
   };

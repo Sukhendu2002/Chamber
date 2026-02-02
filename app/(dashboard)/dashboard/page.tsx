@@ -8,16 +8,23 @@ import {
   IconReceipt,
   IconWallet,
   IconTrendingUp,
+  IconBuildingBank,
+  IconChartLine,
 } from "@tabler/icons-react";
 import { AddExpenseDialog } from "@/components/add-expense-dialog";
 import { getMonthlyStats } from "@/lib/actions/expenses";
 import { getUserSettings } from "@/lib/actions/settings";
 import { ExpenseCalendarWidget } from "@/components/expense-calendar-widget";
+import { getAccountStats, getAllBalanceHistory } from "@/lib/actions/accounts";
+import { BalanceHistoryChart } from "@/components/balance-history-chart";
+import Link from "next/link";
 
 export default async function DashboardPage() {
-  const [stats, settings] = await Promise.all([
+  const [stats, settings, accountStats, balanceHistory] = await Promise.all([
     getMonthlyStats(),
     getUserSettings(),
+    getAccountStats(),
+    getAllBalanceHistory(6),
   ]);
 
   const currentDate = new Date();
@@ -127,6 +134,52 @@ export default async function DashboardPage() {
             </CardContent>
           </Card>
         ))}
+      </div>
+
+      {/* Net Worth Section */}
+      <div className="mb-8 grid gap-4 md:grid-cols-2">
+        <Card className="border">
+          <CardHeader className="flex flex-row items-center justify-between pb-2">
+            <CardTitle className="text-sm font-medium">Net Worth</CardTitle>
+            <Link href="/accounts" className="text-xs text-blue-500 hover:underline">
+              View All
+            </Link>
+          </CardHeader>
+          <CardContent>
+            <div className="text-3xl font-bold mb-4">
+              {formatCurrency(accountStats.totalNetWorth)}
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="flex items-center gap-2">
+                <IconBuildingBank className="h-4 w-4 text-blue-500" />
+                <div>
+                  <div className="text-xs text-muted-foreground">Banks</div>
+                  <div className="font-medium">{formatCurrency(accountStats.totalBankBalance)}</div>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <IconChartLine className="h-4 w-4 text-green-500" />
+                <div>
+                  <div className="text-xs text-muted-foreground">Investments</div>
+                  <div className="font-medium">{formatCurrency(accountStats.totalInvestments)}</div>
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="border">
+          <CardHeader>
+            <CardTitle className="text-sm font-medium">Balance Trend</CardTitle>
+          </CardHeader>
+          <CardContent className="pt-0">
+            <BalanceHistoryChart 
+              accounts={balanceHistory.accounts} 
+              timeline={balanceHistory.timeline} 
+              currency={settings.currency} 
+            />
+          </CardContent>
+        </Card>
       </div>
 
       {/* Charts Section */}

@@ -173,37 +173,52 @@ export async function exportExpensesCSV() {
   });
 
   // Create CSV for expenses
-  const expenseHeaders = ["Date", "Description", "Merchant", "Category", "Amount", "Payment Method", "Source"];
-  const expenseRows = expenses.map((e) => [
-    new Date(e.date).toISOString().split("T")[0],
-    e.description || "",
-    e.merchant || "",
-    e.category,
-    e.amount.toString(),
-    e.paymentMethod || "",
-    e.source,
-  ]);
+  const expenseHeaders = ["Date", "Description", "Merchant", "Category", "Amount", "Payment Method", "Source", "Receipt URLs"];
+  const expenseRows: string[][] = [];
+  for (const e of expenses) {
+    // Combine legacy receiptUrl and new receiptUrls array
+    const receipts: string[] = [...(e.receiptUrls || [])];
+    if (e.receiptUrl && !receipts.includes(e.receiptUrl)) {
+      receipts.unshift(e.receiptUrl);
+    }
+    // Generate full URLs for receipts (they need to be accessed via the API)
+    const receiptLinks = receipts.map((_: string, idx: number) => `/api/receipt/${e.id}?index=${idx}`).join("; ");
+    
+    expenseRows.push([
+      new Date(e.date).toISOString().split("T")[0],
+      e.description || "",
+      e.merchant || "",
+      e.category,
+      e.amount.toString(),
+      e.paymentMethod || "",
+      e.source,
+      receiptLinks,
+    ]);
+  }
 
   const expenseCSV = [
     expenseHeaders.join(","),
-    ...expenseRows.map((row) => row.map((cell) => `"${cell.replace(/"/g, '""')}"`).join(",")),
+    ...expenseRows.map((row: string[]) => row.map((cell: string) => `"${cell.replace(/"/g, '""')}"`).join(",")),
   ].join("\n");
 
   // Create CSV for subscriptions
   const subHeaders = ["Name", "Amount", "Billing Cycle", "Next Billing Date", "Payment Method", "Active", "Alert Days Before"];
-  const subRows = subscriptions.map((s) => [
-    s.name,
-    s.amount.toString(),
-    s.billingCycle,
-    new Date(s.nextBillingDate).toISOString().split("T")[0],
-    s.paymentMethod || "",
-    s.isActive ? "Yes" : "No",
-    s.alertDaysBefore.toString(),
-  ]);
+  const subRows: string[][] = [];
+  for (const s of subscriptions) {
+    subRows.push([
+      s.name,
+      s.amount.toString(),
+      s.billingCycle,
+      new Date(s.nextBillingDate).toISOString().split("T")[0],
+      s.paymentMethod || "",
+      s.isActive ? "Yes" : "No",
+      s.alertDaysBefore.toString(),
+    ]);
+  }
 
   const subscriptionCSV = [
     subHeaders.join(","),
-    ...subRows.map((row) => row.map((cell) => `"${cell.replace(/"/g, '""')}"`).join(",")),
+    ...subRows.map((row: string[]) => row.map((cell: string) => `"${cell.replace(/"/g, '""')}"`).join(",")),
   ].join("\n");
 
   return {
@@ -226,6 +241,16 @@ export async function deleteAllUserData() {
     where: { userId },
   });
 
+  // Delete all user's loans (cascade will delete repayments)
+  await db.loan.deleteMany({
+    where: { userId },
+  });
+
+  // Delete all user's accounts (cascade will delete balance history)
+  await db.account.deleteMany({
+    where: { userId },
+  });
+
   // Delete all user's linking codes
   await db.linkingCode.deleteMany({
     where: { userId },
@@ -243,5 +268,7 @@ export async function deleteAllUserData() {
   revalidatePath("/dashboard");
   revalidatePath("/expenses");
   revalidatePath("/subscriptions");
+  revalidatePath("/loans");
+  revalidatePath("/accounts");
   revalidatePath("/settings");
 }

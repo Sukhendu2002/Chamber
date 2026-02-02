@@ -169,7 +169,7 @@ GEMINI_API_KEY="..."
 
 - [x] **UI Complete**: All pages built with shadcn components
 - [x] **Phase 1**: Complete
-  - [x] Prisma schema created (UserSettings, Expense, LinkingCode)
+  - [x] Prisma schema created (UserSettings, Expense, LinkingCode, Subscription)
   - [x] Clerk authentication configured
   - [x] Middleware for protected routes
   - [x] Server actions for expenses (CRUD)
@@ -184,21 +184,96 @@ GEMINI_API_KEY="..."
   - [x] Account linking via /start command
   - [x] Expense parsing from text messages
   - [x] Category auto-detection
-- [ ] **Phase 3**: Not Started (Analytics with real data)
+- [x] **Phase 3**: Complete (Analytics & Dashboard)
+  - [x] Real monthly totals calculation
+  - [x] Category breakdown with pie chart
+  - [x] Recent expenses display (5 most recent)
+  - [x] Budget progress tracking
+  - [x] Expense calendar widget with hover tooltips
+  - [x] Date range and category filters
+  - [x] Search functionality
 - [ ] **Phase 4**: Not Started (Bank Statement Import)
-- [ ] **Phase 5**: Not Started (Polish & Optimization)
+- [x] **Phase 5**: Partial (Polish & Optimization)
+  - [x] Export expenses and subscriptions to CSV (with receipt URLs)
+  - [x] Delete all data functionality with confirmation
+  - [x] Pagination for expenses
+
+---
+
+## Additional Features Implemented
+
+### Subscription Management
+- [x] Subscription model with billing cycles (Weekly, Monthly, Quarterly, Yearly, One-time)
+- [x] Subscriptions page with calendar view
+- [x] Add/Edit/Delete subscriptions
+- [x] Auto-create expense when subscription is added
+- [x] Auto-create expense when subscription is renewed
+- [x] One-time subscriptions auto-deactivate after renewal
+- [x] Subscription mode in Add Expense dialog (when "Subscription" category selected)
+
+### Receipt Management
+- [x] Receipt upload for expenses (Cloudflare R2 storage)
+- [x] Multiple receipts per expense
+- [x] Receipt viewing and deletion
+- [x] Receipts are protected per user (auth required to access)
+- [x] Receipt URLs included in CSV export
+
+### Subscription Alerts
+- [x] Event-driven alerts (triggered on expense create/update)
+- [x] Telegram notifications for subscriptions due within 7 days
+- [x] Alert tracking to prevent duplicate notifications
+
+### Categories
+- [x] Food, Travel, Entertainment, Bills, Shopping, Health, Education, General
+- [x] Investments category
+- [x] Subscription category
+
+### Loan Tracking (Lent Money)
+- [x] Loan model with borrower info, amount, status, due date
+- [x] Repayment model to track partial payments
+- [x] Loans page with stats cards (Total Lent, Outstanding, Pending, Completed)
+- [x] Add/Edit/Delete loans
+- [x] Add/Delete repayments with automatic status updates
+- [x] Progress bar showing repayment percentage
+- [x] Loan details dialog with repayment history
+- [x] Overdue loan highlighting
+- [x] Multiple receipt attachments for loans and repayments
+- [x] Automatic status transitions (PENDING → PARTIAL → COMPLETED)
+
+### Account & Investment Tracking
+- [x] Account model with types: Bank, Investment, Wallet, Cash, Other
+- [x] BalanceHistory model to track every balance update
+- [x] Accounts page with stats cards (Net Worth, Bank Balance, Investments, Wallet, Cash)
+- [x] Add/Edit/Delete accounts
+- [x] Update balance with date and note tracking
+- [x] View balance history with change indicators
+- [x] Delete individual history entries
+- [x] Balance history chart (stacked area chart for banks vs investments)
+- [x] Net Worth widget on main dashboard
+- [x] Balance trend graph on main dashboard
+
+---
+
+## Receipt Security
+
+Receipts are **protected per user**:
+- Stored in Cloudflare R2 with user-specific paths (`receipts/{userId}/{expenseId}/{filename}`)
+- API endpoint `/api/receipt/[id]` requires authentication
+- Verifies expense ownership before serving receipt
+- Other users cannot access receipts they don't own
+
+---
 
 ## Next Steps
 
-1. **Configure Environment Variables**: Set up `.env` with:
-   - `DATABASE_URL` - PostgreSQL connection string
-   - `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` and `CLERK_SECRET_KEY`
-   - `TELEGRAM_BOT_TOKEN` and `TELEGRAM_WEBHOOK_SECRET`
+1. **Phase 4 - Bank Statement Import**:
+   - CSV file upload and parsing
+   - PDF parsing for bank statements
+   - Transaction matching and deduplication
+   - Bulk import functionality
 
-2. **Run Database Migration**: `npx prisma migrate dev`
-
-3. **Generate Prisma Client**: `npx prisma generate`
-
-4. **Setup Telegram Bot**: 
-   - Create bot via @BotFather
-   - Set webhook URL to `https://your-domain.com/api/telegram/webhook`
+2. **Future Enhancements**:
+   - Monthly spending reports
+   - Budget alerts when approaching limit
+   - Recurring expense predictions
+   - Mobile app (React Native)

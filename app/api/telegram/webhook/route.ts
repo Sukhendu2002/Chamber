@@ -328,8 +328,8 @@ async function handleExpenseMessage(chatId: number, text: string) {
         { text: "🏦 SBI", callback_data: "pay_SBI" },
       ],
       [
-        { text: "💵 Cash", callback_data: "pay_Cash" },
-        { text: "💳 Credit", callback_data: "pay_Credit" },
+        { text: "💵 Cash", callback_data: "pay_CASH" },
+        { text: "💳 Credit", callback_data: "pay_CREDIT" },
       ],
       [
         { text: "❌ Cancel", callback_data: "confirm_no" },
@@ -439,8 +439,8 @@ async function handlePhotoMessage(chatId: number, photo: TelegramMessage["photo"
         { text: "🏦 SBI", callback_data: "pay_SBI" },
       ],
       [
-        { text: "💵 Cash", callback_data: "pay_Cash" },
-        { text: "💳 Credit", callback_data: "pay_Credit" },
+        { text: "💵 Cash", callback_data: "pay_CASH" },
+        { text: "💳 Credit", callback_data: "pay_CREDIT" },
       ],
       [
         { text: "❌ Cancel", callback_data: "confirm_no" },
@@ -586,8 +586,8 @@ async function handleDocumentMessage(chatId: number, document: TelegramMessage["
         { text: "🏦 SBI", callback_data: "pay_SBI" },
       ],
       [
-        { text: "💵 Cash", callback_data: "pay_Cash" },
-        { text: "💳 Credit", callback_data: "pay_Credit" },
+        { text: "💵 Cash", callback_data: "pay_CASH" },
+        { text: "💳 Credit", callback_data: "pay_CREDIT" },
       ],
       [
         { text: "❌ Cancel", callback_data: "confirm_no" },

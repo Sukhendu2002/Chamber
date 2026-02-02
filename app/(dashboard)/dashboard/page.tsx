@@ -34,7 +34,7 @@ export default async function DashboardPage() {
   });
 
   const budget = settings.monthlyBudget;
-  const remaining = budget - stats.totalSpent;
+  const remaining = budget - stats.spentExcludingInvestment;
   const budgetUsed = budget > 0 ? Math.round((stats.totalSpent / budget) * 100) : 0;
 
   const formatCurrency = (amount: number) => {

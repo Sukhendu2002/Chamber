@@ -200,8 +200,12 @@ export async function getMonthlyStats() {
   });
 
   let totalSpent = 0;
+  let spentExcludingInvestment = 0;
   for (const e of monthlyExpenses) {
     totalSpent += e.amount;
+    if (e.category !== "Investment") {
+      spentExcludingInvestment += e.amount;
+    }
   }
   const transactionCount = monthlyExpenses.length;
 
@@ -212,6 +216,7 @@ export async function getMonthlyStats() {
 
   return {
     totalSpent,
+    spentExcludingInvestment,
     transactionCount,
     categoryBreakdown,
     expenses: recentExpenses, // 5 most recent expenses overall

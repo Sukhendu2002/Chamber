@@ -6,8 +6,8 @@
 
 set -e
 
-BOT_TOKEN="8333407242:AAE-lBeK2U5SWNCYjSXBvK7RmrwLsaPP25U"
-WEBHOOK_SECRET="chamber_webhook_secret_2026"
+BOT_TOKEN="${TELEGRAM_BOT_TOKEN:-${BOT_TOKEN:-}}"
+WEBHOOK_SECRET="${TELEGRAM_WEBHOOK_SECRET:-${WEBHOOK_SECRET:-}}"
 
 TUNNEL_URL="$1"
 
@@ -18,6 +18,16 @@ if [ -z "$TUNNEL_URL" ]; then
   echo "Example: npm run webhook:setup -- https://abc-xyz.trycloudflare.com"
   echo ""
   echo "Get the URL from cloudflared output (look for 'https://...trycloudflare.com')"
+  exit 1
+fi
+
+if [ -z "$BOT_TOKEN" ]; then
+  echo "❌ Missing Telegram bot token. Set TELEGRAM_BOT_TOKEN in your environment."
+  exit 1
+fi
+
+if [ -z "$WEBHOOK_SECRET" ]; then
+  echo "❌ Missing webhook secret. Set TELEGRAM_WEBHOOK_SECRET in your environment."
   exit 1
 fi
 

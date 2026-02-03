@@ -245,7 +245,7 @@ export function SubscriptionCalendar({ subscriptions, currency }: SubscriptionCa
 
   // Generate calendar days
   const calendarDays = [];
-  
+
   // Empty cells for days before the first day of the month
   for (let i = 0; i < startingDayOfWeek; i++) {
     calendarDays.push(<div key={`empty-${i}`} className="h-24 border border-muted/30" />);
@@ -259,9 +259,8 @@ export function SubscriptionCalendar({ subscriptions, currency }: SubscriptionCa
     calendarDays.push(
       <div
         key={day}
-        className={`h-24 border border-muted/30 p-1 overflow-hidden ${
-          today ? "bg-primary/5 border-primary" : ""
-        }`}
+        className={`h-24 border border-muted/30 p-1 overflow-hidden ${today ? "bg-primary/5 border-primary" : ""
+          }`}
       >
         <div className={`text-xs font-medium mb-1 ${today ? "text-primary" : "text-muted-foreground"}`}>
           {day}
@@ -271,11 +270,10 @@ export function SubscriptionCalendar({ subscriptions, currency }: SubscriptionCa
             <button
               key={sub.id}
               onClick={() => setSelectedSubscription(sub)}
-              className={`w-full text-left text-xs p-1 rounded truncate ${
-                isDueSoon(sub)
+              className={`w-full text-left text-xs p-1 rounded truncate ${isDueSoon(sub)
                   ? "bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300"
                   : "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300"
-              }`}
+                }`}
             >
               {sub.name}
             </button>
@@ -375,9 +373,8 @@ export function SubscriptionCalendar({ subscriptions, currency }: SubscriptionCa
               subscriptions.map((sub) => (
                 <div
                   key={sub.id}
-                  className={`flex items-center justify-between p-3 rounded-lg border ${
-                    !sub.isActive ? "opacity-50" : ""
-                  } ${isDueSoon(sub) ? "border-orange-300 bg-orange-50 dark:bg-orange-900/10" : ""}`}
+                  className={`flex items-center justify-between p-3 rounded-lg border ${!sub.isActive ? "opacity-50" : ""
+                    } ${isDueSoon(sub) ? "border-orange-300 bg-orange-50 dark:bg-orange-900/10" : ""}`}
                 >
                   <div className="flex items-center gap-3">
                     {isDueSoon(sub) && (
@@ -578,7 +575,7 @@ export function SubscriptionCalendar({ subscriptions, currency }: SubscriptionCa
           <DialogHeader>
             <DialogTitle>Delete Subscription</DialogTitle>
           </DialogHeader>
-          <p>Are you sure you want to delete "{deleteConfirm?.name}"? This action cannot be undone.</p>
+          <p>Are you sure you want to delete &quot;{deleteConfirm?.name}&quot;? This action cannot be undone.</p>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDeleteConfirm(null)}>
               Cancel

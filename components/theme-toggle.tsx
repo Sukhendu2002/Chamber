@@ -3,15 +3,19 @@
 import { useTheme } from "next-themes";
 import { Button } from "@/components/ui/button";
 import { IconSun, IconMoon } from "@tabler/icons-react";
-import { useEffect, useState } from "react";
+import { useSyncExternalStore } from "react";
+
+// Subscribe to nothing, just return the mounted state
+const emptySubscribe = () => () => { };
 
 export function ThemeToggle() {
   const { theme, setTheme } = useTheme();
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
+  // Use useSyncExternalStore to avoid hydration mismatch without triggering cascading renders
+  const mounted = useSyncExternalStore(
+    emptySubscribe,
+    () => true,
+    () => false
+  );
 
   if (!mounted) {
     return (

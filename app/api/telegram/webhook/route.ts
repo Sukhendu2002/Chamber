@@ -116,7 +116,7 @@ async function sendTelegramMessage(chatId: number, text: string, replyMarkup?: o
 
 async function answerCallbackQuery(callbackQueryId: string, text?: string) {
   if (!TELEGRAM_BOT_TOKEN) return;
-  
+
   await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/answerCallbackQuery`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -129,18 +129,18 @@ async function answerCallbackQuery(callbackQueryId: string, text?: string) {
 
 async function editMessageText(chatId: number, messageId: number, text: string, replyMarkup?: object) {
   if (!TELEGRAM_BOT_TOKEN) return;
-  
+
   const body: Record<string, unknown> = {
     chat_id: chatId,
     message_id: messageId,
     text,
     parse_mode: "HTML",
   };
-  
+
   if (replyMarkup) {
     body.reply_markup = replyMarkup;
   }
-  
+
   await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/editMessageText`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -191,7 +191,7 @@ async function getFileUrl(fileId: string): Promise<string | null> {
       `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/getFile?file_id=${fileId}`
     );
     const data = await response.json();
-    
+
     if (data.ok && data.result.file_path) {
       return `https://api.telegram.org/file/bot${TELEGRAM_BOT_TOKEN}/${data.result.file_path}`;
     }
@@ -268,7 +268,7 @@ async function handleExpenseMessage(chatId: number, text: string) {
 
   // Use AI to parse the expense
   await sendTelegramMessage(chatId, "🤖 Processing...");
-  
+
   const aiResult = await parseExpenseWithAI(text);
 
   let amount: number;
@@ -279,7 +279,7 @@ async function handleExpenseMessage(chatId: number, text: string) {
   if (!aiResult.success || !aiResult.expense) {
     // Fallback to simple parsing
     const amountMatch = text.match(/(\d+(?:\.\d{1,2})?)/);
-    
+
     if (!amountMatch) {
       await sendTelegramMessage(
         chatId,
@@ -315,7 +315,7 @@ async function handleExpenseMessage(chatId: number, text: string) {
   let confirmMsg = `📋 <b>Select payment method:</b>\n\n`;
   if (merchant) confirmMsg += `🏪 ${merchant}\n`;
   confirmMsg += `💰 ₹${amount.toFixed(2)}\n📁 ${category}\n📝 ${description}`;
-  
+
   if (isDuplicate) {
     confirmMsg += `\n\n⚠️ <b>Warning:</b> Duplicate amount today.`;
   }
@@ -378,7 +378,7 @@ async function handlePhotoMessage(chatId: number, photo: TelegramMessage["photo"
   }
 
   let aiResult;
-  
+
   // If caption has useful expense info (contains amount), use it; otherwise do OCR
   if (caption && caption.trim().length > 5 && hasUsefulExpenseInfo(caption)) {
     console.log("Using caption for parsing:", caption);
@@ -426,7 +426,7 @@ async function handlePhotoMessage(chatId: number, photo: TelegramMessage["photo"
   if (merchant) confirmMsg += `🏪 ${merchant}\n`;
   confirmMsg += `💰 ₹${amount.toFixed(2)}\n📁 ${category}\n📝 ${description}`;
   if (receiptUrl) confirmMsg += `\n📎 Receipt attached`;
-  
+
   if (isDuplicate) {
     confirmMsg += `\n\n⚠️ <b>Warning:</b> Duplicate amount today.`;
   }
@@ -473,7 +473,7 @@ async function handleDocumentMessage(chatId: number, document: TelegramMessage["
 
   // Check if it's a PDF
   const isPdf = document.mime_type === "application/pdf" || document.file_name?.toLowerCase().endsWith(".pdf");
-  
+
   if (!isPdf) {
     await sendTelegramMessage(chatId, "❌ Only PDF invoices are supported. Please send a PDF file or an image.");
     return;
@@ -505,7 +505,7 @@ async function handleDocumentMessage(chatId: number, document: TelegramMessage["
   }
 
   // Use caption if provided, otherwise use extracted PDF text
-  let textToParse = caption && hasUsefulExpenseInfo(caption) 
+  const textToParse = caption && hasUsefulExpenseInfo(caption)
     ? `User sent a PDF invoice with caption: "${caption}"`
     : `Extract expense details from this invoice text:\n\n${pdfText.substring(0, 2000)}`;
 
@@ -573,7 +573,7 @@ async function handleDocumentMessage(chatId: number, document: TelegramMessage["
   if (merchant) confirmMsg += `🏪 ${merchant}\n`;
   confirmMsg += `💰 ₹${amount.toFixed(2)}\n📁 ${category}\n📝 ${description}`;
   confirmMsg += `\n📄 PDF attached`;
-  
+
   if (isDuplicate) {
     confirmMsg += `\n\n⚠️ <b>Warning:</b> Duplicate amount today.`;
   }
@@ -607,7 +607,7 @@ export async function POST(request: NextRequest) {
 
   try {
     const update: TelegramUpdate = await request.json();
-    
+
     // Handle callback queries (inline button clicks)
     if (update.callback_query) {
       const callbackQuery = update.callback_query;
@@ -637,12 +637,12 @@ export async function POST(request: NextRequest) {
             });
             // Notify web UI to refresh
             notifyUser(pending.userId);
-            
+
             // Check and send subscription alerts (non-blocking)
             checkAndSendSubscriptionAlerts(pending.userId).catch(console.error);
-            
+
             pendingExpenses.delete(chatId);
-            
+
             await editMessageText(chatId, messageId, `✅ <b>Saved!</b>\n\n💰 ₹${pending.amount.toFixed(2)}\n📁 ${pending.category}\n💳 ${paymentMethod}`);
             await answerCallbackQuery(callbackQuery.id, "Saved!");
           } else {

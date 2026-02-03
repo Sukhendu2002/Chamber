@@ -73,7 +73,7 @@ describe("R2 Key Generation Logic", () => {
                 ".webp": "image/webp",
             };
 
-            for (const [ext, expectedType] of Object.entries(contentTypes)) {
+            for (const [, expectedType] of Object.entries(contentTypes)) {
                 expect(typeof expectedType).toBe("string");
                 expect(expectedType.includes("/")).toBe(true);
             }

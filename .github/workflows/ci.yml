@@ -2,9 +2,10 @@ name: CI - Test Suite
 
 on:
   push:
-    branches: [main, dev, 'feature/**']
+    branches: [main, dev, "feature/**"]
   pull_request:
     branches: [main, dev]
+  workflow_dispatch: # Allow manual trigger
 
 env:
   # Test environment variables
@@ -74,14 +75,10 @@ jobs:
             coverage/
           retention-days: 7
 
-  # Build and E2E tests require valid Clerk keys
-  # Set NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY and CLERK_SECRET_KEY as repository secrets
-  # to enable these jobs
   build:
     name: Build Check
     runs-on: ubuntu-latest
     needs: lint
-    if: ${{ vars.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY != '' || secrets.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY != '' }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -109,8 +106,7 @@ jobs:
   e2e-tests:
     name: E2E Tests
     runs-on: ubuntu-latest
-    needs: unit-tests
-    if: ${{ vars.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY != '' || secrets.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY != '' }}
+    needs: [unit-tests, build]
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -147,15 +143,19 @@ jobs:
           path: playwright-report/
           retention-days: 7
 
-  # Summary job - always runs, provides status summary
   ci-summary:
     name: CI Summary
     runs-on: ubuntu-latest
-    needs: [lint, unit-tests]
+    needs: [lint, unit-tests, build]
     if: always()
     steps:
       - name: Check results
         run: |
+          echo "🔍 CI Results:"
+          echo "  Lint: ${{ needs.lint.result }}"
+          echo "  Unit Tests: ${{ needs.unit-tests.result }}"
+          echo "  Build: ${{ needs.build.result }}"
+          
           if [[ "${{ needs.lint.result }}" == "failure" ]]; then
             echo "❌ Lint failed"
             exit 1
@@ -164,8 +164,8 @@ jobs:
             echo "❌ Unit tests failed"
             exit 1
           fi
-          echo "✅ All required checks passed!"
-          echo ""
-          echo "📝 Note: Build and E2E tests are skipped without Clerk secrets."
-          echo "   Add NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY and CLERK_SECRET_KEY"
-          echo "   as repository secrets to enable full CI."
+          if [[ "${{ needs.build.result }}" == "failure" ]]; then
+            echo "❌ Build failed"
+            exit 1
+          fi
+          echo "✅ All checks passed!"

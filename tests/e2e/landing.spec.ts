@@ -11,11 +11,10 @@ test.describe("Landing Page", () => {
     test("should have navigation or auth elements", async ({ page }) => {
         await page.goto("/");
 
-        // Wait for page to be fully loaded
-        await page.waitForLoadState("networkidle");
+        // Wait for DOM to be ready (faster than networkidle)
+        await page.waitForLoadState("domcontentloaded");
 
-        // The landing page should have either auth links, a CTA button, or navigation
-        // This is a flexible check that works with different landing page designs
+        // The landing page should have content
         const hasContent = await page.locator("body").textContent();
         expect(hasContent).toBeTruthy();
         expect(hasContent!.length).toBeGreaterThan(0);
@@ -28,9 +27,8 @@ test.describe("Authentication Flow", () => {
     }) => {
         await page.goto("/dashboard");
 
-        // Should redirect to sign-in or show auth prompt
-        // Wait for redirect to complete
-        await page.waitForLoadState("networkidle");
+        // Wait for DOM (not networkidle - Clerk keeps connections open)
+        await page.waitForLoadState("domcontentloaded");
 
         // URL should contain sign-in, clerk, or we should be on a login page
         const url = page.url();
@@ -41,11 +39,13 @@ test.describe("Authentication Flow", () => {
     test("should load sign-in page without errors", async ({ page }) => {
         await page.goto("/sign-in");
 
-        // Wait for page to load
-        await page.waitForLoadState("networkidle");
+        // Wait for DOM to be ready (Clerk uses websockets that keep networkidle waiting)
+        await page.waitForLoadState("domcontentloaded");
+
+        // Give Clerk a moment to render
+        await page.waitForTimeout(1000);
 
         // The page should load without crashing
-        // Check that we're on an auth-related page
         const url = page.url();
         expect(url).toMatch(/sign-in|clerk|login/);
 

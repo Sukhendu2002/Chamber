@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useSyncExternalStore } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useClerk, useUser } from "@clerk/nextjs";
@@ -76,15 +76,19 @@ const navItems = [
   },
 ];
 
+// Subscribe to nothing, just return the mounted state
+const emptySubscribe = () => () => { };
+
 export function Sidebar() {
   const pathname = usePathname();
   const { user, isLoaded } = useUser();
   const { signOut } = useClerk();
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
+  // Use useSyncExternalStore to avoid hydration mismatch without triggering cascading renders
+  const mounted = useSyncExternalStore(
+    emptySubscribe,
+    () => true,
+    () => false
+  );
 
   return (
     <aside className="flex h-screen w-56 flex-col border-r bg-background">

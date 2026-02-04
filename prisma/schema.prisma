@@ -10,13 +10,14 @@ datasource db {
 }
 
 model UserSettings {
-  id             String   @id @default(uuid())
-  userId         String   @unique // Clerk User ID
-  telegramChatId String?  @unique // Linked Telegram Chat ID
-  monthlyBudget  Float    @default(0)
-  currency       String   @default("INR")
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  id               String   @id @default(uuid())
+  userId           String   @unique // Clerk User ID
+  telegramChatId   String?  @unique // Linked Telegram Chat ID
+  monthlyBudget    Float    @default(0)
+  currency         String   @default("INR")
+  dashboardWidgets Json?    // Stores which dashboard widgets to show/hide
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 }
 
 model Expense {

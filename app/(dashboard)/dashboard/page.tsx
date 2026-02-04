@@ -18,6 +18,7 @@ import { ExpenseCalendarWidget } from "@/components/expense-calendar-widget";
 import { getAccountStats, getAllBalanceHistory } from "@/lib/actions/accounts";
 import { BalanceHistoryChart } from "@/components/balance-history-chart";
 import Link from "next/link";
+import { DashboardWidgets, DEFAULT_DASHBOARD_WIDGETS } from "@/types/dashboard";
 
 export default async function DashboardPage() {
   const [stats, settings, accountStats, balanceHistory] = await Promise.all([
@@ -36,6 +37,12 @@ export default async function DashboardPage() {
   const budget = settings.monthlyBudget;
   const remaining = budget - stats.spentExcludingInvestment;
   const budgetUsed = budget > 0 ? Math.round((stats.totalSpent / budget) * 100) : 0;
+
+  // Get dashboard widget settings with defaults
+  const widgets: DashboardWidgets = {
+    ...DEFAULT_DASHBOARD_WIDGETS,
+    ...((settings.dashboardWidgets as DashboardWidgets) || {}),
+  };
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat("en-IN", {
@@ -101,6 +108,10 @@ export default async function DashboardPage() {
     General: "bg-gray-500",
   };
 
+  // Count enabled bottom widgets to determine grid columns
+  const enabledBottomWidgets = [widgets.showCalendar, widgets.showCategories, widgets.showRecent].filter(Boolean).length;
+  const bottomGridCols = enabledBottomWidgets === 1 ? "md:grid-cols-1" : enabledBottomWidgets === 2 ? "md:grid-cols-2" : "md:grid-cols-3";
+
   return (
     <div className="p-6">
       {/* Header */}
@@ -115,167 +126,195 @@ export default async function DashboardPage() {
       </div>
 
       {/* Stats Grid */}
-      <div className="mb-8 grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        {statsData.map((stat) => (
-          <Card key={stat.title} className="border">
-            <CardHeader className="flex flex-row items-center justify-between pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                {stat.title}
-              </CardTitle>
-              <stat.icon className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div
-                className={`text-2xl font-bold ${stat.valueColor || ""}`}
-              >
-                {stat.value}
-              </div>
-              <p className="text-xs text-muted-foreground">{stat.subtitle}</p>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+      {widgets.showStats && (
+        <div className="mb-8 grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          {statsData.map((stat) => (
+            <Card key={stat.title} className="border">
+              <CardHeader className="flex flex-row items-center justify-between pb-2">
+                <CardTitle className="text-sm font-medium text-muted-foreground">
+                  {stat.title}
+                </CardTitle>
+                <stat.icon className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div
+                  className={`text-2xl font-bold ${stat.valueColor || ""}`}
+                >
+                  {stat.value}
+                </div>
+                <p className="text-xs text-muted-foreground">{stat.subtitle}</p>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
 
       {/* Net Worth Section */}
-      <div className="mb-8 grid gap-4 md:grid-cols-2">
-        <Card className="border">
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium">Net Worth</CardTitle>
-            <Link href="/accounts" className="text-xs text-blue-500 hover:underline">
-              View All
-            </Link>
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold mb-4">
-              {formatCurrency(accountStats.totalNetWorth)}
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="flex items-center gap-2">
-                <IconBuildingBank className="h-4 w-4 text-blue-500" />
-                <div>
-                  <div className="text-xs text-muted-foreground">Banks</div>
-                  <div className="font-medium">{formatCurrency(accountStats.totalBankBalance)}</div>
+      {(widgets.showNetWorth || widgets.showBalanceTrend) && (
+        <div className="mb-8 grid gap-4 md:grid-cols-2">
+          {widgets.showNetWorth && (
+            <Card className="border">
+              <CardHeader className="flex flex-row items-center justify-between pb-2">
+                <CardTitle className="text-sm font-medium">Net Worth</CardTitle>
+                <Link href="/accounts" className="text-xs text-blue-500 hover:underline">
+                  View All
+                </Link>
+              </CardHeader>
+              <CardContent>
+                <div className="text-3xl font-bold mb-4">
+                  {formatCurrency(accountStats.totalNetWorth)}
                 </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <IconChartLine className="h-4 w-4 text-green-500" />
-                <div>
-                  <div className="text-xs text-muted-foreground">Investments</div>
-                  <div className="font-medium">{formatCurrency(accountStats.totalInvestments)}</div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="flex items-center gap-2">
+                    <IconBuildingBank className="h-4 w-4 text-blue-500" />
+                    <div>
+                      <div className="text-xs text-muted-foreground">Banks</div>
+                      <div className="font-medium">{formatCurrency(accountStats.totalBankBalance)}</div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <IconChartLine className="h-4 w-4 text-green-500" />
+                    <div>
+                      <div className="text-xs text-muted-foreground">Investments</div>
+                      <div className="font-medium">{formatCurrency(accountStats.totalInvestments)}</div>
+                    </div>
+                  </div>
                 </div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+              </CardContent>
+            </Card>
+          )}
 
-        <Card className="border">
-          <CardHeader>
-            <CardTitle className="text-sm font-medium">Balance Trend</CardTitle>
-          </CardHeader>
-          <CardContent className="pt-0">
-            <BalanceHistoryChart 
-              accounts={balanceHistory.accounts} 
-              timeline={balanceHistory.timeline} 
-              currency={settings.currency} 
-            />
-          </CardContent>
-        </Card>
-      </div>
+          {widgets.showBalanceTrend && (
+            <Card className="border">
+              <CardHeader>
+                <CardTitle className="text-sm font-medium">Balance Trend</CardTitle>
+              </CardHeader>
+              <CardContent className="pt-0">
+                <BalanceHistoryChart
+                  accounts={balanceHistory.accounts}
+                  timeline={balanceHistory.timeline}
+                  currency={settings.currency}
+                />
+              </CardContent>
+            </Card>
+          )}
+        </div>
+      )}
 
       {/* Charts Section */}
-      <div className="grid gap-6 md:grid-cols-3">
-        {/* Expense Calendar */}
-        <ExpenseCalendarWidget 
-          expenses={stats.calendarExpenses.map((e: { id: string; amount: number; category: string; merchant: string | null; description: string | null; date: Date }) => ({
-            id: e.id,
-            amount: e.amount,
-            category: e.category,
-            merchant: e.merchant,
-            description: e.description,
-            date: e.date,
-          }))} 
-          currency={settings.currency} 
-        />
-        
-        {/* Spending by Category */}
-        <Card className="border">
-          <CardHeader>
-            <CardTitle className="text-sm font-medium">
-              Spending by Category
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {Object.keys(stats.categoryBreakdown).length > 0 ? (
-              <div className="space-y-3">
-                {Object.entries(stats.categoryBreakdown as Record<string, number>).map(([category, amount]) => (
-                  <div key={category} className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <div
-                        className={`h-3 w-3 rounded-full ${categoryColors[category] || "bg-gray-500"}`}
-                      />
-                      <span className="text-sm">{category}</span>
-                    </div>
-                    <span className="text-sm font-medium">
-                      {formatCurrency(amount)}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="flex h-48 items-center justify-center">
-                <p className="text-sm text-muted-foreground">
-                  No expenses this month
-                </p>
-              </div>
-            )}
-          </CardContent>
-        </Card>
+      {(widgets.showCalendar || widgets.showCategories || widgets.showRecent) && (
+        <div className={`grid gap-6 ${bottomGridCols}`}>
+          {/* Expense Calendar */}
+          {widgets.showCalendar && (
+            <ExpenseCalendarWidget
+              expenses={stats.calendarExpenses.map((e: { id: string; amount: number; category: string; merchant: string | null; description: string | null; date: Date }) => ({
+                id: e.id,
+                amount: e.amount,
+                category: e.category,
+                merchant: e.merchant,
+                description: e.description,
+                date: e.date,
+              }))}
+              currency={settings.currency}
+            />
+          )}
 
-        {/* Recent Expenses */}
-        <Card className="border">
-          <CardHeader>
-            <CardTitle className="text-sm font-medium">
-              Recent Expenses
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {stats.expenses.length > 0 ? (
-              <div className="space-y-3">
-                {stats.expenses.map((expense: { id: string; description: string | null; merchant: string | null; category: string; date: Date; amount: number }) => (
-                  <div
-                    key={expense.id}
-                    className="flex items-center justify-between border-b pb-2 last:border-0"
-                  >
-                    <div>
-                      <p className="text-sm font-medium">
-                        {expense.description || expense.merchant || expense.category}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        {new Date(expense.date).toLocaleDateString("en-US", {
-                          month: "short",
-                          day: "numeric",
-                        })}
-                      </p>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-sm font-medium">
-                        {formatCurrency(expense.amount)}
-                      </p>
-                      <Badge variant="secondary" className="text-xs">
-                        {expense.category}
-                      </Badge>
-                    </div>
+          {/* Spending by Category */}
+          {widgets.showCategories && (
+            <Card className="border">
+              <CardHeader>
+                <CardTitle className="text-sm font-medium">
+                  Spending by Category
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {Object.keys(stats.categoryBreakdown).length > 0 ? (
+                  <div className="space-y-3">
+                    {Object.entries(stats.categoryBreakdown as Record<string, number>).map(([category, amount]) => (
+                      <div key={category} className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <div
+                            className={`h-3 w-3 rounded-full ${categoryColors[category] || "bg-gray-500"}`}
+                          />
+                          <span className="text-sm">{category}</span>
+                        </div>
+                        <span className="text-sm font-medium">
+                          {formatCurrency(amount)}
+                        </span>
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
-            ) : (
-              <div className="flex h-48 items-center justify-center">
-                <p className="text-sm text-muted-foreground">No recent expenses</p>
-              </div>
-            )}
+                ) : (
+                  <div className="flex h-48 items-center justify-center">
+                    <p className="text-sm text-muted-foreground">
+                      No expenses this month
+                    </p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Recent Expenses */}
+          {widgets.showRecent && (
+            <Card className="border">
+              <CardHeader>
+                <CardTitle className="text-sm font-medium">
+                  Recent Expenses
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {stats.expenses.length > 0 ? (
+                  <div className="space-y-3">
+                    {stats.expenses.map((expense: { id: string; description: string | null; merchant: string | null; category: string; date: Date; amount: number }) => (
+                      <div
+                        key={expense.id}
+                        className="flex items-center justify-between border-b pb-2 last:border-0"
+                      >
+                        <div>
+                          <p className="text-sm font-medium">
+                            {expense.description || expense.merchant || expense.category}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            {new Date(expense.date).toLocaleDateString("en-US", {
+                              month: "short",
+                              day: "numeric",
+                            })}
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-sm font-medium">
+                            {formatCurrency(expense.amount)}
+                          </p>
+                          <Badge variant="secondary" className="text-xs">
+                            {expense.category}
+                          </Badge>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="flex h-48 items-center justify-center">
+                    <p className="text-sm text-muted-foreground">No recent expenses</p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
+        </div>
+      )}
+
+      {/* Empty state when all widgets are disabled */}
+      {!widgets.showStats && !widgets.showNetWorth && !widgets.showBalanceTrend && !widgets.showCalendar && !widgets.showCategories && !widgets.showRecent && (
+        <Card className="border">
+          <CardContent className="flex flex-col items-center justify-center py-16">
+            <p className="text-muted-foreground mb-2">No widgets enabled</p>
+            <p className="text-sm text-muted-foreground">
+              Go to <Link href="/settings" className="text-primary hover:underline">Settings</Link> to enable dashboard widgets.
+            </p>
           </CardContent>
         </Card>
-      </div>
+      )}
     </div>
   );
 }

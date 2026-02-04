@@ -13,8 +13,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
-import { IconDeviceFloppy, IconDownload, IconTrash } from "@tabler/icons-react";
+import { IconDeviceFloppy, IconDownload, IconTrash, IconLayoutDashboard } from "@tabler/icons-react";
 import { updateUserSettings, exportExpensesCSV, deleteAllUserData } from "@/lib/actions/settings";
+import { DashboardWidgets, DEFAULT_DASHBOARD_WIDGETS, DASHBOARD_WIDGET_OPTIONS } from "@/types/dashboard";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -49,6 +50,7 @@ type SettingsFormProps = {
   initialSettings: {
     monthlyBudget: number;
     currency: string;
+    dashboardWidgets: DashboardWidgets;
   };
 };
 
@@ -57,16 +59,26 @@ export function SettingsForm({ initialSettings }: SettingsFormProps) {
     initialSettings.monthlyBudget.toString()
   );
   const [currency, setCurrency] = useState(initialSettings.currency);
+  const [dashboardWidgets, setDashboardWidgets] = useState<DashboardWidgets>(
+    initialSettings.dashboardWidgets || DEFAULT_DASHBOARD_WIDGETS
+  );
   const [loading, setLoading] = useState(false);
   const [saved, setSaved] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
+  const toggleWidget = (key: keyof DashboardWidgets) => {
+    setDashboardWidgets((prev) => ({
+      ...prev,
+      [key]: !prev[key],
+    }));
+  };
+
   const handleExport = async () => {
     setExporting(true);
     try {
       const data = await exportExpensesCSV();
-      
+
       // Download expenses CSV
       const expenseBlob = new Blob([data.expenses], { type: "text/csv" });
       const expenseUrl = URL.createObjectURL(expenseBlob);
@@ -109,6 +121,7 @@ export function SettingsForm({ initialSettings }: SettingsFormProps) {
       await updateUserSettings({
         monthlyBudget: parseFloat(monthlyBudget) || 0,
         currency,
+        dashboardWidgets,
       });
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
@@ -153,6 +166,50 @@ export function SettingsForm({ initialSettings }: SettingsFormProps) {
                 </SelectContent>
               </Select>
             </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Dashboard Widget Settings */}
+      <Card className="mb-6 border">
+        <CardHeader>
+          <CardTitle className="text-sm font-medium flex items-center gap-2">
+            <IconLayoutDashboard className="h-4 w-4" />
+            Dashboard Widgets
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <p className="text-sm text-muted-foreground mb-4">
+            Choose which widgets to display on your dashboard.
+          </p>
+          <div className="grid gap-3">
+            {DASHBOARD_WIDGET_OPTIONS.map((widget) => (
+              <div
+                key={widget.key}
+                className="flex items-center justify-between rounded-lg border p-3 cursor-pointer hover:bg-muted/50 transition-colors"
+                onClick={() => toggleWidget(widget.key)}
+              >
+                <div>
+                  <p className="font-medium text-sm">{widget.label}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {widget.description}
+                  </p>
+                </div>
+                <div
+                  className={`h-5 w-9 rounded-full transition-colors ${dashboardWidgets[widget.key]
+                      ? "bg-primary"
+                      : "bg-muted"
+                    }`}
+                >
+                  <div
+                    className={`h-4 w-4 mt-0.5 rounded-full bg-white shadow-sm transition-transform ${dashboardWidgets[widget.key]
+                        ? "translate-x-4.5 ml-0.5"
+                        : "translate-x-0.5"
+                      }`}
+                  />
+                </div>
+              </div>
+            ))}
           </div>
         </CardContent>
       </Card>

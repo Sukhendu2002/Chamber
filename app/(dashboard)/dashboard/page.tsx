@@ -108,9 +108,9 @@ export default async function DashboardPage() {
     General: "bg-gray-500",
   };
 
-  // Count enabled bottom widgets to determine grid columns
-  const enabledBottomWidgets = [widgets.showCalendar, widgets.showCategories, widgets.showRecent].filter(Boolean).length;
-  const bottomGridCols = enabledBottomWidgets === 1 ? "md:grid-cols-1" : enabledBottomWidgets === 2 ? "md:grid-cols-2" : "md:grid-cols-3";
+  // Check if any widget is enabled
+  const hasAnyWidget = widgets.showStats || widgets.showNetWorth || widgets.showBalanceTrend ||
+    widgets.showCalendar || widgets.showCategories || widgets.showRecent;
 
   return (
     <div className="p-6">
@@ -125,9 +125,9 @@ export default async function DashboardPage() {
         <AddExpenseDialog />
       </div>
 
-      {/* Stats Grid */}
+      {/* Stats Grid - Always full width row */}
       {widgets.showStats && (
-        <div className="mb-8 grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <div className="mb-6 grid gap-4 md:grid-cols-2 lg:grid-cols-4">
           {statsData.map((stat) => (
             <Card key={stat.title} className="border">
               <CardHeader className="flex flex-row items-center justify-between pb-2">
@@ -149,9 +149,10 @@ export default async function DashboardPage() {
         </div>
       )}
 
-      {/* Net Worth Section */}
-      {(widgets.showNetWorth || widgets.showBalanceTrend) && (
-        <div className="mb-8 grid gap-4 md:grid-cols-2">
+      {/* Main Widget Grid - Responsive flowing layout */}
+      {(widgets.showNetWorth || widgets.showBalanceTrend || widgets.showCalendar || widgets.showCategories || widgets.showRecent) && (
+        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+          {/* Net Worth Widget */}
           {widgets.showNetWorth && (
             <Card className="border">
               <CardHeader className="flex flex-row items-center justify-between pb-2">
@@ -184,6 +185,7 @@ export default async function DashboardPage() {
             </Card>
           )}
 
+          {/* Balance Trend Widget */}
           {widgets.showBalanceTrend && (
             <Card className="border">
               <CardHeader>
@@ -198,13 +200,8 @@ export default async function DashboardPage() {
               </CardContent>
             </Card>
           )}
-        </div>
-      )}
 
-      {/* Charts Section */}
-      {(widgets.showCalendar || widgets.showCategories || widgets.showRecent) && (
-        <div className={`grid gap-6 ${bottomGridCols}`}>
-          {/* Expense Calendar */}
+          {/* Expense Calendar Widget */}
           {widgets.showCalendar && (
             <ExpenseCalendarWidget
               expenses={stats.calendarExpenses.map((e: { id: string; amount: number; category: string; merchant: string | null; description: string | null; date: Date }) => ({
@@ -219,7 +216,7 @@ export default async function DashboardPage() {
             />
           )}
 
-          {/* Spending by Category */}
+          {/* Spending by Category Widget */}
           {widgets.showCategories && (
             <Card className="border">
               <CardHeader>
@@ -255,7 +252,7 @@ export default async function DashboardPage() {
             </Card>
           )}
 
-          {/* Recent Expenses */}
+          {/* Recent Expenses Widget */}
           {widgets.showRecent && (
             <Card className="border">
               <CardHeader>
@@ -305,7 +302,7 @@ export default async function DashboardPage() {
       )}
 
       {/* Empty state when all widgets are disabled */}
-      {!widgets.showStats && !widgets.showNetWorth && !widgets.showBalanceTrend && !widgets.showCalendar && !widgets.showCategories && !widgets.showRecent && (
+      {!hasAnyWidget && (
         <Card className="border">
           <CardContent className="flex flex-col items-center justify-center py-16">
             <p className="text-muted-foreground mb-2">No widgets enabled</p>

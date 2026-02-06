@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { toLocalDateString } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -92,7 +93,7 @@ export function LoanList({ loans, currency }: LoanListProps) {
 
   // Repayment form
   const [repaymentAmount, setRepaymentAmount] = useState("");
-  const [repaymentDate, setRepaymentDate] = useState(new Date().toISOString().split("T")[0]);
+  const [repaymentDate, setRepaymentDate] = useState(toLocalDateString());
   const [repaymentNote, setRepaymentNote] = useState("");
   const [repaymentFiles, setRepaymentFiles] = useState<File[]>([]);
   const [uploading, setUploading] = useState(false);
@@ -135,7 +136,7 @@ export function LoanList({ loans, currency }: LoanListProps) {
   const openRepaymentDialog = (loan: Loan) => {
     setSelectedLoan(loan);
     setRepaymentAmount("");
-    setRepaymentDate(new Date().toISOString().split("T")[0]);
+    setRepaymentDate(toLocalDateString());
     setRepaymentNote("");
     setRepaymentFiles([]);
     setShowRepaymentDialog(true);
@@ -156,8 +157,8 @@ export function LoanList({ loans, currency }: LoanListProps) {
     setEditBorrowerName(loan.borrowerName);
     setEditBorrowerPhone(loan.borrowerPhone || "");
     setEditAmount(loan.amount.toString());
-    setEditLendDate(new Date(loan.lendDate).toISOString().split("T")[0]);
-    setEditDueDate(loan.dueDate ? new Date(loan.dueDate).toISOString().split("T")[0] : "");
+    setEditLendDate(toLocalDateString(new Date(loan.lendDate)));
+    setEditDueDate(loan.dueDate ? toLocalDateString(new Date(loan.dueDate)) : "");
     setEditDescription(loan.description || "");
     setShowEditDialog(true);
   };

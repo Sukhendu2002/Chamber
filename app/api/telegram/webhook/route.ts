@@ -5,6 +5,7 @@ import { notifyUser } from "@/app/api/events/route";
 import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 import pdfParse from "pdf-parse";
 import { checkAndSendSubscriptionAlerts } from "@/lib/subscription-alerts";
+import { getAccountsByUserId } from "@/lib/actions/accounts";
 
 const TELEGRAM_WEBHOOK_SECRET = process.env.TELEGRAM_WEBHOOK_SECRET;
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
@@ -82,8 +83,43 @@ const pendingExpenses = new Map<number, {
   expiresAt: number;
 }>();
 
-// Payment method options
-const PAYMENT_METHODS = ["PNB", "SBI", "Cash", "Credit"] as const;
+// Icon mapping for account types in Telegram keyboard
+const ACCOUNT_TYPE_ICONS: Record<string, string> = {
+  BANK: "\u{1F3E6}",
+  INVESTMENT: "\u{1F4C8}",
+  WALLET: "\u{1F4B3}",
+  CASH: "\u{1F4B5}",
+  CREDIT_CARD: "\u{1F4B3}",
+  DEBIT_CARD: "\u{1F4B3}",
+  OTHER: "\u{1F4B0}",
+};
+
+// Build inline keyboard from user's accounts (uses accountId in callback_data)
+function buildAccountKeyboard(accounts: { id: string; name: string; type: string }[]) {
+  const rows: { text: string; callback_data: string }[][] = [];
+  for (let i = 0; i < accounts.length; i += 2) {
+    const row: { text: string; callback_data: string }[] = [];
+    row.push({
+      text: `${ACCOUNT_TYPE_ICONS[accounts[i].type] || "\u{1F4B0}"} ${accounts[i].name}`,
+      callback_data: `pay_${accounts[i].id}`,
+    });
+    if (i + 1 < accounts.length) {
+      row.push({
+        text: `${ACCOUNT_TYPE_ICONS[accounts[i + 1].type] || "\u{1F4B0}"} ${accounts[i + 1].name}`,
+        callback_data: `pay_${accounts[i + 1].id}`,
+      });
+    }
+    rows.push(row);
+  }
+  rows.push([{ text: "\u274C Cancel", callback_data: "confirm_no" }]);
+  return { inline_keyboard: rows };
+}
+
+// Balance adjustment helper for Telegram expense creation
+function getTelegramBalanceAdjustment(accountType: string, amount: number): number {
+  if (accountType === "CREDIT_CARD") return amount;
+  return -amount;
+}
 
 type TelegramUpdate = {
   update_id: number;
@@ -116,7 +152,7 @@ async function sendTelegramMessage(chatId: number, text: string, replyMarkup?: o
 
 async function answerCallbackQuery(callbackQueryId: string, text?: string) {
   if (!TELEGRAM_BOT_TOKEN) return;
-  
+
   await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/answerCallbackQuery`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -129,18 +165,18 @@ async function answerCallbackQuery(callbackQueryId: string, text?: string) {
 
 async function editMessageText(chatId: number, messageId: number, text: string, replyMarkup?: object) {
   if (!TELEGRAM_BOT_TOKEN) return;
-  
+
   const body: Record<string, unknown> = {
     chat_id: chatId,
     message_id: messageId,
     text,
     parse_mode: "HTML",
   };
-  
+
   if (replyMarkup) {
     body.reply_markup = replyMarkup;
   }
-  
+
   await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/editMessageText`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -191,7 +227,7 @@ async function getFileUrl(fileId: string): Promise<string | null> {
       `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/getFile?file_id=${fileId}`
     );
     const data = await response.json();
-    
+
     if (data.ok && data.result.file_path) {
       return `https://api.telegram.org/file/bot${TELEGRAM_BOT_TOKEN}/${data.result.file_path}`;
     }
@@ -268,7 +304,7 @@ async function handleExpenseMessage(chatId: number, text: string) {
 
   // Use AI to parse the expense
   await sendTelegramMessage(chatId, "🤖 Processing...");
-  
+
   const aiResult = await parseExpenseWithAI(text);
 
   let amount: number;
@@ -279,7 +315,7 @@ async function handleExpenseMessage(chatId: number, text: string) {
   if (!aiResult.success || !aiResult.expense) {
     // Fallback to simple parsing
     const amountMatch = text.match(/(\d+(?:\.\d{1,2})?)/);
-    
+
     if (!amountMatch) {
       await sendTelegramMessage(
         chatId,
@@ -311,31 +347,26 @@ async function handleExpenseMessage(chatId: number, text: string) {
     expiresAt: Date.now() + 5 * 60 * 1000, // 5 minutes
   });
 
+  // Fetch user's accounts for payment method selection
+  const userAccounts = await getAccountsByUserId(userSettings.userId);
+
   // Build confirmation message - ask for payment method first
   let confirmMsg = `📋 <b>Select payment method:</b>\n\n`;
   if (merchant) confirmMsg += `🏪 ${merchant}\n`;
   confirmMsg += `💰 ₹${amount.toFixed(2)}\n📁 ${category}\n📝 ${description}`;
-  
+
   if (isDuplicate) {
     confirmMsg += `\n\n⚠️ <b>Warning:</b> Duplicate amount today.`;
   }
 
-  // Inline keyboard with payment method buttons
-  const keyboard = {
-    inline_keyboard: [
-      [
-        { text: "🏦 PNB", callback_data: "pay_PNB" },
-        { text: "🏦 SBI", callback_data: "pay_SBI" },
-      ],
-      [
-        { text: "💵 Cash", callback_data: "pay_CASH" },
-        { text: "💳 Credit", callback_data: "pay_CREDIT" },
-      ],
-      [
-        { text: "❌ Cancel", callback_data: "confirm_no" },
-      ],
-    ],
-  };
+  if (userAccounts.length === 0) {
+    confirmMsg += `\n\n⚠️ No accounts found. Please add accounts in Chamber first.`;
+    await sendTelegramMessage(chatId, confirmMsg);
+    return;
+  }
+
+  // Inline keyboard with dynamic account buttons
+  const keyboard = buildAccountKeyboard(userAccounts);
 
   await sendTelegramMessage(chatId, confirmMsg, keyboard);
 }
@@ -378,7 +409,7 @@ async function handlePhotoMessage(chatId: number, photo: TelegramMessage["photo"
   }
 
   let aiResult;
-  
+
   // If caption has useful expense info (contains amount), use it; otherwise do OCR
   if (caption && caption.trim().length > 5 && hasUsefulExpenseInfo(caption)) {
     console.log("Using caption for parsing:", caption);
@@ -421,32 +452,27 @@ async function handlePhotoMessage(chatId: number, photo: TelegramMessage["photo"
     expiresAt: Date.now() + 5 * 60 * 1000, // 5 minutes
   });
 
+  // Fetch user's accounts for payment method selection
+  const userAccounts = await getAccountsByUserId(userSettings.userId);
+
   // Build confirmation message - ask for payment method first
   let confirmMsg = `📋 <b>Select payment method:</b>\n\n`;
   if (merchant) confirmMsg += `🏪 ${merchant}\n`;
   confirmMsg += `💰 ₹${amount.toFixed(2)}\n📁 ${category}\n📝 ${description}`;
   if (receiptUrl) confirmMsg += `\n📎 Receipt attached`;
-  
+
   if (isDuplicate) {
     confirmMsg += `\n\n⚠️ <b>Warning:</b> Duplicate amount today.`;
   }
 
-  // Inline keyboard with payment method buttons
-  const keyboard = {
-    inline_keyboard: [
-      [
-        { text: "🏦 PNB", callback_data: "pay_PNB" },
-        { text: "🏦 SBI", callback_data: "pay_SBI" },
-      ],
-      [
-        { text: "💵 Cash", callback_data: "pay_CASH" },
-        { text: "💳 Credit", callback_data: "pay_CREDIT" },
-      ],
-      [
-        { text: "❌ Cancel", callback_data: "confirm_no" },
-      ],
-    ],
-  };
+  if (userAccounts.length === 0) {
+    confirmMsg += `\n\n⚠️ No accounts found. Please add accounts in Chamber first.`;
+    await sendTelegramMessage(chatId, confirmMsg);
+    return;
+  }
+
+  // Inline keyboard with dynamic account buttons
+  const keyboard = buildAccountKeyboard(userAccounts);
 
   await sendTelegramMessage(chatId, confirmMsg, keyboard);
 }
@@ -473,7 +499,7 @@ async function handleDocumentMessage(chatId: number, document: TelegramMessage["
 
   // Check if it's a PDF
   const isPdf = document.mime_type === "application/pdf" || document.file_name?.toLowerCase().endsWith(".pdf");
-  
+
   if (!isPdf) {
     await sendTelegramMessage(chatId, "❌ Only PDF invoices are supported. Please send a PDF file or an image.");
     return;
@@ -505,7 +531,7 @@ async function handleDocumentMessage(chatId: number, document: TelegramMessage["
   }
 
   // Use caption if provided, otherwise use extracted PDF text
-  let textToParse = caption && hasUsefulExpenseInfo(caption) 
+  const textToParse = caption && hasUsefulExpenseInfo(caption)
     ? `User sent a PDF invoice with caption: "${caption}"`
     : `Extract expense details from this invoice text:\n\n${pdfText.substring(0, 2000)}`;
 
@@ -568,32 +594,27 @@ async function handleDocumentMessage(chatId: number, document: TelegramMessage["
     expiresAt: Date.now() + 5 * 60 * 1000, // 5 minutes
   });
 
+  // Fetch user's accounts for payment method selection
+  const userAccounts = await getAccountsByUserId(userSettings.userId);
+
   // Build confirmation message - ask for payment method first
   let confirmMsg = `📋 <b>Select payment method:</b>\n\n`;
   if (merchant) confirmMsg += `🏪 ${merchant}\n`;
   confirmMsg += `💰 ₹${amount.toFixed(2)}\n📁 ${category}\n📝 ${description}`;
   confirmMsg += `\n📄 PDF attached`;
-  
+
   if (isDuplicate) {
     confirmMsg += `\n\n⚠️ <b>Warning:</b> Duplicate amount today.`;
   }
 
-  // Inline keyboard with payment method buttons
-  const keyboard = {
-    inline_keyboard: [
-      [
-        { text: "🏦 PNB", callback_data: "pay_PNB" },
-        { text: "🏦 SBI", callback_data: "pay_SBI" },
-      ],
-      [
-        { text: "💵 Cash", callback_data: "pay_CASH" },
-        { text: "💳 Credit", callback_data: "pay_CREDIT" },
-      ],
-      [
-        { text: "❌ Cancel", callback_data: "confirm_no" },
-      ],
-    ],
-  };
+  if (userAccounts.length === 0) {
+    confirmMsg += `\n\n⚠️ No accounts found. Please add accounts in Chamber first.`;
+    await sendTelegramMessage(chatId, confirmMsg);
+    return;
+  }
+
+  // Inline keyboard with dynamic account buttons
+  const keyboard = buildAccountKeyboard(userAccounts);
 
   await sendTelegramMessage(chatId, confirmMsg, keyboard);
 }
@@ -607,7 +628,7 @@ export async function POST(request: NextRequest) {
 
   try {
     const update: TelegramUpdate = await request.json();
-    
+
     // Handle callback queries (inline button clicks)
     if (update.callback_query) {
       const callbackQuery = update.callback_query;
@@ -618,32 +639,58 @@ export async function POST(request: NextRequest) {
       if (chatId && messageId) {
         // Handle payment method selection - save directly without extra confirmation
         if (data?.startsWith("pay_")) {
-          const paymentMethod = data.replace("pay_", "") as "PNB" | "SBI" | "CASH" | "CREDIT";
+          const accountId = data.replace("pay_", "");
           const pending = pendingExpenses.get(chatId);
           if (pending && pending.expiresAt > Date.now()) {
-            // Save expense directly with payment method
-            await db.expense.create({
-              data: {
-                userId: pending.userId,
-                amount: pending.amount,
-                category: pending.category,
-                description: pending.description,
-                merchant: pending.merchant,
-                receiptUrl: pending.receiptUrl,
-                source: "TELEGRAM",
-                paymentMethod: paymentMethod,
-                date: new Date(),
-              },
+            // Look up the account to get name and type for balance adjustment
+            const account = await db.account.findUnique({ where: { id: accountId } });
+            const accountName = account?.name || accountId;
+
+            // Save expense and adjust balance in a transaction
+            await db.$transaction(async (tx) => {
+              await tx.expense.create({
+                data: {
+                  userId: pending.userId,
+                  amount: pending.amount,
+                  category: pending.category,
+                  description: pending.description,
+                  merchant: pending.merchant,
+                  receiptUrl: pending.receiptUrl,
+                  source: "TELEGRAM",
+                  paymentMethod: accountName,
+                  accountId: accountId,
+                  date: new Date(),
+                },
+              });
+
+              // Adjust account balance and record history
+              if (account) {
+                const adjustment = getTelegramBalanceAdjustment(account.type, pending.amount);
+                const updatedAccount = await tx.account.update({
+                  where: { id: accountId },
+                  data: { currentBalance: { increment: adjustment } },
+                });
+                const label = pending.description || pending.category || "Expense";
+                await tx.balanceHistory.create({
+                  data: {
+                    accountId,
+                    balance: updatedAccount.currentBalance,
+                    note: `Expense: ${label} (₹${pending.amount})`,
+                    date: new Date(),
+                  },
+                });
+              }
             });
+
             // Notify web UI to refresh
             notifyUser(pending.userId);
-            
+
             // Check and send subscription alerts (non-blocking)
             checkAndSendSubscriptionAlerts(pending.userId).catch(console.error);
-            
+
             pendingExpenses.delete(chatId);
-            
-            await editMessageText(chatId, messageId, `✅ <b>Saved!</b>\n\n💰 ₹${pending.amount.toFixed(2)}\n📁 ${pending.category}\n💳 ${paymentMethod}`);
+
+            await editMessageText(chatId, messageId, `✅ <b>Saved!</b>\n\n💰 ₹${pending.amount.toFixed(2)}\n📁 ${pending.category}\n💳 ${accountName}`);
             await answerCallbackQuery(callbackQuery.id, "Saved!");
           } else {
             await editMessageText(chatId, messageId, "⏰ Expired. Please send the expense again.");

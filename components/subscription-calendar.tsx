@@ -35,6 +35,12 @@ import {
   renewSubscription,
 } from "@/lib/actions/subscriptions";
 
+type AccountOption = {
+  id: string;
+  name: string;
+  type: string;
+};
+
 type Subscription = {
   id: string;
   name: string;
@@ -50,6 +56,7 @@ type Subscription = {
 type SubscriptionCalendarProps = {
   subscriptions: Subscription[];
   currency: string;
+  accounts?: AccountOption[];
 };
 
 const billingCycles = [
@@ -60,14 +67,7 @@ const billingCycles = [
   { value: "YEARLY", label: "Yearly" },
 ];
 
-const paymentMethods = [
-  { value: "PNB", label: "PNB" },
-  { value: "SBI", label: "SBI" },
-  { value: "CASH", label: "Cash" },
-  { value: "CREDIT", label: "Credit" },
-];
-
-export function SubscriptionCalendar({ subscriptions, currency }: SubscriptionCalendarProps) {
+export function SubscriptionCalendar({ subscriptions, currency, accounts = [] }: SubscriptionCalendarProps) {
   const router = useRouter();
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedSubscription, setSelectedSubscription] = useState<Subscription | null>(null);
@@ -115,6 +115,7 @@ export function SubscriptionCalendar({ subscriptions, currency }: SubscriptionCa
   ];
 
   const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  const dayNamesShort = ["S", "M", "T", "W", "T", "F", "S"];
 
   const prevMonth = () => {
     setCurrentDate(new Date(year, month - 1, 1));
@@ -130,7 +131,6 @@ export function SubscriptionCalendar({ subscriptions, currency }: SubscriptionCa
 
   // Get subscriptions for a specific day
   const getSubscriptionsForDay = (day: number) => {
-    const date = new Date(year, month, day);
     return subscriptions.filter((sub) => {
       const billingDate = new Date(sub.nextBillingDate);
       return (
@@ -245,10 +245,10 @@ export function SubscriptionCalendar({ subscriptions, currency }: SubscriptionCa
 
   // Generate calendar days
   const calendarDays = [];
-  
+
   // Empty cells for days before the first day of the month
   for (let i = 0; i < startingDayOfWeek; i++) {
-    calendarDays.push(<div key={`empty-${i}`} className="h-24 border border-muted/30" />);
+    calendarDays.push(<div key={`empty-${i}`} className="h-10 border border-muted/30 sm:h-24" />);
   }
 
   // Days of the month
@@ -259,23 +259,33 @@ export function SubscriptionCalendar({ subscriptions, currency }: SubscriptionCa
     calendarDays.push(
       <div
         key={day}
-        className={`h-24 border border-muted/30 p-1 overflow-hidden ${
-          today ? "bg-primary/5 border-primary" : ""
-        }`}
+        className={`h-10 border border-muted/30 p-0.5 overflow-hidden sm:h-24 sm:p-1 ${today ? "bg-primary/5 border-primary" : ""
+          }`}
       >
-        <div className={`text-xs font-medium mb-1 ${today ? "text-primary" : "text-muted-foreground"}`}>
+        <div className={`text-[10px] font-medium mb-0.5 sm:text-xs sm:mb-1 ${today ? "text-primary" : "text-muted-foreground"}`}>
           {day}
         </div>
-        <div className="space-y-1">
+        {/* Mobile: show dot indicators */}
+        <div className="flex gap-0.5 sm:hidden">
+          {daySubs.slice(0, 3).map((sub) => (
+            <button
+              key={sub.id}
+              onClick={() => setSelectedSubscription(sub)}
+              className={`h-1.5 w-1.5 rounded-full ${isDueSoon(sub) ? "bg-orange-500" : "bg-blue-500"}`}
+              title={sub.name}
+            />
+          ))}
+        </div>
+        {/* Desktop: show labels */}
+        <div className="hidden sm:block space-y-1">
           {daySubs.slice(0, 2).map((sub) => (
             <button
               key={sub.id}
               onClick={() => setSelectedSubscription(sub)}
-              className={`w-full text-left text-xs p-1 rounded truncate ${
-                isDueSoon(sub)
+              className={`w-full text-left text-xs p-1 rounded truncate ${isDueSoon(sub)
                   ? "bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300"
                   : "bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300"
-              }`}
+                }`}
             >
               {sub.name}
             </button>
@@ -349,9 +359,10 @@ export function SubscriptionCalendar({ subscriptions, currency }: SubscriptionCa
         <CardContent>
           {/* Day headers */}
           <div className="grid grid-cols-7 mb-2">
-            {dayNames.map((day) => (
-              <div key={day} className="text-center text-sm font-medium text-muted-foreground py-2">
-                {day}
+            {dayNames.map((day, i) => (
+              <div key={day} className="text-center text-xs font-medium text-muted-foreground py-1 sm:text-sm sm:py-2">
+                <span className="hidden sm:inline">{day}</span>
+                <span className="sm:hidden">{dayNamesShort[i]}</span>
               </div>
             ))}
           </div>
@@ -375,30 +386,32 @@ export function SubscriptionCalendar({ subscriptions, currency }: SubscriptionCa
               subscriptions.map((sub) => (
                 <div
                   key={sub.id}
-                  className={`flex items-center justify-between p-3 rounded-lg border ${
-                    !sub.isActive ? "opacity-50" : ""
-                  } ${isDueSoon(sub) ? "border-orange-300 bg-orange-50 dark:bg-orange-900/10" : ""}`}
+                  className={`flex items-center justify-between p-3 rounded-lg border ${!sub.isActive ? "opacity-50" : ""
+                    } ${isDueSoon(sub) ? "border-orange-300 bg-orange-50 dark:bg-orange-900/10" : ""}`}
                 >
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-3 min-w-0 flex-1">
                     {isDueSoon(sub) && (
-                      <IconBell className="h-4 w-4 text-orange-500" />
+                      <IconBell className="h-4 w-4 shrink-0 text-orange-500" />
                     )}
-                    <div>
-                      <div className="font-medium">{sub.name}</div>
+                    <div className="min-w-0">
+                      <div className="font-medium truncate">{sub.name}</div>
                       <div className="text-sm text-muted-foreground">
                         {formatCurrency(sub.amount)} / {sub.billingCycle.toLowerCase()}
-                        {" • "}
+                        <span className="hidden sm:inline">{" • "}Next: {formatDate(sub.nextBillingDate)}</span>
+                      </div>
+                      <div className="text-xs text-muted-foreground sm:hidden">
                         Next: {formatDate(sub.nextBillingDate)}
                       </div>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1 shrink-0">
                     {sub.paymentMethod && (
-                      <Badge variant="secondary">{sub.paymentMethod}</Badge>
+                      <Badge variant="secondary" className="hidden sm:inline-flex">{sub.paymentMethod}</Badge>
                     )}
                     <Button
                       variant="ghost"
                       size="icon"
+                      className="h-8 w-8"
                       onClick={() => handleRenew(sub)}
                       title="Mark as renewed"
                     >
@@ -407,6 +420,7 @@ export function SubscriptionCalendar({ subscriptions, currency }: SubscriptionCa
                     <Button
                       variant="ghost"
                       size="icon"
+                      className="h-8 w-8"
                       onClick={() => openEditDialog(sub)}
                     >
                       <IconEdit className="h-4 w-4" />
@@ -414,7 +428,7 @@ export function SubscriptionCalendar({ subscriptions, currency }: SubscriptionCa
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="text-destructive"
+                      className="h-8 w-8 text-destructive"
                       onClick={() => setDeleteConfirm(sub)}
                     >
                       <IconTrash className="h-4 w-4" />
@@ -534,9 +548,9 @@ export function SubscriptionCalendar({ subscriptions, currency }: SubscriptionCa
                     <SelectValue placeholder="Select method" />
                   </SelectTrigger>
                   <SelectContent>
-                    {paymentMethods.map((method) => (
-                      <SelectItem key={method.value} value={method.value}>
-                        {method.label}
+                    {accounts.map((account) => (
+                      <SelectItem key={account.id} value={account.name}>
+                        {account.name}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -578,7 +592,7 @@ export function SubscriptionCalendar({ subscriptions, currency }: SubscriptionCa
           <DialogHeader>
             <DialogTitle>Delete Subscription</DialogTitle>
           </DialogHeader>
-          <p>Are you sure you want to delete "{deleteConfirm?.name}"? This action cannot be undone.</p>
+          <p>Are you sure you want to delete &quot;{deleteConfirm?.name}&quot;? This action cannot be undone.</p>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDeleteConfirm(null)}>
               Cancel

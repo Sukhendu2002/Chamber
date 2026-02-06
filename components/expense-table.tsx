@@ -43,12 +43,17 @@ import {
   IconTrash,
   IconArrowUp,
   IconArrowDown,
-  IconReceipt,
   IconUpload,
   IconPhoto,
   IconX,
 } from "@tabler/icons-react";
 import { updateExpense, deleteExpense } from "@/lib/actions/expenses";
+
+type AccountOption = {
+  id: string;
+  name: string;
+  type: string;
+};
 
 const categories = [
   "Food",
@@ -77,6 +82,7 @@ type Expense = {
   description: string | null;
   source: string;
   paymentMethod: string | null;
+  accountId: string | null;
   date: Date;
   isVerified: boolean;
   receiptUrl: string | null;  // Legacy single receipt
@@ -89,9 +95,10 @@ type SortOrder = "asc" | "desc";
 type ExpenseTableProps = {
   expenses: Expense[];
   currency: string;
+  accounts?: AccountOption[];
 };
 
-export function ExpenseTable({ expenses: initialExpenses, currency }: ExpenseTableProps) {
+export function ExpenseTable({ expenses: initialExpenses, currency, accounts = [] }: ExpenseTableProps) {
   const router = useRouter();
   const [expenses, setExpenses] = useState(initialExpenses);
   const [sortField, setSortField] = useState<SortField>("date");
@@ -109,42 +116,30 @@ export function ExpenseTable({ expenses: initialExpenses, currency }: ExpenseTab
   const [editDescription, setEditDescription] = useState("");
   const [editMerchant, setEditMerchant] = useState("");
   const [editDate, setEditDate] = useState("");
-  const [editPaymentMethod, setEditPaymentMethod] = useState("");
+  const [editAccountId, setEditAccountId] = useState("");
   const [editReceipt, setEditReceipt] = useState<File | null>(null);
   const [editLoading, setEditLoading] = useState(false);
   
   // Delete state
   const [deletingExpense, setDeletingExpense] = useState<Expense | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
+  const [reverseBalance, setReverseBalance] = useState(true);
 
   // Receipt state
   const [viewingReceipt, setViewingReceipt] = useState<string | null>(null);
   const [uploadingExpenseId, setUploadingExpenseId] = useState<string | null>(null);
-
-  // Track which dialog is active to prevent stacking
-  type ActiveDialog = 'none' | 'edit' | 'delete' | 'receipt';
-  const [activeDialog, setActiveDialog] = useState<ActiveDialog>('none');
 
   // Custom setters to ensure only one dialog is open at a time
   const openReceiptViewer = (expenseId: string) => {
     setEditingExpense(null);
     setDeletingExpense(null);
     setViewingReceipt(expenseId);
-    setActiveDialog('receipt');
   };
 
   const openEditDialogSafe = (expense: Expense) => {
     setViewingReceipt(null);
     setDeletingExpense(null);
     openEditDialog(expense);
-    setActiveDialog('edit');
-  };
-
-  const closeAllDialogs = () => {
-    setEditingExpense(null);
-    setDeletingExpense(null);
-    setViewingReceipt(null);
-    setActiveDialog('none');
   };
 
   const handleReceiptUpload = async (expenseId: string, file: File) => {
@@ -223,7 +218,7 @@ export function ExpenseTable({ expenses: initialExpenses, currency }: ExpenseTab
     setEditDescription(expense.description || "");
     setEditMerchant(expense.merchant || "");
     setEditDate(new Date(expense.date).toISOString().split("T")[0]);
-    setEditPaymentMethod(expense.paymentMethod || "");
+    setEditAccountId(expense.accountId || "");
     setEditReceipt(null);
   };
 
@@ -231,13 +226,15 @@ export function ExpenseTable({ expenses: initialExpenses, currency }: ExpenseTab
     if (!editingExpense) return;
     setEditLoading(true);
     try {
+      const accountName = accounts.find(a => a.id === editAccountId)?.name;
       await updateExpense(editingExpense.id, {
         amount: parseFloat(editAmount),
         category: editCategory,
         description: editDescription || undefined,
         merchant: editMerchant || undefined,
         date: new Date(editDate),
-        paymentMethod: editPaymentMethod || undefined,
+        paymentMethod: accountName || undefined,
+        accountId: editAccountId || undefined,
       });
 
       // If there's a new receipt, upload it
@@ -264,8 +261,9 @@ export function ExpenseTable({ expenses: initialExpenses, currency }: ExpenseTab
     if (!deletingExpense) return;
     setDeleteLoading(true);
     try {
-      await deleteExpense(deletingExpense.id);
+      await deleteExpense(deletingExpense.id, reverseBalance);
       setDeletingExpense(null);
+      setReverseBalance(true);
       router.refresh();
     } catch (error) {
       console.error("Failed to delete expense:", error);
@@ -283,168 +281,219 @@ export function ExpenseTable({ expenses: initialExpenses, currency }: ExpenseTab
     );
   };
 
+  const renderActions = (expense: Expense) => (
+    <div className="flex gap-1">
+      {(() => {
+        const receipts = getReceipts(expense);
+        if (receipts.length > 0) {
+          return (
+            <>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 text-blue-600 hover:text-blue-700"
+                onClick={() => openReceiptViewer(expense.id)}
+                title={`View ${receipts.length} receipt(s)`}
+              >
+                <span className="relative">
+                  <IconPhoto className="h-4 w-4" />
+                  {receipts.length > 1 && (
+                    <span className="absolute -right-1 -top-1 flex h-3 w-3 items-center justify-center rounded-full bg-blue-600 text-[8px] text-white">
+                      {receipts.length}
+                    </span>
+                  )}
+                </span>
+              </Button>
+              <label className="cursor-pointer">
+                <input
+                  type="file"
+                  accept="image/*,.pdf"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) handleReceiptUpload(expense.id, file);
+                  }}
+                  disabled={uploadingExpenseId === expense.id}
+                />
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8"
+                  disabled={uploadingExpenseId === expense.id}
+                  asChild
+                >
+                  <span title="Add Receipt">
+                    <IconUpload className="h-4 w-4" />
+                  </span>
+                </Button>
+              </label>
+            </>
+          );
+        }
+        return (
+          <label className="cursor-pointer">
+            <input
+              type="file"
+              accept="image/*,.pdf"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) handleReceiptUpload(expense.id, file);
+              }}
+              disabled={uploadingExpenseId === expense.id}
+            />
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8"
+              disabled={uploadingExpenseId === expense.id}
+              asChild
+            >
+              <span title="Upload Receipt">
+                <IconUpload className="h-4 w-4" />
+              </span>
+            </Button>
+          </label>
+        );
+      })()}
+      <Button
+        variant="ghost"
+        size="icon"
+        className="h-8 w-8"
+        onClick={() => openEditDialogSafe(expense)}
+      >
+        <IconEdit className="h-4 w-4" />
+      </Button>
+      <Button
+        variant="ghost"
+        size="icon"
+        className="h-8 w-8 text-destructive hover:text-destructive"
+        onClick={() => setDeletingExpense(expense)}
+      >
+        <IconTrash className="h-4 w-4" />
+      </Button>
+    </div>
+  );
+
   return (
     <>
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead
-              className="cursor-pointer hover:bg-muted"
-              onClick={() => handleSort("date")}
-            >
-              Date <SortIcon field="date" />
-            </TableHead>
-            <TableHead>Description</TableHead>
-            <TableHead
-              className="cursor-pointer hover:bg-muted"
-              onClick={() => handleSort("category")}
-            >
-              Category <SortIcon field="category" />
-            </TableHead>
-            <TableHead>Source</TableHead>
-            <TableHead>Payment</TableHead>
-            <TableHead
-              className="cursor-pointer hover:bg-muted text-right"
-              onClick={() => handleSort("amount")}
-            >
-              Amount <SortIcon field="amount" />
-            </TableHead>
-            <TableHead className="text-right">Actions</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {sortedExpenses.map((expense) => (
-            <TableRow key={expense.id}>
-              <TableCell className="text-muted-foreground">
-                {new Date(expense.date).toLocaleDateString("en-US", {
-                  month: "short",
-                  day: "numeric",
-                })}
-              </TableCell>
-              <TableCell className="font-medium">
-                {expense.description || expense.merchant || "-"}
-              </TableCell>
-              <TableCell>
-                <Badge variant="secondary">{expense.category}</Badge>
-              </TableCell>
-              <TableCell>
-                <span
-                  className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${
-                    sourceColors[expense.source] || "bg-gray-100 text-gray-800"
-                  }`}
-                >
-                  {expense.source}
-                </span>
-              </TableCell>
-              <TableCell>
-                {expense.paymentMethod ? (
-                  <span className="inline-flex items-center rounded-full bg-slate-100 px-2 py-1 text-xs font-medium text-slate-700 dark:bg-slate-800 dark:text-slate-300">
+      {/* Mobile card layout */}
+      <div className="space-y-3 md:hidden">
+        {sortedExpenses.map((expense) => (
+          <div key={expense.id} className="rounded-lg border p-3">
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0 flex-1">
+                <p className="font-medium truncate">
+                  {expense.description || expense.merchant || expense.category}
+                </p>
+                <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                  <span>
+                    {new Date(expense.date).toLocaleDateString("en-US", {
+                      month: "short",
+                      day: "numeric",
+                    })}
+                  </span>
+                  <Badge variant="secondary" className="text-xs">{expense.category}</Badge>
+                  <span
+                    className={`inline-flex items-center rounded-full px-1.5 py-0.5 text-xs font-medium ${
+                      sourceColors[expense.source] || "bg-gray-100 text-gray-800"
+                    }`}
+                  >
+                    {expense.source}
+                  </span>
+                </div>
+                {expense.paymentMethod && (
+                  <span className="mt-1 inline-flex items-center rounded-full bg-slate-100 px-1.5 py-0.5 text-xs font-medium text-slate-700 dark:bg-slate-800 dark:text-slate-300">
                     {expense.paymentMethod}
                   </span>
-                ) : (
-                  <span className="text-muted-foreground">-</span>
                 )}
-              </TableCell>
-              <TableCell className="text-right font-medium">
+              </div>
+              <p className="text-sm font-bold whitespace-nowrap">
                 {formatCurrency(expense.amount)}
-              </TableCell>
-              <TableCell className="text-right">
-                <div className="flex justify-end gap-1">
-                  {(() => {
-                    const receipts = getReceipts(expense);
-                    if (receipts.length > 0) {
-                      return (
-                        <>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8 text-blue-600 hover:text-blue-700"
-                            onClick={() => openReceiptViewer(expense.id)}
-                            title={`View ${receipts.length} receipt(s)`}
-                          >
-                            <span className="relative">
-                              <IconPhoto className="h-4 w-4" />
-                              {receipts.length > 1 && (
-                                <span className="absolute -right-1 -top-1 flex h-3 w-3 items-center justify-center rounded-full bg-blue-600 text-[8px] text-white">
-                                  {receipts.length}
-                                </span>
-                              )}
-                            </span>
-                          </Button>
-                          <label className="cursor-pointer">
-                            <input
-                              type="file"
-                              accept="image/*,.pdf"
-                              className="hidden"
-                              onChange={(e) => {
-                                const file = e.target.files?.[0];
-                                if (file) handleReceiptUpload(expense.id, file);
-                              }}
-                              disabled={uploadingExpenseId === expense.id}
-                            />
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-8 w-8"
-                              disabled={uploadingExpenseId === expense.id}
-                              asChild
-                            >
-                              <span title="Add Receipt">
-                                <IconUpload className="h-4 w-4" />
-                              </span>
-                            </Button>
-                          </label>
-                        </>
-                      );
-                    }
-                    return (
-                      <label className="cursor-pointer">
-                        <input
-                          type="file"
-                          accept="image/*,.pdf"
-                          className="hidden"
-                          onChange={(e) => {
-                            const file = e.target.files?.[0];
-                            if (file) handleReceiptUpload(expense.id, file);
-                          }}
-                          disabled={uploadingExpenseId === expense.id}
-                        />
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8"
-                          disabled={uploadingExpenseId === expense.id}
-                          asChild
-                        >
-                          <span title="Upload Receipt">
-                            <IconUpload className="h-4 w-4" />
-                          </span>
-                        </Button>
-                      </label>
-                    );
-                  })()}
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8"
-                    onClick={() => openEditDialogSafe(expense)}
-                  >
-                    <IconEdit className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8 text-destructive hover:text-destructive"
-                    onClick={() => setDeletingExpense(expense)}
-                  >
-                    <IconTrash className="h-4 w-4" />
-                  </Button>
-                </div>
-              </TableCell>
+              </p>
+            </div>
+            <div className="mt-2 flex justify-end border-t pt-2">
+              {renderActions(expense)}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Desktop table layout */}
+      <div className="hidden md:block">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead
+                className="cursor-pointer hover:bg-muted"
+                onClick={() => handleSort("date")}
+              >
+                Date <SortIcon field="date" />
+              </TableHead>
+              <TableHead>Description</TableHead>
+              <TableHead
+                className="cursor-pointer hover:bg-muted"
+                onClick={() => handleSort("category")}
+              >
+                Category <SortIcon field="category" />
+              </TableHead>
+              <TableHead>Source</TableHead>
+              <TableHead>Payment</TableHead>
+              <TableHead
+                className="cursor-pointer hover:bg-muted text-right"
+                onClick={() => handleSort("amount")}
+              >
+                Amount <SortIcon field="amount" />
+              </TableHead>
+              <TableHead className="text-right">Actions</TableHead>
             </TableRow>
-          ))}
-        </TableBody>
-      </Table>
+          </TableHeader>
+          <TableBody>
+            {sortedExpenses.map((expense) => (
+              <TableRow key={expense.id}>
+                <TableCell className="text-muted-foreground">
+                  {new Date(expense.date).toLocaleDateString("en-US", {
+                    month: "short",
+                    day: "numeric",
+                  })}
+                </TableCell>
+                <TableCell className="font-medium">
+                  {expense.description || expense.merchant || "-"}
+                </TableCell>
+                <TableCell>
+                  <Badge variant="secondary">{expense.category}</Badge>
+                </TableCell>
+                <TableCell>
+                  <span
+                    className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${
+                      sourceColors[expense.source] || "bg-gray-100 text-gray-800"
+                    }`}
+                  >
+                    {expense.source}
+                  </span>
+                </TableCell>
+                <TableCell>
+                  {expense.paymentMethod ? (
+                    <span className="inline-flex items-center rounded-full bg-slate-100 px-2 py-1 text-xs font-medium text-slate-700 dark:bg-slate-800 dark:text-slate-300">
+                      {expense.paymentMethod}
+                    </span>
+                  ) : (
+                    <span className="text-muted-foreground">-</span>
+                  )}
+                </TableCell>
+                <TableCell className="text-right font-medium">
+                  {formatCurrency(expense.amount)}
+                </TableCell>
+                <TableCell className="text-right">
+                  <div className="flex justify-end">
+                    {renderActions(expense)}
+                  </div>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
 
       {/* Edit Dialog */}
       {!viewingReceipt && (
@@ -511,15 +560,16 @@ export function ExpenseTable({ expenses: initialExpenses, currency }: ExpenseTab
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="edit-payment">Payment Method</Label>
-                <Select value={editPaymentMethod} onValueChange={setEditPaymentMethod}>
+                <Select value={editAccountId} onValueChange={setEditAccountId}>
                   <SelectTrigger>
-                    <SelectValue placeholder="Select method" />
+                    <SelectValue placeholder="Select account" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="PNB">PNB</SelectItem>
-                    <SelectItem value="SBI">SBI</SelectItem>
-                    <SelectItem value="CASH">Cash</SelectItem>
-                    <SelectItem value="CREDIT">Credit</SelectItem>
+                    {accounts.map((account) => (
+                      <SelectItem key={account.id} value={account.id}>
+                        {account.name}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
@@ -586,7 +636,7 @@ export function ExpenseTable({ expenses: initialExpenses, currency }: ExpenseTab
       )}
 
       {/* Delete Confirmation */}
-      <AlertDialog open={!!deletingExpense} onOpenChange={() => setDeletingExpense(null)}>
+      <AlertDialog open={!!deletingExpense} onOpenChange={(open) => { if (!open) { setDeletingExpense(null); setReverseBalance(true); } }}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Delete Expense</AlertDialogTitle>
@@ -594,6 +644,33 @@ export function ExpenseTable({ expenses: initialExpenses, currency }: ExpenseTab
               Are you sure you want to delete this expense? This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
+          {deletingExpense?.accountId && (
+            <div className="flex items-center gap-3 rounded-md border p-3">
+              <button
+                type="button"
+                role="switch"
+                aria-checked={reverseBalance}
+                onClick={() => setReverseBalance(!reverseBalance)}
+                className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+                  reverseBalance ? "bg-primary" : "bg-muted"
+                }`}
+              >
+                <span
+                  className={`pointer-events-none block h-4 w-4 rounded-full bg-background shadow-lg ring-0 transition-transform ${
+                    reverseBalance ? "translate-x-4" : "translate-x-0"
+                  }`}
+                />
+              </button>
+              <div className="text-sm">
+                <div className="font-medium">Reverse balance deduction</div>
+                <div className="text-muted-foreground text-xs">
+                  {reverseBalance
+                    ? "The account balance will be restored"
+                    : "The account balance will remain unchanged"}
+                </div>
+              </div>
+            </div>
+          )}
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
@@ -655,6 +732,7 @@ export function ExpenseTable({ expenses: initialExpenses, currency }: ExpenseTab
                               title={`Receipt ${index + 1}`}
                             />
                           ) : (
+                            /* eslint-disable-next-line @next/next/no-img-element */
                             <img
                               src={`/api/receipt/${expense.id}?index=${index}`}
                               alt={`Receipt ${index + 1}`}

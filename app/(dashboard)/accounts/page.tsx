@@ -28,8 +28,8 @@ export default async function AccountsPage() {
   };
 
   return (
-    <div className="flex flex-1 flex-col gap-4 p-4">
-      <div className="flex items-center justify-between">
+    <div className="flex flex-1 flex-col gap-4 p-4 md:p-6">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Accounts</h1>
           <p className="text-muted-foreground">
@@ -40,7 +40,7 @@ export default async function AccountsPage() {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid gap-4 md:grid-cols-5">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3 lg:grid-cols-5">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Net Worth</CardTitle>

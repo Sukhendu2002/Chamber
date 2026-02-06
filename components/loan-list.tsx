@@ -38,7 +38,6 @@ import {
   AlertDialogDescription,
   AlertDialogFooter,
   AlertDialogHeader,
-  AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Progress } from "@/components/ui/progress";
 import {
@@ -53,7 +52,7 @@ import {
   IconX,
   IconPhoto,
 } from "@tabler/icons-react";
-import { addRepayment, deleteLoan, deleteRepayment, updateLoan, addLoanReceipt, addRepaymentReceipt } from "@/lib/actions/loans";
+import { addRepayment, deleteLoan, deleteRepayment, updateLoan, addRepaymentReceipt } from "@/lib/actions/loans";
 
 type Repayment = {
   id: string;
@@ -286,95 +285,156 @@ export function LoanList({ loans, currency }: LoanListProps) {
     );
   }
 
+  const renderLoanMenu = (loan: Loan) => (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="ghost" size="icon">
+          <IconDotsVertical className="h-4 w-4" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        <DropdownMenuItem onClick={() => openRepaymentDialog(loan)}>
+          <IconPlus className="mr-2 h-4 w-4" />
+          Add Repayment
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => openEditDialog(loan)}>
+          <IconEdit className="mr-2 h-4 w-4" />
+          Edit
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem
+          className="text-destructive"
+          onClick={() => openDeleteDialog(loan)}
+        >
+          <IconTrash className="mr-2 h-4 w-4" />
+          Delete
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+
   return (
     <>
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Borrower</TableHead>
-            <TableHead>Amount</TableHead>
-            <TableHead>Repaid</TableHead>
-            <TableHead>Progress</TableHead>
-            <TableHead>Status</TableHead>
-            <TableHead>Lend Date</TableHead>
-            <TableHead>Due Date</TableHead>
-            <TableHead className="w-[50px]"></TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {loans.map((loan) => {
-            const progress = (loan.amountRepaid / loan.amount) * 100;
-            const isOverdue = loan.dueDate && new Date(loan.dueDate) < new Date() && loan.status !== "COMPLETED";
+      {/* Mobile card layout */}
+      <div className="space-y-3 md:hidden">
+        {loans.map((loan) => {
+          const progress = (loan.amountRepaid / loan.amount) * 100;
+          const isOverdue = loan.dueDate && new Date(loan.dueDate) < new Date() && loan.status !== "COMPLETED";
 
-            return (
-              <TableRow
-                key={loan.id}
-                className="cursor-pointer hover:bg-muted/50"
-                onClick={() => openDetailsDialog(loan)}
-              >
-                <TableCell>
-                  <div>
-                    <div className="font-medium">{loan.borrowerName}</div>
-                    {loan.borrowerPhone && (
-                      <div className="text-xs text-muted-foreground flex items-center gap-1">
-                        <IconPhone className="h-3 w-3" />
-                        {loan.borrowerPhone}
-                      </div>
-                    )}
+          return (
+            <div
+              key={loan.id}
+              className="cursor-pointer rounded-lg border p-3"
+              onClick={() => openDetailsDialog(loan)}
+            >
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium truncate">{loan.borrowerName}</span>
+                    {getStatusBadge(loan.status)}
                   </div>
-                </TableCell>
-                <TableCell className="font-medium">{formatCurrency(loan.amount)}</TableCell>
-                <TableCell className="text-green-600">{formatCurrency(loan.amountRepaid)}</TableCell>
-                <TableCell>
-                  <div className="w-24">
-                    <Progress value={progress} className="h-2" />
-                    <span className="text-xs text-muted-foreground">{progress.toFixed(0)}%</span>
-                  </div>
-                </TableCell>
-                <TableCell>{getStatusBadge(loan.status)}</TableCell>
-                <TableCell>{formatDate(loan.lendDate)}</TableCell>
-                <TableCell>
-                  {loan.dueDate ? (
-                    <span className={isOverdue ? "text-destructive font-medium" : ""}>
-                      {formatDate(loan.dueDate)}
-                      {isOverdue && " (Overdue)"}
-                    </span>
-                  ) : (
-                    <span className="text-muted-foreground">-</span>
+                  {loan.borrowerPhone && (
+                    <div className="mt-0.5 text-xs text-muted-foreground flex items-center gap-1">
+                      <IconPhone className="h-3 w-3" />
+                      {loan.borrowerPhone}
+                    </div>
                   )}
-                </TableCell>
-                <TableCell onClick={(e) => e.stopPropagation()}>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="icon">
-                        <IconDotsVertical className="h-4 w-4" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <DropdownMenuItem onClick={() => openRepaymentDialog(loan)}>
-                        <IconPlus className="mr-2 h-4 w-4" />
-                        Add Repayment
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => openEditDialog(loan)}>
-                        <IconEdit className="mr-2 h-4 w-4" />
-                        Edit
-                      </DropdownMenuItem>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem
-                        className="text-destructive"
-                        onClick={() => openDeleteDialog(loan)}
-                      >
-                        <IconTrash className="mr-2 h-4 w-4" />
-                        Delete
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </TableCell>
-              </TableRow>
-            );
-          })}
-        </TableBody>
-      </Table>
+                </div>
+                <div onClick={(e) => e.stopPropagation()}>
+                  {renderLoanMenu(loan)}
+                </div>
+              </div>
+              <div className="mt-2 flex items-center justify-between text-sm">
+                <span className="font-medium">{formatCurrency(loan.amount)}</span>
+                <span className="text-green-600">Repaid: {formatCurrency(loan.amountRepaid)}</span>
+              </div>
+              <div className="mt-2">
+                <Progress value={progress} className="h-2" />
+                <div className="mt-1 flex items-center justify-between text-xs text-muted-foreground">
+                  <span>{progress.toFixed(0)}% repaid</span>
+                  <span>
+                    {loan.dueDate ? (
+                      <span className={isOverdue ? "text-destructive font-medium" : ""}>
+                        Due: {formatDate(loan.dueDate)}
+                        {isOverdue && " (Overdue)"}
+                      </span>
+                    ) : (
+                      `Lent: ${formatDate(loan.lendDate)}`
+                    )}
+                  </span>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Desktop table layout */}
+      <div className="hidden md:block">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Borrower</TableHead>
+              <TableHead>Amount</TableHead>
+              <TableHead>Repaid</TableHead>
+              <TableHead>Progress</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead>Lend Date</TableHead>
+              <TableHead>Due Date</TableHead>
+              <TableHead className="w-[50px]"></TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {loans.map((loan) => {
+              const progress = (loan.amountRepaid / loan.amount) * 100;
+              const isOverdue = loan.dueDate && new Date(loan.dueDate) < new Date() && loan.status !== "COMPLETED";
+
+              return (
+                <TableRow
+                  key={loan.id}
+                  className="cursor-pointer hover:bg-muted/50"
+                  onClick={() => openDetailsDialog(loan)}
+                >
+                  <TableCell>
+                    <div>
+                      <div className="font-medium">{loan.borrowerName}</div>
+                      {loan.borrowerPhone && (
+                        <div className="text-xs text-muted-foreground flex items-center gap-1">
+                          <IconPhone className="h-3 w-3" />
+                          {loan.borrowerPhone}
+                        </div>
+                      )}
+                    </div>
+                  </TableCell>
+                  <TableCell className="font-medium">{formatCurrency(loan.amount)}</TableCell>
+                  <TableCell className="text-green-600">{formatCurrency(loan.amountRepaid)}</TableCell>
+                  <TableCell>
+                    <div className="w-24">
+                      <Progress value={progress} className="h-2" />
+                      <span className="text-xs text-muted-foreground">{progress.toFixed(0)}%</span>
+                    </div>
+                  </TableCell>
+                  <TableCell>{getStatusBadge(loan.status)}</TableCell>
+                  <TableCell>{formatDate(loan.lendDate)}</TableCell>
+                  <TableCell>
+                    {loan.dueDate ? (
+                      <span className={isOverdue ? "text-destructive font-medium" : ""}>
+                        {formatDate(loan.dueDate)}
+                        {isOverdue && " (Overdue)"}
+                      </span>
+                    ) : (
+                      <span className="text-muted-foreground">-</span>
+                    )}
+                  </TableCell>
+                  <TableCell onClick={(e) => e.stopPropagation()}>
+                    {renderLoanMenu(loan)}
+                  </TableCell>
+                </TableRow>
+              );
+            })}
+          </TableBody>
+        </Table>
+      </div>
 
       {/* Add Repayment Dialog */}
       <Dialog open={showRepaymentDialog} onOpenChange={setShowRepaymentDialog}>

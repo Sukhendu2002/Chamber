@@ -73,9 +73,9 @@ export default function ImportPage() {
   const [isDragging, setIsDragging] = useState(false);
 
   return (
-    <div className="p-6">
+    <div className="p-4 md:p-6">
       {/* Header */}
-      <div className="mb-8">
+      <div className="mb-6 sm:mb-8">
         <h1 className="text-2xl font-bold">Import</h1>
         <p className="text-sm text-muted-foreground">
           Upload bank statements for reconciliation
@@ -140,6 +140,7 @@ export default function ImportPage() {
           </div>
         </CardHeader>
         <CardContent>
+          <div className="overflow-x-auto -mx-4 px-4 sm:mx-0 sm:px-0">
           <Table>
             <TableHeader>
               <TableRow>
@@ -184,6 +185,7 @@ export default function ImportPage() {
               })}
             </TableBody>
           </Table>
+          </div>
         </CardContent>
       </Card>
     </div>

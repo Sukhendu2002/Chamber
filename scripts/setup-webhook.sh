@@ -6,6 +6,20 @@
 
 set -e
 
+# Load environment variables from project root .env files (Next.js loads these automatically,
+# but shell scripts do not).
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
+
+set -a
+if [ -f "${PROJECT_ROOT}/.env" ]; then
+  . "${PROJECT_ROOT}/.env"
+fi
+if [ -f "${PROJECT_ROOT}/.env.local" ]; then
+  . "${PROJECT_ROOT}/.env.local"
+fi
+set +a
+
 BOT_TOKEN="${TELEGRAM_BOT_TOKEN:-${BOT_TOKEN:-}}"
 WEBHOOK_SECRET="${TELEGRAM_WEBHOOK_SECRET:-${WEBHOOK_SECRET:-}}"
 

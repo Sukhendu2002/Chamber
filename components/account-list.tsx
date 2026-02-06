@@ -58,6 +58,7 @@ import {
   IconCash,
   IconQuestionMark,
   IconHistory,
+  IconBrandTelegram,
 } from "@tabler/icons-react";
 import { 
   updateBalance, 
@@ -65,6 +66,7 @@ import {
   updateAccount,
   getAccountWithHistory,
   deleteBalanceHistory,
+  toggleShowOnTelegram,
 } from "@/lib/actions/accounts";
 
 type BalanceHistoryItem = {
@@ -77,10 +79,12 @@ type BalanceHistoryItem = {
 type Account = {
   id: string;
   name: string;
-  type: "BANK" | "INVESTMENT" | "WALLET" | "CASH" | "OTHER";
+  type: "BANK" | "INVESTMENT" | "WALLET" | "CASH" | "CREDIT_CARD" | "DEBIT_CARD" | "OTHER";
   currentBalance: number;
+  creditLimit: number | null;
   description: string | null;
   isActive: boolean;
+  showOnTelegram: boolean;
   balanceHistory: BalanceHistoryItem[];
 };
 
@@ -91,6 +95,8 @@ type AccountListProps = {
 
 const accountTypes = [
   { value: "BANK", label: "Bank Account" },
+  { value: "CREDIT_CARD", label: "Credit Card" },
+  { value: "DEBIT_CARD", label: "Debit Card" },
   { value: "INVESTMENT", label: "Investment" },
   { value: "WALLET", label: "Digital Wallet" },
   { value: "CASH", label: "Cash" },
@@ -144,6 +150,10 @@ export function AccountList({ accounts, currency }: AccountListProps) {
         return <IconWallet className="h-4 w-4 text-purple-500" />;
       case "CASH":
         return <IconCash className="h-4 w-4 text-yellow-500" />;
+      case "CREDIT_CARD":
+        return <IconWallet className="h-4 w-4 text-red-500" />;
+      case "DEBIT_CARD":
+        return <IconWallet className="h-4 w-4 text-orange-500" />;
       default:
         return <IconQuestionMark className="h-4 w-4 text-gray-500" />;
     }
@@ -155,6 +165,8 @@ export function AccountList({ accounts, currency }: AccountListProps) {
       INVESTMENT: "bg-green-500",
       WALLET: "bg-purple-500",
       CASH: "bg-yellow-500",
+      CREDIT_CARD: "bg-red-500",
+      DEBIT_CARD: "bg-orange-500",
       OTHER: "bg-gray-500",
     };
     return <Badge className={colors[type]}>{type}</Badge>;
@@ -284,80 +296,186 @@ export function AccountList({ accounts, currency }: AccountListProps) {
     );
   }
 
+  const renderAccountMenu = (account: Account) => (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="ghost" size="icon">
+          <IconDotsVertical className="h-4 w-4" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        <DropdownMenuItem onClick={() => openUpdateDialog(account)}>
+          <IconRefresh className="mr-2 h-4 w-4" />
+          Update Balance
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => openHistoryDialog(account)}>
+          <IconHistory className="mr-2 h-4 w-4" />
+          View History
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => openEditDialog(account)}>
+          <IconEdit className="mr-2 h-4 w-4" />
+          Edit Account
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          onClick={async () => {
+            await toggleShowOnTelegram(account.id);
+            router.refresh();
+          }}
+        >
+          <IconBrandTelegram className="mr-2 h-4 w-4" />
+          {account.showOnTelegram ? "Hide from Telegram" : "Show on Telegram"}
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem
+          className="text-destructive"
+          onClick={() => openDeleteDialog(account)}
+        >
+          <IconTrash className="mr-2 h-4 w-4" />
+          Delete
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+
+  const renderCreditCardBalance = (account: Account) => {
+    const utilization = account.creditLimit
+      ? (account.currentBalance / account.creditLimit) * 100
+      : 0;
+    const utilizationColor =
+      utilization > 60 ? "bg-red-500" :
+      utilization > 30 ? "bg-yellow-500" :
+      "bg-green-500";
+    return (
+      <div className="space-y-1">
+        <div className="text-red-600 font-bold">{formatCurrency(account.currentBalance)} due</div>
+        {account.creditLimit && (
+          <>
+            <div className="text-xs text-muted-foreground">
+              {formatCurrency(account.creditLimit - account.currentBalance)} available / {formatCurrency(account.creditLimit)} limit
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="h-1.5 w-24 rounded-full bg-muted overflow-hidden">
+                <div
+                  className={`h-full rounded-full transition-all ${utilizationColor}`}
+                  style={{ width: `${Math.min(utilization, 100)}%` }}
+                />
+              </div>
+              <span className={`text-xs font-medium ${utilization > 30 ? "text-red-600" : "text-green-600"}`}>
+                {utilization.toFixed(0)}%
+              </span>
+            </div>
+            {utilization > 30 && (
+              <div className="text-xs text-red-600 font-medium">
+                ⚠ Over 30% utilization
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    );
+  };
+
   return (
     <>
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead>Account</TableHead>
-            <TableHead>Type</TableHead>
-            <TableHead>Current Balance</TableHead>
-            <TableHead>Last Updated</TableHead>
-            <TableHead className="w-[50px]"></TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {accounts.map((account) => {
-            const lastUpdate = account.balanceHistory[0];
-
-            return (
-              <TableRow key={account.id}>
-                <TableCell>
-                  <div className="flex items-center gap-2">
-                    {getTypeIcon(account.type)}
-                    <div>
-                      <div className="font-medium">{account.name}</div>
-                      {account.description && (
-                        <div className="text-xs text-muted-foreground">
-                          {account.description}
-                        </div>
+      {/* Mobile card layout */}
+      <div className="space-y-3 md:hidden">
+        {accounts.map((account) => {
+          const lastUpdate = account.balanceHistory[0];
+          return (
+            <div key={account.id} className="rounded-lg border p-3">
+              <div className="flex items-start justify-between gap-2">
+                <div className="flex items-center gap-2 min-w-0">
+                  {getTypeIcon(account.type)}
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-1.5 font-medium">
+                      <span className="truncate">{account.name}</span>
+                      {account.showOnTelegram && (
+                        <IconBrandTelegram className="h-3.5 w-3.5 shrink-0 text-blue-400" />
                       )}
                     </div>
+                    {account.description && (
+                      <div className="text-xs text-muted-foreground truncate">
+                        {account.description}
+                      </div>
+                    )}
                   </div>
-                </TableCell>
-                <TableCell>{getTypeBadge(account.type)}</TableCell>
-                <TableCell className="font-bold">
-                  {formatCurrency(account.currentBalance)}
-                </TableCell>
-                <TableCell className="text-muted-foreground">
-                  {lastUpdate ? formatDate(lastUpdate.date) : "-"}
-                </TableCell>
-                <TableCell>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="icon">
-                        <IconDotsVertical className="h-4 w-4" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <DropdownMenuItem onClick={() => openUpdateDialog(account)}>
-                        <IconRefresh className="mr-2 h-4 w-4" />
-                        Update Balance
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => openHistoryDialog(account)}>
-                        <IconHistory className="mr-2 h-4 w-4" />
-                        View History
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => openEditDialog(account)}>
-                        <IconEdit className="mr-2 h-4 w-4" />
-                        Edit Account
-                      </DropdownMenuItem>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem
-                        className="text-destructive"
-                        onClick={() => openDeleteDialog(account)}
-                      >
-                        <IconTrash className="mr-2 h-4 w-4" />
-                        Delete
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </TableCell>
-              </TableRow>
-            );
-          })}
-        </TableBody>
-      </Table>
+                </div>
+                {renderAccountMenu(account)}
+              </div>
+              <div className="mt-2 flex items-center justify-between">
+                <div>
+                  {account.type === "CREDIT_CARD" ? renderCreditCardBalance(account) : (
+                    <div className="font-bold">{formatCurrency(account.currentBalance)}</div>
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  {getTypeBadge(account.type)}
+                </div>
+              </div>
+              {lastUpdate && (
+                <div className="mt-1 text-xs text-muted-foreground">
+                  Updated: {formatDate(lastUpdate.date)}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Desktop table layout */}
+      <div className="hidden md:block">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Account</TableHead>
+              <TableHead>Type</TableHead>
+              <TableHead>Current Balance</TableHead>
+              <TableHead>Last Updated</TableHead>
+              <TableHead className="w-[50px]"></TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {accounts.map((account) => {
+              const lastUpdate = account.balanceHistory[0];
+
+              return (
+                <TableRow key={account.id}>
+                  <TableCell>
+                    <div className="flex items-center gap-2">
+                      {getTypeIcon(account.type)}
+                      <div>
+                        <div className="flex items-center gap-1.5 font-medium">
+                          {account.name}
+                          {account.showOnTelegram && (
+                            <IconBrandTelegram className="h-3.5 w-3.5 text-blue-400" title="Visible on Telegram" />
+                          )}
+                        </div>
+                        {account.description && (
+                          <div className="text-xs text-muted-foreground">
+                            {account.description}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </TableCell>
+                  <TableCell>{getTypeBadge(account.type)}</TableCell>
+                  <TableCell className="font-bold">
+                    {account.type === "CREDIT_CARD" ? renderCreditCardBalance(account) : (
+                      formatCurrency(account.currentBalance)
+                    )}
+                  </TableCell>
+                  <TableCell className="text-muted-foreground">
+                    {lastUpdate ? formatDate(lastUpdate.date) : "-"}
+                  </TableCell>
+                  <TableCell>
+                    {renderAccountMenu(account)}
+                  </TableCell>
+                </TableRow>
+              );
+            })}
+          </TableBody>
+        </Table>
+      </div>
 
       {/* Update Balance Dialog */}
       <Dialog open={showUpdateDialog} onOpenChange={setShowUpdateDialog}>
@@ -397,6 +515,7 @@ export function AccountList({ accounts, currency }: AccountListProps) {
                 id="updateDate"
                 type="date"
                 value={updateDate}
+                max={new Date().toISOString().split("T")[0]}
                 onChange={(e) => setUpdateDate(e.target.value)}
               />
             </div>

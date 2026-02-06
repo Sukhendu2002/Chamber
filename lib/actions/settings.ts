@@ -4,6 +4,7 @@ import { auth } from "@clerk/nextjs/server";
 import { db } from "@/lib/db";
 import { revalidatePath, revalidateTag } from "next/cache";
 import { unstable_cache } from "next/cache";
+import { DashboardWidgets, DEFAULT_DASHBOARD_WIDGETS } from "@/types/dashboard";
 
 // Free exchange rate API (no API key needed for basic usage)
 async function getExchangeRate(from: string, to: string): Promise<number> {
@@ -30,11 +31,21 @@ const getCachedSettings = unstable_cache(
           userId,
           monthlyBudget: 0,
           currency: "INR",
+          dashboardWidgets: DEFAULT_DASHBOARD_WIDGETS,
         },
       });
     }
 
-    return settings;
+    // Ensure dashboardWidgets has all keys (for backwards compatibility)
+    const dashboardWidgets = {
+      ...DEFAULT_DASHBOARD_WIDGETS,
+      ...((settings.dashboardWidgets as DashboardWidgets) || {}),
+    };
+
+    return {
+      ...settings,
+      dashboardWidgets,
+    };
   },
   ["user-settings"],
   { revalidate: 60, tags: ["user-settings"] } // Cache for 60 seconds
@@ -50,6 +61,7 @@ export async function getUserSettings() {
 export async function updateUserSettings(input: {
   monthlyBudget?: number;
   currency?: string;
+  dashboardWidgets?: DashboardWidgets;
 }) {
   const { userId } = await auth();
   if (!userId) throw new Error("Unauthorized");
@@ -64,7 +76,7 @@ export async function updateUserSettings(input: {
   // If currency is changing, convert all expenses
   if (newCurrency && newCurrency !== oldCurrency) {
     const exchangeRate = await getExchangeRate(oldCurrency, newCurrency);
-    
+
     // Get all user's expenses
     const expenses = await db.expense.findMany({
       where: { userId },
@@ -183,7 +195,7 @@ export async function exportExpensesCSV() {
     }
     // Generate full URLs for receipts (they need to be accessed via the API)
     const receiptLinks = receipts.map((_: string, idx: number) => `/api/receipt/${e.id}?index=${idx}`).join("; ");
-    
+
     expenseRows.push([
       new Date(e.date).toISOString().split("T")[0],
       e.description || "",

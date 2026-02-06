@@ -4,13 +4,16 @@ import { auth } from "@clerk/nextjs/server";
 import { db } from "@/lib/db";
 import { revalidatePath } from "next/cache";
 
+export type AccountTypeValue = "BANK" | "INVESTMENT" | "WALLET" | "CASH" | "CREDIT_CARD" | "DEBIT_CARD" | "OTHER";
+
 export type CreateAccountInput = {
   name: string;
-  type: "BANK" | "INVESTMENT" | "WALLET" | "CASH" | "OTHER";
+  type: AccountTypeValue;
   initialBalance: number;
   description?: string;
   icon?: string;
   color?: string;
+  creditLimit?: number;
 };
 
 export type UpdateBalanceInput = {
@@ -24,6 +27,9 @@ export async function createAccount(input: CreateAccountInput) {
   const { userId } = await auth();
   if (!userId) throw new Error("Unauthorized");
 
+  // Investment accounts are hidden from Telegram by default
+  const showOnTelegram = input.type !== "INVESTMENT";
+
   // Create account with initial balance
   const account = await db.account.create({
     data: {
@@ -34,6 +40,8 @@ export async function createAccount(input: CreateAccountInput) {
       description: input.description,
       icon: input.icon,
       color: input.color,
+      creditLimit: input.type === "CREDIT_CARD" ? input.creditLimit : undefined,
+      showOnTelegram,
     },
   });
 
@@ -52,7 +60,7 @@ export async function createAccount(input: CreateAccountInput) {
 }
 
 export async function getAccounts(options?: {
-  type?: "BANK" | "INVESTMENT" | "WALLET" | "CASH" | "OTHER";
+  type?: AccountTypeValue;
   includeInactive?: boolean;
 }) {
   const { userId } = await auth();
@@ -60,7 +68,7 @@ export async function getAccounts(options?: {
 
   const where: {
     userId: string;
-    type?: "BANK" | "INVESTMENT" | "WALLET" | "CASH" | "OTHER";
+    type?: AccountTypeValue;
     isActive?: boolean;
   } = { userId };
 
@@ -246,6 +254,24 @@ export async function deleteAccount(id: string) {
   revalidatePath("/dashboard");
 }
 
+export async function toggleShowOnTelegram(id: string) {
+  const { userId } = await auth();
+  if (!userId) throw new Error("Unauthorized");
+
+  const account = await db.account.findFirst({
+    where: { id, userId },
+  });
+
+  if (!account) throw new Error("Account not found");
+
+  await db.account.update({
+    where: { id },
+    data: { showOnTelegram: !account.showOnTelegram },
+  });
+
+  revalidatePath("/accounts");
+}
+
 export async function toggleAccountActive(id: string) {
   const { userId } = await auth();
   if (!userId) throw new Error("Unauthorized");
@@ -277,6 +303,7 @@ export async function getAccountStats() {
   let totalInvestments = 0;
   let totalWallet = 0;
   let totalCash = 0;
+  let totalCards = 0;
   let totalOther = 0;
 
   for (const account of accounts) {
@@ -293,6 +320,10 @@ export async function getAccountStats() {
       case "CASH":
         totalCash += account.currentBalance;
         break;
+      case "CREDIT_CARD":
+      case "DEBIT_CARD":
+        totalCards += account.currentBalance;
+        break;
       case "OTHER":
         totalOther += account.currentBalance;
         break;
@@ -304,8 +335,9 @@ export async function getAccountStats() {
     totalInvestments,
     totalWallet,
     totalCash,
+    totalCards,
     totalOther,
-    totalNetWorth: totalBankBalance + totalInvestments + totalWallet + totalCash + totalOther,
+    totalNetWorth: totalBankBalance + totalInvestments + totalWallet + totalCash + totalOther, // Cards excluded from net worth
     accountCount: accounts.length,
   };
 }
@@ -317,9 +349,13 @@ export async function getAllBalanceHistory(months: number = 6) {
   const startDate = new Date();
   startDate.setMonth(startDate.getMonth() - months);
 
-  // Get all accounts with their history
+  // Get all accounts with their history (exclude cards from balance trend chart)
   const accounts = await db.account.findMany({
-    where: { userId, isActive: true },
+    where: {
+      userId,
+      isActive: true,
+      type: { notIn: ["CREDIT_CARD", "DEBIT_CARD"] },
+    },
     include: {
       balanceHistory: {
         orderBy: { date: "asc" },
@@ -341,13 +377,6 @@ export async function getAllBalanceHistory(months: number = 6) {
       color: a.color || getDefaultColor(i),
     });
   }
-
-  // Collect all unique dates from history within range
-  const datesInRange = new Set<string>();
-  
-  // Track balance for each account at each date
-  type BalanceAtDate = Record<string, number>;
-  const balancesByDate: Record<string, BalanceAtDate> = {};
 
   // Collect ALL history entries within range with full timestamps
   type HistoryEntry = { timestamp: number; date: Date; accountId: string; balance: number };
@@ -415,6 +444,24 @@ export async function getAllBalanceHistory(months: number = 6) {
   }
 
   return { accounts: accountInfo, timeline };
+}
+
+// Get active accounts by userId directly (no auth check - for internal use like Telegram webhook)
+export async function getAccountsByUserId(userId: string) {
+  const accounts = await db.account.findMany({
+    where: { userId, isActive: true, showOnTelegram: true },
+    orderBy: [
+      { type: "asc" },
+      { name: "asc" },
+    ],
+    select: {
+      id: true,
+      name: true,
+      type: true,
+    },
+  });
+
+  return accounts;
 }
 
 function getDefaultColor(index: number): string {

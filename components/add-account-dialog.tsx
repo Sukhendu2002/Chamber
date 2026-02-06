@@ -31,6 +31,8 @@ type AddAccountDialogProps = {
 
 const accountTypes = [
   { value: "BANK", label: "Bank Account" },
+  { value: "CREDIT_CARD", label: "Credit Card" },
+  { value: "DEBIT_CARD", label: "Debit Card" },
   { value: "INVESTMENT", label: "Investment" },
   { value: "WALLET", label: "Digital Wallet" },
   { value: "CASH", label: "Cash" },
@@ -43,15 +45,17 @@ export function AddAccountDialog({ currency }: AddAccountDialogProps) {
   const [loading, setLoading] = useState(false);
 
   const [name, setName] = useState("");
-  const [type, setType] = useState<"BANK" | "INVESTMENT" | "WALLET" | "CASH" | "OTHER">("BANK");
+  const [type, setType] = useState<"BANK" | "INVESTMENT" | "WALLET" | "CASH" | "CREDIT_CARD" | "DEBIT_CARD" | "OTHER">("BANK");
   const [initialBalance, setInitialBalance] = useState("");
   const [description, setDescription] = useState("");
+  const [creditLimit, setCreditLimit] = useState("");
 
   const resetForm = () => {
     setName("");
     setType("BANK");
     setInitialBalance("");
     setDescription("");
+    setCreditLimit("");
   };
 
   const handleSubmit = async () => {
@@ -64,6 +68,7 @@ export function AddAccountDialog({ currency }: AddAccountDialogProps) {
         type,
         initialBalance: parseFloat(initialBalance),
         description: description || undefined,
+        creditLimit: type === "CREDIT_CARD" && creditLimit ? parseFloat(creditLimit) : undefined,
       });
 
       resetForm();
@@ -136,6 +141,25 @@ export function AddAccountDialog({ currency }: AddAccountDialogProps) {
               />
             </div>
           </div>
+
+          {type === "CREDIT_CARD" && (
+            <div className="grid gap-2">
+              <Label htmlFor="creditLimit">Credit Limit</Label>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
+                  {currencySymbol}
+                </span>
+                <Input
+                  id="creditLimit"
+                  type="number"
+                  placeholder="0.00"
+                  className="pl-8"
+                  value={creditLimit}
+                  onChange={(e) => setCreditLimit(e.target.value)}
+                />
+              </div>
+            </div>
+          )}
 
           <div className="grid gap-2">
             <Label htmlFor="description">Description (optional)</Label>

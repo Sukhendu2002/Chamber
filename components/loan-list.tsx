@@ -38,7 +38,6 @@ import {
   AlertDialogDescription,
   AlertDialogFooter,
   AlertDialogHeader,
-  AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Progress } from "@/components/ui/progress";
 import {
@@ -53,7 +52,7 @@ import {
   IconX,
   IconPhoto,
 } from "@tabler/icons-react";
-import { addRepayment, deleteLoan, deleteRepayment, updateLoan, addLoanReceipt, addRepaymentReceipt } from "@/lib/actions/loans";
+import { addRepayment, deleteLoan, deleteRepayment, updateLoan, addRepaymentReceipt } from "@/lib/actions/loans";
 
 type Repayment = {
   id: string;

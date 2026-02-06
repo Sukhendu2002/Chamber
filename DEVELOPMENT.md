@@ -177,7 +177,7 @@ refactor(actions): consolidate expense queries
    }
    
    // For unions and primitives
-   type PaymentMethod = "PNB" | "SBI" | "CASH" | "CREDIT";
+   type PaymentMethod = string; // Dynamic, from user's accounts
    type ID = string;
    ```
 
@@ -851,20 +851,15 @@ import { db } from "@/lib/db"; // Will crash!
 import { getExpenses } from "@/lib/actions/expenses";
 ```
 
-### 5. Forgetting Prisma Enum Types
+### 5. Payment Method is a Dynamic String
 
-When using enums, TypeScript doesn't auto-cast:
+`paymentMethod` is a `String?` field, not an enum. It stores the account name from the user's accounts:
 
 ```typescript
-// ❌ Bad - Type error
-await db.expense.create({
-  data: { paymentMethod: "PNB" } // String, not enum
-});
-
-// ✅ Good - Cast to enum type
+// ✅ Good - paymentMethod is a plain string (account name)
 await db.expense.create({
   data: {
-    paymentMethod: input.paymentMethod as "PNB" | "SBI" | "CASH" | "CREDIT" | undefined
+    paymentMethod: input.paymentMethod, // e.g., "SBI Savings", "Cash", etc.
   }
 });
 ```

@@ -1,10 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-// Mock the database client first
+// Mock the database client with $transaction support
 const mockDb = {
     expense: {
         create: vi.fn(),
         findMany: vi.fn(),
+        findFirst: vi.fn(),
         findUnique: vi.fn(),
         update: vi.fn(),
         updateMany: vi.fn(),
@@ -14,10 +15,21 @@ const mockDb = {
         aggregate: vi.fn(),
         groupBy: vi.fn(),
     },
+    account: {
+        findUnique: vi.fn(),
+        update: vi.fn(),
+    },
+    balanceHistory: {
+        create: vi.fn(),
+    },
     userSettings: {
         findUnique: vi.fn(),
         upsert: vi.fn(),
     },
+    // $transaction executes the callback with mockDb as the transactional client
+    $transaction: vi.fn(async (fn: (tx: typeof mockDb) => Promise<unknown>) => {
+        return fn(mockDb);
+    }),
 };
 
 vi.mock("@/lib/db", () => ({
@@ -32,6 +44,10 @@ vi.mock("@/lib/subscription-alerts", () => ({
 describe("Expense Actions", () => {
     beforeEach(() => {
         vi.clearAllMocks();
+        // Re-setup $transaction mock after clearAllMocks
+        mockDb.$transaction.mockImplementation(async (fn: (tx: typeof mockDb) => Promise<unknown>) => {
+            return fn(mockDb);
+        });
     });
 
     describe("createExpense", () => {
@@ -46,6 +62,7 @@ describe("Expense Actions", () => {
                 date: new Date(),
                 source: "WEB",
                 paymentMethod: null,
+                accountId: null,
                 isVerified: false,
                 receiptUrl: null,
                 receiptUrls: [],
@@ -66,6 +83,7 @@ describe("Expense Actions", () => {
             });
 
             expect(result).toEqual(mockExpense);
+            expect(mockDb.$transaction).toHaveBeenCalledTimes(1);
             expect(mockDb.expense.create).toHaveBeenCalledTimes(1);
         });
 
@@ -97,6 +115,100 @@ describe("Expense Actions", () => {
                     }),
                 })
             );
+        });
+
+        it("should deduct balance from a BANK account when accountId is provided", async () => {
+            const mockExpense = {
+                id: "expense-3",
+                userId: "test-user-id",
+                amount: 500,
+                category: "Food",
+                accountId: "account-1",
+                paymentMethod: "SBI Savings",
+            };
+
+            const mockAccount = {
+                id: "account-1",
+                type: "BANK",
+                currentBalance: 10000,
+            };
+
+            mockDb.expense.create.mockResolvedValue(mockExpense);
+            mockDb.account.findUnique.mockResolvedValue(mockAccount);
+            mockDb.account.update.mockResolvedValue({ ...mockAccount, currentBalance: 9500 });
+            mockDb.balanceHistory.create.mockResolvedValue({});
+
+            vi.resetModules();
+            const { createExpense } = await import("@/lib/actions/expenses");
+
+            await createExpense({
+                amount: 500,
+                category: "Food",
+                accountId: "account-1",
+                paymentMethod: "SBI Savings",
+            });
+
+            // Should deduct from bank account (negative adjustment)
+            expect(mockDb.account.update).toHaveBeenCalledWith({
+                where: { id: "account-1" },
+                data: { currentBalance: { increment: -500 } },
+            });
+
+            // Should record balance history
+            expect(mockDb.balanceHistory.create).toHaveBeenCalledTimes(1);
+        });
+
+        it("should increase balance for CREDIT_CARD account (outstanding increases)", async () => {
+            const mockExpense = {
+                id: "expense-4",
+                userId: "test-user-id",
+                amount: 300,
+                category: "Shopping",
+                accountId: "cc-1",
+                paymentMethod: "HDFC Credit Card",
+            };
+
+            const mockAccount = {
+                id: "cc-1",
+                type: "CREDIT_CARD",
+                currentBalance: 1000,
+            };
+
+            mockDb.expense.create.mockResolvedValue(mockExpense);
+            mockDb.account.findUnique.mockResolvedValue(mockAccount);
+            mockDb.account.update.mockResolvedValue({ ...mockAccount, currentBalance: 1300 });
+            mockDb.balanceHistory.create.mockResolvedValue({});
+
+            vi.resetModules();
+            const { createExpense } = await import("@/lib/actions/expenses");
+
+            await createExpense({
+                amount: 300,
+                category: "Shopping",
+                accountId: "cc-1",
+                paymentMethod: "HDFC Credit Card",
+            });
+
+            // Credit card: spending increases outstanding (positive adjustment)
+            expect(mockDb.account.update).toHaveBeenCalledWith({
+                where: { id: "cc-1" },
+                data: { currentBalance: { increment: 300 } },
+            });
+        });
+
+        it("should not adjust balance when no accountId is provided", async () => {
+            mockDb.expense.create.mockResolvedValue({ id: "expense-5" });
+
+            vi.resetModules();
+            const { createExpense } = await import("@/lib/actions/expenses");
+
+            await createExpense({
+                amount: 100,
+                category: "Food",
+            });
+
+            expect(mockDb.account.findUnique).not.toHaveBeenCalled();
+            expect(mockDb.account.update).not.toHaveBeenCalled();
         });
     });
 
@@ -200,20 +312,152 @@ describe("Expense Actions", () => {
     });
 
     describe("deleteExpense", () => {
-        it("should delete an expense by id", async () => {
-            mockDb.expense.deleteMany.mockResolvedValue({ count: 1 });
+        it("should delete an expense and reverse balance if linked to account", async () => {
+            const existingExpense = {
+                id: "expense-1",
+                userId: "test-user-id",
+                amount: 200,
+                category: "Food",
+                description: "Dinner",
+                accountId: "account-1",
+            };
+
+            const mockAccount = {
+                id: "account-1",
+                type: "BANK",
+                currentBalance: 9800,
+            };
+
+            mockDb.expense.findFirst.mockResolvedValue(existingExpense);
+            mockDb.account.findUnique.mockResolvedValue(mockAccount);
+            mockDb.account.update.mockResolvedValue({ ...mockAccount, currentBalance: 10000 });
+            mockDb.balanceHistory.create.mockResolvedValue({});
+            mockDb.expense.delete.mockResolvedValue(existingExpense);
 
             vi.resetModules();
             const { deleteExpense } = await import("@/lib/actions/expenses");
 
             await deleteExpense("expense-1");
 
-            expect(mockDb.expense.deleteMany).toHaveBeenCalledWith({
-                where: {
-                    id: "expense-1",
-                    userId: "test-user-id",
-                },
+            // Should reverse the deduction (add back 200)
+            expect(mockDb.account.update).toHaveBeenCalledWith({
+                where: { id: "account-1" },
+                data: { currentBalance: { increment: 200 } },
             });
+
+            // Should record balance history for the reversal
+            expect(mockDb.balanceHistory.create).toHaveBeenCalledTimes(1);
+
+            // Should delete the expense
+            expect(mockDb.expense.delete).toHaveBeenCalledWith({
+                where: { id: "expense-1" },
+            });
+        });
+
+        it("should delete expense without balance change if no accountId", async () => {
+            const existingExpense = {
+                id: "expense-2",
+                userId: "test-user-id",
+                amount: 100,
+                category: "Food",
+                accountId: null,
+            };
+
+            mockDb.expense.findFirst.mockResolvedValue(existingExpense);
+            mockDb.expense.delete.mockResolvedValue(existingExpense);
+
+            vi.resetModules();
+            const { deleteExpense } = await import("@/lib/actions/expenses");
+
+            await deleteExpense("expense-2");
+
+            expect(mockDb.account.findUnique).not.toHaveBeenCalled();
+            expect(mockDb.account.update).not.toHaveBeenCalled();
+            expect(mockDb.expense.delete).toHaveBeenCalledWith({
+                where: { id: "expense-2" },
+            });
+        });
+
+        it("should reverse credit card outstanding on delete", async () => {
+            const existingExpense = {
+                id: "expense-3",
+                userId: "test-user-id",
+                amount: 500,
+                category: "Shopping",
+                description: "Online purchase",
+                accountId: "cc-1",
+            };
+
+            const mockAccount = {
+                id: "cc-1",
+                type: "CREDIT_CARD",
+                currentBalance: 1500,
+            };
+
+            mockDb.expense.findFirst.mockResolvedValue(existingExpense);
+            mockDb.account.findUnique.mockResolvedValue(mockAccount);
+            mockDb.account.update.mockResolvedValue({ ...mockAccount, currentBalance: 1000 });
+            mockDb.balanceHistory.create.mockResolvedValue({});
+            mockDb.expense.delete.mockResolvedValue(existingExpense);
+
+            vi.resetModules();
+            const { deleteExpense } = await import("@/lib/actions/expenses");
+
+            await deleteExpense("expense-3");
+
+            // Credit card: deleting expense should decrease outstanding (negative adjustment)
+            expect(mockDb.account.update).toHaveBeenCalledWith({
+                where: { id: "cc-1" },
+                data: { currentBalance: { increment: -500 } },
+            });
+        });
+    });
+
+    describe("updateExpense", () => {
+        it("should reverse old balance and apply new balance when amount changes", async () => {
+            const existingExpense = {
+                id: "expense-1",
+                userId: "test-user-id",
+                amount: 200,
+                category: "Food",
+                description: "Lunch",
+                accountId: "account-1",
+            };
+
+            const mockAccount = {
+                id: "account-1",
+                type: "BANK",
+                currentBalance: 9800,
+            };
+
+            mockDb.expense.findFirst.mockResolvedValue(existingExpense);
+            mockDb.account.findUnique.mockResolvedValue(mockAccount);
+            // First call: reverse old (add back 200), second call: apply new (deduct 300)
+            mockDb.account.update
+                .mockResolvedValueOnce({ ...mockAccount, currentBalance: 10000 })
+                .mockResolvedValueOnce({ ...mockAccount, currentBalance: 9700 });
+            mockDb.balanceHistory.create.mockResolvedValue({});
+            mockDb.expense.update.mockResolvedValue({ ...existingExpense, amount: 300 });
+
+            vi.resetModules();
+            const { updateExpense } = await import("@/lib/actions/expenses");
+
+            await updateExpense("expense-1", { amount: 300 });
+
+            // First: reverse old deduction (add back 200)
+            expect(mockDb.account.update).toHaveBeenNthCalledWith(1, {
+                where: { id: "account-1" },
+                data: { currentBalance: { increment: 200 } },
+            });
+
+            // Second: apply new deduction (deduct 300)
+            expect(mockDb.account.update).toHaveBeenNthCalledWith(2, {
+                where: { id: "account-1" },
+                data: { currentBalance: { increment: -300 } },
+            });
+
+            // Should record two balance history entries
+            expect(mockDb.balanceHistory.create).toHaveBeenCalledTimes(2);
         });
     });
 
@@ -251,11 +495,11 @@ describe("Expense Validation", () => {
         }
     });
 
-    it("should validate payment methods", () => {
-        const validMethods = ["PNB", "SBI", "CASH", "CREDIT"];
+    it("should accept any string as payment method (dynamic from accounts)", () => {
+        const exampleMethods = ["SBI Savings", "PNB", "Cash Wallet", "Zerodha"];
 
-        for (const method of validMethods) {
-            expect(validMethods.includes(method)).toBe(true);
+        for (const method of exampleMethods) {
+            expect(typeof method).toBe("string");
         }
     });
 

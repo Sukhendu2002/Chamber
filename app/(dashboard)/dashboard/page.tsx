@@ -15,17 +15,18 @@ import { AddExpenseDialog } from "@/components/add-expense-dialog";
 import { getMonthlyStats } from "@/lib/actions/expenses";
 import { getUserSettings } from "@/lib/actions/settings";
 import { ExpenseCalendarWidget } from "@/components/expense-calendar-widget";
-import { getAccountStats, getAllBalanceHistory } from "@/lib/actions/accounts";
+import { getAccounts, getAccountStats, getAllBalanceHistory } from "@/lib/actions/accounts";
 import { BalanceHistoryChart } from "@/components/balance-history-chart";
 import Link from "next/link";
 import { DashboardWidgets, DEFAULT_DASHBOARD_WIDGETS } from "@/types/dashboard";
 
 export default async function DashboardPage() {
-  const [stats, settings, accountStats, balanceHistory] = await Promise.all([
+  const [stats, settings, accountStats, balanceHistory, accounts] = await Promise.all([
     getMonthlyStats(),
     getUserSettings(),
     getAccountStats(),
     getAllBalanceHistory(6),
+    getAccounts(),
   ]);
 
   const currentDate = new Date();
@@ -122,7 +123,7 @@ export default async function DashboardPage() {
             Your financial overview for {monthYear}
           </p>
         </div>
-        <AddExpenseDialog />
+        <AddExpenseDialog accounts={accounts.map(a => ({ id: a.id, name: a.name, type: a.type }))} />
       </div>
 
       {/* Stats Grid - Always full width row */}

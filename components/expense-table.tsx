@@ -43,12 +43,17 @@ import {
   IconTrash,
   IconArrowUp,
   IconArrowDown,
-  IconReceipt,
   IconUpload,
   IconPhoto,
   IconX,
 } from "@tabler/icons-react";
 import { updateExpense, deleteExpense } from "@/lib/actions/expenses";
+
+type AccountOption = {
+  id: string;
+  name: string;
+  type: string;
+};
 
 const categories = [
   "Food",
@@ -77,6 +82,7 @@ type Expense = {
   description: string | null;
   source: string;
   paymentMethod: string | null;
+  accountId: string | null;
   date: Date;
   isVerified: boolean;
   receiptUrl: string | null;  // Legacy single receipt
@@ -89,9 +95,10 @@ type SortOrder = "asc" | "desc";
 type ExpenseTableProps = {
   expenses: Expense[];
   currency: string;
+  accounts?: AccountOption[];
 };
 
-export function ExpenseTable({ expenses: initialExpenses, currency }: ExpenseTableProps) {
+export function ExpenseTable({ expenses: initialExpenses, currency, accounts = [] }: ExpenseTableProps) {
   const router = useRouter();
   const [expenses, setExpenses] = useState(initialExpenses);
   const [sortField, setSortField] = useState<SortField>("date");
@@ -109,42 +116,30 @@ export function ExpenseTable({ expenses: initialExpenses, currency }: ExpenseTab
   const [editDescription, setEditDescription] = useState("");
   const [editMerchant, setEditMerchant] = useState("");
   const [editDate, setEditDate] = useState("");
-  const [editPaymentMethod, setEditPaymentMethod] = useState("");
+  const [editAccountId, setEditAccountId] = useState("");
   const [editReceipt, setEditReceipt] = useState<File | null>(null);
   const [editLoading, setEditLoading] = useState(false);
   
   // Delete state
   const [deletingExpense, setDeletingExpense] = useState<Expense | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
+  const [reverseBalance, setReverseBalance] = useState(true);
 
   // Receipt state
   const [viewingReceipt, setViewingReceipt] = useState<string | null>(null);
   const [uploadingExpenseId, setUploadingExpenseId] = useState<string | null>(null);
-
-  // Track which dialog is active to prevent stacking
-  type ActiveDialog = 'none' | 'edit' | 'delete' | 'receipt';
-  const [activeDialog, setActiveDialog] = useState<ActiveDialog>('none');
 
   // Custom setters to ensure only one dialog is open at a time
   const openReceiptViewer = (expenseId: string) => {
     setEditingExpense(null);
     setDeletingExpense(null);
     setViewingReceipt(expenseId);
-    setActiveDialog('receipt');
   };
 
   const openEditDialogSafe = (expense: Expense) => {
     setViewingReceipt(null);
     setDeletingExpense(null);
     openEditDialog(expense);
-    setActiveDialog('edit');
-  };
-
-  const closeAllDialogs = () => {
-    setEditingExpense(null);
-    setDeletingExpense(null);
-    setViewingReceipt(null);
-    setActiveDialog('none');
   };
 
   const handleReceiptUpload = async (expenseId: string, file: File) => {
@@ -223,7 +218,7 @@ export function ExpenseTable({ expenses: initialExpenses, currency }: ExpenseTab
     setEditDescription(expense.description || "");
     setEditMerchant(expense.merchant || "");
     setEditDate(new Date(expense.date).toISOString().split("T")[0]);
-    setEditPaymentMethod(expense.paymentMethod || "");
+    setEditAccountId(expense.accountId || "");
     setEditReceipt(null);
   };
 
@@ -231,13 +226,15 @@ export function ExpenseTable({ expenses: initialExpenses, currency }: ExpenseTab
     if (!editingExpense) return;
     setEditLoading(true);
     try {
+      const accountName = accounts.find(a => a.id === editAccountId)?.name;
       await updateExpense(editingExpense.id, {
         amount: parseFloat(editAmount),
         category: editCategory,
         description: editDescription || undefined,
         merchant: editMerchant || undefined,
         date: new Date(editDate),
-        paymentMethod: editPaymentMethod || undefined,
+        paymentMethod: accountName || undefined,
+        accountId: editAccountId || undefined,
       });
 
       // If there's a new receipt, upload it
@@ -264,8 +261,9 @@ export function ExpenseTable({ expenses: initialExpenses, currency }: ExpenseTab
     if (!deletingExpense) return;
     setDeleteLoading(true);
     try {
-      await deleteExpense(deletingExpense.id);
+      await deleteExpense(deletingExpense.id, reverseBalance);
       setDeletingExpense(null);
+      setReverseBalance(true);
       router.refresh();
     } catch (error) {
       console.error("Failed to delete expense:", error);
@@ -511,15 +509,16 @@ export function ExpenseTable({ expenses: initialExpenses, currency }: ExpenseTab
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="edit-payment">Payment Method</Label>
-                <Select value={editPaymentMethod} onValueChange={setEditPaymentMethod}>
+                <Select value={editAccountId} onValueChange={setEditAccountId}>
                   <SelectTrigger>
-                    <SelectValue placeholder="Select method" />
+                    <SelectValue placeholder="Select account" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="PNB">PNB</SelectItem>
-                    <SelectItem value="SBI">SBI</SelectItem>
-                    <SelectItem value="CASH">Cash</SelectItem>
-                    <SelectItem value="CREDIT">Credit</SelectItem>
+                    {accounts.map((account) => (
+                      <SelectItem key={account.id} value={account.id}>
+                        {account.name}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
@@ -586,7 +585,7 @@ export function ExpenseTable({ expenses: initialExpenses, currency }: ExpenseTab
       )}
 
       {/* Delete Confirmation */}
-      <AlertDialog open={!!deletingExpense} onOpenChange={() => setDeletingExpense(null)}>
+      <AlertDialog open={!!deletingExpense} onOpenChange={(open) => { if (!open) { setDeletingExpense(null); setReverseBalance(true); } }}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Delete Expense</AlertDialogTitle>
@@ -594,6 +593,33 @@ export function ExpenseTable({ expenses: initialExpenses, currency }: ExpenseTab
               Are you sure you want to delete this expense? This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
+          {deletingExpense?.accountId && (
+            <div className="flex items-center gap-3 rounded-md border p-3">
+              <button
+                type="button"
+                role="switch"
+                aria-checked={reverseBalance}
+                onClick={() => setReverseBalance(!reverseBalance)}
+                className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+                  reverseBalance ? "bg-primary" : "bg-muted"
+                }`}
+              >
+                <span
+                  className={`pointer-events-none block h-4 w-4 rounded-full bg-background shadow-lg ring-0 transition-transform ${
+                    reverseBalance ? "translate-x-4" : "translate-x-0"
+                  }`}
+                />
+              </button>
+              <div className="text-sm">
+                <div className="font-medium">Reverse balance deduction</div>
+                <div className="text-muted-foreground text-xs">
+                  {reverseBalance
+                    ? "The account balance will be restored"
+                    : "The account balance will remain unchanged"}
+                </div>
+              </div>
+            </div>
+          )}
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
@@ -655,6 +681,7 @@ export function ExpenseTable({ expenses: initialExpenses, currency }: ExpenseTab
                               title={`Receipt ${index + 1}`}
                             />
                           ) : (
+                            /* eslint-disable-next-line @next/next/no-img-element */
                             <img
                               src={`/api/receipt/${expense.id}?index=${index}`}
                               alt={`Receipt ${index + 1}`}

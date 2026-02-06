@@ -25,7 +25,7 @@ export async function createSubscription(input: CreateSubscriptionInput) {
       amount: input.amount,
       billingCycle: input.billingCycle,
       nextBillingDate: input.nextBillingDate,
-      paymentMethod: input.paymentMethod as "PNB" | "SBI" | "CASH" | "CREDIT" | undefined,
+      paymentMethod: input.paymentMethod,
       description: input.description,
       alertDaysBefore: input.alertDaysBefore || 3,
     },
@@ -70,7 +70,7 @@ export async function updateSubscription(
     where: { id, userId },
     data: {
       ...input,
-      paymentMethod: input.paymentMethod as "PNB" | "SBI" | "CASH" | "CREDIT" | undefined,
+      paymentMethod: input.paymentMethod,
     },
   });
 

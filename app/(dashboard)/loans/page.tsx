@@ -1,7 +1,6 @@
 import { getLoans, getLoanStats } from "@/lib/actions/loans";
 import { getUserSettings } from "@/lib/actions/settings";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { IconCash, IconCashOff, IconUsers, IconCheck } from "@tabler/icons-react";
 import { LoanList } from "@/components/loan-list";
 import { AddLoanDialog } from "@/components/add-loan-dialog";

@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { useClerk, useUser } from "@clerk/nextjs";
 import { cn } from "@/lib/utils";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { useDemoMode } from "@/components/demo-mode-provider";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -26,6 +27,8 @@ import {
   IconCalendarRepeat,
   IconCash,
   IconBuildingBank,
+  IconEyeOff,
+  IconEye,
 } from "@tabler/icons-react";
 
 const navItems = [
@@ -83,6 +86,7 @@ export function Sidebar() {
   const pathname = usePathname();
   const { user, isLoaded } = useUser();
   const { signOut } = useClerk();
+  const { isDemoMode, toggleDemoMode } = useDemoMode();
   // Use useSyncExternalStore to avoid hydration mismatch without triggering cascading renders
   const mounted = useSyncExternalStore(
     emptySubscribe,
@@ -126,12 +130,24 @@ export function Sidebar() {
       {/* User Profile & Theme Toggle */}
       <div className="border-t p-2">
         <div className="flex items-center justify-between px-2 py-1">
-          <ThemeToggle />
+          <div className="flex items-center gap-1">
+            <ThemeToggle />
+            <Button
+              variant="ghost"
+              size="icon"
+              className={cn("h-8 w-8", isDemoMode && "text-yellow-500")}
+              onClick={toggleDemoMode}
+              title={isDemoMode ? "Demo mode on (Ctrl+D)" : "Demo mode off (Ctrl+D)"}
+            >
+              {isDemoMode ? <IconEyeOff className="h-4 w-4" /> : <IconEye className="h-4 w-4" />}
+            </Button>
+          </div>
           {mounted && isLoaded ? (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" className="flex items-center gap-2 px-2">
                   {user?.imageUrl ? (
+                    /* eslint-disable-next-line @next/next/no-img-element */
                     <img
                       src={user.imageUrl}
                       alt={user.fullName || "User"}

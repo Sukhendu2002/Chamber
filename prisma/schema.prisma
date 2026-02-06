@@ -28,7 +28,9 @@ model Expense {
   merchant      String?
   description   String?
   source        Source         @default(WEB)
-  paymentMethod PaymentMethod?
+  paymentMethod String?        // Account name label (for display)
+  accountId     String?        // Linked account for balance tracking
+  account       Account?       @relation(fields: [accountId], references: [id], onDelete: SetNull)
   date          DateTime       @default(now())
   isVerified    Boolean        @default(false) // True if matched with Bank Statement
   metadata      Json?          // Stores raw OCR text or debug info
@@ -38,13 +40,7 @@ model Expense {
 
   @@index([userId])
   @@index([date])
-}
-
-enum PaymentMethod {
-  PNB
-  SBI
-  CASH
-  CREDIT
+  @@index([accountId])
 }
 
 model LinkingCode {
@@ -79,7 +75,7 @@ model Subscription {
   amount        Float
   billingCycle  BillingCycle @default(MONTHLY)
   nextBillingDate DateTime
-  paymentMethod PaymentMethod?
+  paymentMethod String?       // Account name (dynamic, from user's accounts)
   category      String       @default("Subscription")
   description   String?
   isActive      Boolean      @default(true)
@@ -136,6 +132,8 @@ enum AccountType {
   INVESTMENT
   WALLET
   CASH
+  CREDIT_CARD
+  DEBIT_CARD
   OTHER
 }
 
@@ -148,10 +146,13 @@ model Account {
   description   String?
   icon          String?         // Optional icon identifier
   color         String?         // Optional color for UI
+  creditLimit   Float?          // Credit limit (for CREDIT_CARD accounts)
   isActive      Boolean         @default(true)
+  showOnTelegram Boolean        @default(true) // Whether to show in Telegram bot payment options
   createdAt     DateTime        @default(now())
   updatedAt     DateTime        @updatedAt
   balanceHistory BalanceHistory[]
+  expenses      Expense[]
 
   @@index([userId])
   @@index([type])

@@ -13,9 +13,10 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
-import { IconDeviceFloppy, IconDownload, IconTrash, IconLayoutDashboard } from "@tabler/icons-react";
+import { IconDeviceFloppy, IconDownload, IconTrash, IconLayoutDashboard, IconEyeOff } from "@tabler/icons-react";
 import { updateUserSettings, exportExpensesCSV, deleteAllUserData } from "@/lib/actions/settings";
 import { DashboardWidgets, DEFAULT_DASHBOARD_WIDGETS, DASHBOARD_WIDGET_OPTIONS } from "@/types/dashboard";
+import { useDemoMode } from "@/components/demo-mode-provider";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -66,6 +67,7 @@ export function SettingsForm({ initialSettings }: SettingsFormProps) {
   const [saved, setSaved] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const { isDemoMode, toggleDemoMode: demoToggle } = useDemoMode();
 
   const toggleWidget = (key: keyof DashboardWidgets) => {
     setDashboardWidgets((prev) => ({
@@ -210,6 +212,36 @@ export function SettingsForm({ initialSettings }: SettingsFormProps) {
                 </div>
               </div>
             ))}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Demo Mode */}
+      <Card className="mb-6 border">
+        <CardHeader>
+          <CardTitle className="text-sm font-medium flex items-center gap-2">
+            <IconEyeOff className="h-4 w-4" />
+            Demo Mode
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div
+            className="flex items-center justify-between rounded-lg border p-3 cursor-pointer hover:bg-muted/50 transition-colors"
+            onClick={demoToggle}
+          >
+            <div>
+              <p className="font-medium text-sm">Show fake data</p>
+              <p className="text-xs text-muted-foreground">
+                Replace all numbers with random values for screenshots or demos. Shortcut: Ctrl+D
+              </p>
+            </div>
+            <div
+              className={`h-5 w-9 rounded-full transition-colors ${isDemoMode ? "bg-yellow-500" : "bg-muted"}`}
+            >
+              <div
+                className={`h-4 w-4 mt-0.5 rounded-full bg-white shadow-sm transition-transform ${isDemoMode ? "translate-x-4.5 ml-0.5" : "translate-x-0.5"}`}
+              />
+            </div>
           </div>
         </CardContent>
       </Card>

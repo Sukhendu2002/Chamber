@@ -104,7 +104,6 @@ export function DemoModeProvider({ children }: { children: React.ReactNode }) {
   const isDemoMode = useSyncExternalStore(subscribeToDemoMode, getDemoModeSnapshot, getDemoModeServerSnapshot);
   const mounted = useSyncExternalStore(emptySubscribe, () => true, () => false);
   const observerRef = useRef<MutationObserver | null>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
 
   const toggleDemoMode = useCallback(() => {
     const next = !getDemoModeSnapshot();
@@ -128,8 +127,7 @@ export function DemoModeProvider({ children }: { children: React.ReactNode }) {
   // Scramble / restore DOM when demo mode toggles
   useEffect(() => {
     if (!mounted) return;
-    const root = containerRef.current;
-    if (!root) return;
+    const root = document.body;
 
     if (isDemoMode) {
       // Scramble all existing text nodes
@@ -178,9 +176,7 @@ export function DemoModeProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <DemoModeContext.Provider value={{ isDemoMode, toggleDemoMode }}>
-      <div ref={containerRef}>
-        {children}
-      </div>
+      {children}
     </DemoModeContext.Provider>
   );
 }

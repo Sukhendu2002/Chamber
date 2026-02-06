@@ -31,13 +31,14 @@ async function recordBalanceHistory(
   accountId: string,
   newBalance: number,
   note: string,
+  date?: Date,
 ) {
   await tx.balanceHistory.create({
     data: {
       accountId,
       balance: newBalance,
       note,
-      date: new Date(),
+      date: date || new Date(),
     },
   });
 }
@@ -72,7 +73,8 @@ export async function createExpense(input: CreateExpenseInput) {
           data: { currentBalance: { increment: adjustment } },
         });
         const label = input.description || input.category || "Expense";
-        await recordBalanceHistory(tx, input.accountId, updatedAccount.currentBalance, `Expense: ${label} (₹${input.amount})`);
+        const expenseDate = input.date || new Date();
+        await recordBalanceHistory(tx, input.accountId, updatedAccount.currentBalance, `Expense: ${label} (₹${input.amount})`, expenseDate);
       }
     }
 
@@ -198,7 +200,7 @@ export async function updateExpense(
           where: { id: existing.accountId },
           data: { currentBalance: { increment: reversal } },
         });
-        await recordBalanceHistory(tx, existing.accountId, updatedOld.currentBalance, `Expense updated/moved (reversed ₹${existing.amount})`);
+        await recordBalanceHistory(tx, existing.accountId, updatedOld.currentBalance, `Expense updated/moved (reversed ₹${existing.amount})`, existing.date);
       }
     }
 
@@ -216,7 +218,8 @@ export async function updateExpense(
           data: { currentBalance: { increment: adjustment } },
         });
         const label = input.description || input.category || "Expense";
-        await recordBalanceHistory(tx, newAccountId, updatedNew.currentBalance, `Expense: ${label} (₹${newAmount})`);
+        const expenseDate = input.date || existing.date;
+        await recordBalanceHistory(tx, newAccountId, updatedNew.currentBalance, `Expense: ${label} (₹${newAmount})`, expenseDate);
       }
     }
 
@@ -267,7 +270,7 @@ export async function deleteExpense(id: string, reverseBalance: boolean = true) 
           data: { currentBalance: { increment: reversal } },
         });
         const label = existing.description || existing.category || "Expense";
-        await recordBalanceHistory(tx, existing.accountId, updatedAccount.currentBalance, `Expense deleted: ${label} (₹${existing.amount} refunded)`);
+        await recordBalanceHistory(tx, existing.accountId, updatedAccount.currentBalance, `Expense deleted: ${label} (₹${existing.amount} refunded)`, existing.date);
       }
     }
 

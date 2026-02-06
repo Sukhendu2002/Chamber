@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { toLocalDateString } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import {
   Table,
@@ -217,7 +218,7 @@ export function ExpenseTable({ expenses: initialExpenses, currency, accounts = [
     setEditCategory(expense.category);
     setEditDescription(expense.description || "");
     setEditMerchant(expense.merchant || "");
-    setEditDate(new Date(expense.date).toISOString().split("T")[0]);
+    setEditDate(toLocalDateString(new Date(expense.date)));
     setEditAccountId(expense.accountId || "");
     setEditReceipt(null);
   };

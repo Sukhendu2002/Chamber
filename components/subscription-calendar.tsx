@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { toLocalDateString } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -167,7 +168,7 @@ export function SubscriptionCalendar({ subscriptions, currency, accounts = [] }:
     setEditName(sub.name);
     setEditAmount(sub.amount.toString());
     setEditBillingCycle(sub.billingCycle);
-    setEditNextBillingDate(new Date(sub.nextBillingDate).toISOString().split("T")[0]);
+    setEditNextBillingDate(toLocalDateString(new Date(sub.nextBillingDate)));
     setEditPaymentMethod(sub.paymentMethod || "");
     setEditDescription(sub.description || "");
     setEditAlertDays(sub.alertDaysBefore.toString());

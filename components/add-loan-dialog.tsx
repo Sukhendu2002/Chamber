@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { toLocalDateString } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -30,7 +31,7 @@ export function AddLoanDialog({ currency }: AddLoanDialogProps) {
   const [borrowerName, setBorrowerName] = useState("");
   const [borrowerPhone, setBorrowerPhone] = useState("");
   const [amount, setAmount] = useState("");
-  const [lendDate, setLendDate] = useState(new Date().toISOString().split("T")[0]);
+  const [lendDate, setLendDate] = useState(toLocalDateString());
   const [dueDate, setDueDate] = useState("");
   const [description, setDescription] = useState("");
   const [receiptFiles, setReceiptFiles] = useState<File[]>([]);
@@ -40,7 +41,7 @@ export function AddLoanDialog({ currency }: AddLoanDialogProps) {
     setBorrowerName("");
     setBorrowerPhone("");
     setAmount("");
-    setLendDate(new Date().toISOString().split("T")[0]);
+    setLendDate(toLocalDateString());
     setDueDate("");
     setDescription("");
     setReceiptFiles([]);

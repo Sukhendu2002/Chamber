@@ -68,10 +68,24 @@ Create a `.env` file with all required variables. See [README.md](./README.md#en
 
 ## Git Workflow
 
+> **CRITICAL RULE: ALWAYS create a new branch BEFORE making ANY code changes.**  
+> No exceptions. No commits directly on `dev` or `main`. Every change — no matter how small — MUST be on its own feature/fix branch. Violating this rule will result in rejected PRs.
+
+### For AI Assistants / Copilots
+
+**If you are an AI coding assistant (Cascade, Copilot, Cursor, etc.), you MUST:**
+
+1. **Before writing any code**, check the current branch with `git branch --show-current`.
+2. **If on `dev` or `main`**, create a new branch FIRST from `dev` branch using the naming convention below.
+3. **Never make code changes on `dev` or `main`** — always switch to a feature/fix branch first.
+4. **Ask the user** if you are unsure which branch name to use.
+
+This is non-negotiable. Do not skip this step.
+
 ### Branch Naming Convention
 
 | Type | Format | Example |
-|------|--------|---------|
+|------|--------|----------|
 | Feature | `feature/<short-description>` | `feature/bank-import` |
 | Bug Fix | `fix/<issue-or-description>` | `fix/calendar-timezone` |
 | Documentation | `docs/<topic>` | `docs/development-guidelines` |
@@ -85,14 +99,15 @@ main (production)
   ↑ PR (after review)
 dev (integration)
   ↑ PR (feature complete)
-feature/xyz (your work)
+feature/xyz (your work)  ← ALL changes happen here
 ```
 
-1. **Always branch from `dev`**:
+1. **MANDATORY — Create a branch before ANY changes**:
    ```bash
    git checkout dev
    git pull origin dev
    git checkout -b feature/my-feature
+   # NOW you can start writing code
    ```
 
 2. **Commit early and often** with meaningful messages:
@@ -108,7 +123,7 @@ feature/xyz (your work)
    # Create PR from GitHub UI targeting `dev` branch
    ```
 
-4. **Never merge directly** - All changes go through PR review.
+4. **Never commit or merge directly to `dev` or `main`** — All changes go through PR review.
 
 ### Commit Message Format
 

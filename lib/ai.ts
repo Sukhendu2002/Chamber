@@ -37,7 +37,8 @@ Always respond in this exact JSON format only, no other text:
 If you cannot parse the expense, respond with:
 {"error": "<reason>"}`;
 
-const VISION_SYSTEM_PROMPT = `You are an expense parsing assistant. Extract payment/expense information from UPI payment screenshots, receipts, or transaction confirmations.
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const _VISION_SYSTEM_PROMPT = `You are an expense parsing assistant. Extract payment/expense information from UPI payment screenshots, receipts, or transaction confirmations.
 
 Categories available: Food, Travel, Entertainment, Bills, Shopping, Health, Education, Investments, Subscription, General
 

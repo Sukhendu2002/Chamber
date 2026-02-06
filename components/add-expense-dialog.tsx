@@ -9,7 +9,6 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-  DialogFooter,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -69,7 +68,6 @@ export function AddExpenseDialog({ accounts = [] }: AddExpenseDialogProps) {
   // Derive account name for display/label
   const selectedAccountName = accounts.find(a => a.id === selectedAccountId)?.name;
   const [receipt, setReceipt] = useState<File | null>(null);
-  const [uploadingReceipt, setUploadingReceipt] = useState(false);
   
   // Subscription-specific fields
   const [billingCycle, setBillingCycle] = useState<"ONCE" | "WEEKLY" | "MONTHLY" | "QUARTERLY" | "YEARLY">("MONTHLY");
@@ -120,7 +118,6 @@ export function AddExpenseDialog({ accounts = [] }: AddExpenseDialogProps) {
 
         // If there's a receipt, upload it
         if (receipt && expense?.id) {
-          setUploadingReceipt(true);
           const formData = new FormData();
           formData.append("file", receipt);
           formData.append("expenseId", expense.id);
@@ -138,7 +135,6 @@ export function AddExpenseDialog({ accounts = [] }: AddExpenseDialogProps) {
       console.error("Failed to create:", error);
     } finally {
       setLoading(false);
-      setUploadingReceipt(false);
     }
   };
 

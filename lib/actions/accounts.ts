@@ -378,13 +378,6 @@ export async function getAllBalanceHistory(months: number = 6) {
     });
   }
 
-  // Collect all unique dates from history within range
-  const datesInRange = new Set<string>();
-  
-  // Track balance for each account at each date
-  type BalanceAtDate = Record<string, number>;
-  const balancesByDate: Record<string, BalanceAtDate> = {};
-
   // Collect ALL history entries within range with full timestamps
   type HistoryEntry = { timestamp: number; date: Date; accountId: string; balance: number };
   const allEntries: HistoryEntry[] = [];

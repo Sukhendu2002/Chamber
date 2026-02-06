@@ -147,6 +147,7 @@ export function Sidebar() {
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" className="flex items-center gap-2 px-2">
                   {user?.imageUrl ? (
+                    /* eslint-disable-next-line @next/next/no-img-element */
                     <img
                       src={user.imageUrl}
                       alt={user.fullName || "User"}

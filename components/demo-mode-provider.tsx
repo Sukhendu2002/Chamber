@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useState, useEffect, useCallback, useRef } from "react";
+import { createContext, useContext, useEffect, useCallback, useRef, useSyncExternalStore } from "react";
 
 type DemoModeContextType = {
   isDemoMode: boolean;
@@ -13,6 +13,7 @@ const DemoModeContext = createContext<DemoModeContextType>({
 });
 
 const DEMO_MODE_KEY = "chamber-demo-mode";
+const DEMO_MODE_EVENT = "chamber-demo-mode-changed";
 const ORIGINAL_ATTR = "data-demo-original";
 
 // Simple seeded random from a string
@@ -50,8 +51,6 @@ function scrambleNode(node: Text) {
   const text = node.textContent || "";
   // Skip if no digits
   if (!/\d/.test(text)) return;
-  // Skip nodes inside our indicator badge
-  if (node.parentElement?.closest("[data-demo-indicator]")) return;
   // Store original
   if (!node.parentElement?.hasAttribute(ORIGINAL_ATTR)) {
     node.parentElement?.setAttribute(ORIGINAL_ATTR, text);
@@ -78,27 +77,40 @@ function walkTextNodes(root: Node, fn: (node: Text) => void) {
   nodes.forEach(fn);
 }
 
+// useSyncExternalStore-based demo mode state (no useState/useEffect for init)
+function subscribeToDemoMode(callback: () => void) {
+  // Listen for both cross-tab storage events and same-tab custom events
+  const onStorage = (e: StorageEvent) => { if (e.key === DEMO_MODE_KEY) callback(); };
+  const onCustom = () => callback();
+  window.addEventListener("storage", onStorage);
+  window.addEventListener(DEMO_MODE_EVENT, onCustom);
+  return () => {
+    window.removeEventListener("storage", onStorage);
+    window.removeEventListener(DEMO_MODE_EVENT, onCustom);
+  };
+}
+
+function getDemoModeSnapshot(): boolean {
+  return localStorage.getItem(DEMO_MODE_KEY) === "true";
+}
+
+function getDemoModeServerSnapshot(): boolean {
+  return false;
+}
+
+const emptySubscribe = () => () => {};
+
 export function DemoModeProvider({ children }: { children: React.ReactNode }) {
-  const [isDemoMode, setIsDemoMode] = useState(false);
-  const [mounted, setMounted] = useState(false);
+  const isDemoMode = useSyncExternalStore(subscribeToDemoMode, getDemoModeSnapshot, getDemoModeServerSnapshot);
+  const mounted = useSyncExternalStore(emptySubscribe, () => true, () => false);
   const observerRef = useRef<MutationObserver | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Load from localStorage on mount
-  useEffect(() => {
-    const stored = localStorage.getItem(DEMO_MODE_KEY);
-    if (stored === "true") {
-      setIsDemoMode(true);
-    }
-    setMounted(true);
-  }, []);
-
   const toggleDemoMode = useCallback(() => {
-    setIsDemoMode((prev) => {
-      const next = !prev;
-      localStorage.setItem(DEMO_MODE_KEY, String(next));
-      return next;
-    });
+    const next = !getDemoModeSnapshot();
+    localStorage.setItem(DEMO_MODE_KEY, String(next));
+    // Dispatch custom event so useSyncExternalStore re-reads in the same tab
+    window.dispatchEvent(new Event(DEMO_MODE_EVENT));
   }, []);
 
   // Keyboard shortcut: Ctrl+D

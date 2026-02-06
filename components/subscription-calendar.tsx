@@ -130,7 +130,6 @@ export function SubscriptionCalendar({ subscriptions, currency, accounts = [] }:
 
   // Get subscriptions for a specific day
   const getSubscriptionsForDay = (day: number) => {
-    const date = new Date(year, month, day);
     return subscriptions.filter((sub) => {
       const billingDate = new Date(sub.nextBillingDate);
       return (

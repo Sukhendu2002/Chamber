@@ -43,7 +43,6 @@ import {
   IconTrash,
   IconArrowUp,
   IconArrowDown,
-  IconReceipt,
   IconUpload,
   IconPhoto,
   IconX,
@@ -130,30 +129,17 @@ export function ExpenseTable({ expenses: initialExpenses, currency, accounts = [
   const [viewingReceipt, setViewingReceipt] = useState<string | null>(null);
   const [uploadingExpenseId, setUploadingExpenseId] = useState<string | null>(null);
 
-  // Track which dialog is active to prevent stacking
-  type ActiveDialog = 'none' | 'edit' | 'delete' | 'receipt';
-  const [activeDialog, setActiveDialog] = useState<ActiveDialog>('none');
-
   // Custom setters to ensure only one dialog is open at a time
   const openReceiptViewer = (expenseId: string) => {
     setEditingExpense(null);
     setDeletingExpense(null);
     setViewingReceipt(expenseId);
-    setActiveDialog('receipt');
   };
 
   const openEditDialogSafe = (expense: Expense) => {
     setViewingReceipt(null);
     setDeletingExpense(null);
     openEditDialog(expense);
-    setActiveDialog('edit');
-  };
-
-  const closeAllDialogs = () => {
-    setEditingExpense(null);
-    setDeletingExpense(null);
-    setViewingReceipt(null);
-    setActiveDialog('none');
   };
 
   const handleReceiptUpload = async (expenseId: string, file: File) => {
@@ -695,6 +681,7 @@ export function ExpenseTable({ expenses: initialExpenses, currency, accounts = [
                               title={`Receipt ${index + 1}`}
                             />
                           ) : (
+                            /* eslint-disable-next-line @next/next/no-img-element */
                             <img
                               src={`/api/receipt/${expense.id}?index=${index}`}
                               alt={`Receipt ${index + 1}`}

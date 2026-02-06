@@ -19,6 +19,10 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Chamber - AI-Powered Expense Tracking",
   description: "Eliminate the friction of manual expense tracking. Input anywhere via Telegram or Web, and let AI automatically categorize your spending.",
+  icons: {
+    icon: "/icon.svg",
+    apple: "/apple-icon.svg",
+  },
 };
 
 export default function RootLayout({

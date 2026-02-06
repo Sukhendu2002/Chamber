@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { toLocalDateString } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -62,7 +63,7 @@ export function AddExpenseDialog({ accounts = [] }: AddExpenseDialogProps) {
   const [category, setCategory] = useState("General");
   const [description, setDescription] = useState("");
   const [merchant, setMerchant] = useState("");
-  const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
+  const [date, setDate] = useState(toLocalDateString());
   const [selectedAccountId, setSelectedAccountId] = useState<string>("");
 
   // Derive account name for display/label
@@ -143,7 +144,7 @@ export function AddExpenseDialog({ accounts = [] }: AddExpenseDialogProps) {
     setCategory("General");
     setDescription("");
     setMerchant("");
-    setDate(new Date().toISOString().split("T")[0]);
+    setDate(toLocalDateString());
     setSelectedAccountId("");
     setReceipt(null);
     setBillingCycle("MONTHLY");

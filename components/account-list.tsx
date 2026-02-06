@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { toLocalDateString } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -116,7 +117,7 @@ export function AccountList({ accounts, currency }: AccountListProps) {
   // Update balance form
   const [newBalance, setNewBalance] = useState("");
   const [updateNote, setUpdateNote] = useState("");
-  const [updateDate, setUpdateDate] = useState(new Date().toISOString().split("T")[0]);
+  const [updateDate, setUpdateDate] = useState(toLocalDateString());
 
   // Edit form
   const [editName, setEditName] = useState("");
@@ -176,7 +177,7 @@ export function AccountList({ accounts, currency }: AccountListProps) {
     setSelectedAccount(account);
     setNewBalance(account.currentBalance.toString());
     setUpdateNote("");
-    setUpdateDate(new Date().toISOString().split("T")[0]);
+    setUpdateDate(toLocalDateString());
     setShowUpdateDialog(true);
   };
 
@@ -515,7 +516,7 @@ export function AccountList({ accounts, currency }: AccountListProps) {
                 id="updateDate"
                 type="date"
                 value={updateDate}
-                max={new Date().toISOString().split("T")[0]}
+                max={toLocalDateString()}
                 onChange={(e) => setUpdateDate(e.target.value)}
               />
             </div>
@@ -645,6 +646,10 @@ export function AccountList({ accounts, currency }: AccountListProps) {
                   {historyData.map((entry, index) => {
                     const prevEntry = historyData[index + 1];
                     const change = prevEntry ? entry.balance - prevEntry.balance : 0;
+                    // For credit cards, balance increase = more debt (bad/red), decrease = paying off (good/green)
+                    // For all other accounts, balance increase = good (green), decrease = bad (red)
+                    const isCreditCard = selectedAccount?.type === "CREDIT_CARD";
+                    const isPositiveChange = isCreditCard ? change < 0 : change > 0;
 
                     return (
                       <TableRow key={entry.id}>
@@ -652,7 +657,7 @@ export function AccountList({ accounts, currency }: AccountListProps) {
                         <TableCell>
                           <div className="font-medium">{formatCurrency(entry.balance)}</div>
                           {change !== 0 && (
-                            <div className={`text-xs ${change > 0 ? "text-green-600" : "text-red-600"}`}>
+                            <div className={`text-xs ${isPositiveChange ? "text-green-600" : "text-red-600"}`}>
                               {change > 0 ? "+" : ""}{formatCurrency(change)}
                             </div>
                           )}

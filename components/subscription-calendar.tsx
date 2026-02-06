@@ -35,6 +35,12 @@ import {
   renewSubscription,
 } from "@/lib/actions/subscriptions";
 
+type AccountOption = {
+  id: string;
+  name: string;
+  type: string;
+};
+
 type Subscription = {
   id: string;
   name: string;
@@ -50,6 +56,7 @@ type Subscription = {
 type SubscriptionCalendarProps = {
   subscriptions: Subscription[];
   currency: string;
+  accounts?: AccountOption[];
 };
 
 const billingCycles = [
@@ -60,14 +67,7 @@ const billingCycles = [
   { value: "YEARLY", label: "Yearly" },
 ];
 
-const paymentMethods = [
-  { value: "PNB", label: "PNB" },
-  { value: "SBI", label: "SBI" },
-  { value: "CASH", label: "Cash" },
-  { value: "CREDIT", label: "Credit" },
-];
-
-export function SubscriptionCalendar({ subscriptions, currency }: SubscriptionCalendarProps) {
+export function SubscriptionCalendar({ subscriptions, currency, accounts = [] }: SubscriptionCalendarProps) {
   const router = useRouter();
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedSubscription, setSelectedSubscription] = useState<Subscription | null>(null);
@@ -531,9 +531,9 @@ export function SubscriptionCalendar({ subscriptions, currency }: SubscriptionCa
                     <SelectValue placeholder="Select method" />
                   </SelectTrigger>
                   <SelectContent>
-                    {paymentMethods.map((method) => (
-                      <SelectItem key={method.value} value={method.value}>
-                        {method.label}
+                    {accounts.map((account) => (
+                      <SelectItem key={account.id} value={account.name}>
+                        {account.name}
                       </SelectItem>
                     ))}
                   </SelectContent>

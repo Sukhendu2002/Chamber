@@ -24,6 +24,12 @@ import { IconPlus, IconUpload, IconX } from "@tabler/icons-react";
 import { createExpense } from "@/lib/actions/expenses";
 import { createSubscription } from "@/lib/actions/subscriptions";
 
+type AccountOption = {
+  id: string;
+  name: string;
+  type: string;
+};
+
 const categories = [
   "Food",
   "Travel",
@@ -37,13 +43,6 @@ const categories = [
   "General",
 ];
 
-const paymentMethods = [
-  { value: "PNB", label: "PNB" },
-  { value: "SBI", label: "SBI" },
-  { value: "CASH", label: "Cash" },
-  { value: "CREDIT", label: "Credit" },
-];
-
 const billingCycles = [
   { value: "ONCE", label: "One-time (non-recurring)" },
   { value: "WEEKLY", label: "Weekly" },
@@ -52,7 +51,11 @@ const billingCycles = [
   { value: "YEARLY", label: "Yearly" },
 ];
 
-export function AddExpenseDialog() {
+type AddExpenseDialogProps = {
+  accounts?: AccountOption[];
+};
+
+export function AddExpenseDialog({ accounts = [] }: AddExpenseDialogProps) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -61,7 +64,10 @@ export function AddExpenseDialog() {
   const [description, setDescription] = useState("");
   const [merchant, setMerchant] = useState("");
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
-  const [paymentMethod, setPaymentMethod] = useState<string>("");
+  const [selectedAccountId, setSelectedAccountId] = useState<string>("");
+
+  // Derive account name for display/label
+  const selectedAccountName = accounts.find(a => a.id === selectedAccountId)?.name;
   const [receipt, setReceipt] = useState<File | null>(null);
   const [uploadingReceipt, setUploadingReceipt] = useState(false);
   
@@ -85,7 +91,7 @@ export function AddExpenseDialog() {
           amount: parseFloat(amount),
           billingCycle,
           nextBillingDate: new Date(date),
-          paymentMethod: paymentMethod || undefined,
+          paymentMethod: selectedAccountName || undefined,
           description: description || undefined,
           alertDaysBefore: parseInt(alertDaysBefore) || 3,
         });
@@ -97,7 +103,8 @@ export function AddExpenseDialog() {
           description: `${merchant} - ${billingCycle.toLowerCase()} subscription`,
           merchant: merchant,
           date: new Date(), // Today's date
-          paymentMethod: paymentMethod || undefined,
+          paymentMethod: selectedAccountName || undefined,
+          accountId: selectedAccountId || undefined,
         });
       } else {
         // Create regular expense
@@ -107,7 +114,8 @@ export function AddExpenseDialog() {
           description: description || undefined,
           merchant: merchant || undefined,
           date: new Date(date),
-          paymentMethod: paymentMethod || undefined,
+          paymentMethod: selectedAccountName || undefined,
+          accountId: selectedAccountId || undefined,
         });
 
         // If there's a receipt, upload it
@@ -140,7 +148,7 @@ export function AddExpenseDialog() {
     setDescription("");
     setMerchant("");
     setDate(new Date().toISOString().split("T")[0]);
-    setPaymentMethod("");
+    setSelectedAccountId("");
     setReceipt(null);
     setBillingCycle("MONTHLY");
     setAlertDaysBefore("3");
@@ -228,14 +236,14 @@ export function AddExpenseDialog() {
             </div>
             <div className="space-y-2">
               <Label htmlFor="paymentMethod">Payment Method</Label>
-              <Select value={paymentMethod} onValueChange={setPaymentMethod}>
+              <Select value={selectedAccountId} onValueChange={setSelectedAccountId}>
                 <SelectTrigger>
-                  <SelectValue placeholder="Select method" />
+                  <SelectValue placeholder="Select account" />
                 </SelectTrigger>
                 <SelectContent>
-                  {paymentMethods.map((method) => (
-                    <SelectItem key={method.value} value={method.value}>
-                      {method.label}
+                  {accounts.map((account) => (
+                    <SelectItem key={account.id} value={account.id}>
+                      {account.name}
                     </SelectItem>
                   ))}
                 </SelectContent>

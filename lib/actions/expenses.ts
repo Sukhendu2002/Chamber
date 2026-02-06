@@ -12,29 +12,76 @@ export type CreateExpenseInput = {
   description?: string;
   date?: Date;
   paymentMethod?: string;
+  accountId?: string;
   receiptUrl?: string;
 };
+
+// For credit cards, spending increases the outstanding balance.
+// For all other account types, spending decreases the balance.
+function getBalanceAdjustment(accountType: string, expenseAmount: number): number {
+  if (accountType === "CREDIT_CARD") {
+    return expenseAmount; // increase outstanding
+  }
+  return -expenseAmount; // decrease balance
+}
+
+// Record a balance history entry after an account balance change
+async function recordBalanceHistory(
+  tx: Parameters<Parameters<typeof db.$transaction>[0]>[0],
+  accountId: string,
+  newBalance: number,
+  note: string,
+) {
+  await tx.balanceHistory.create({
+    data: {
+      accountId,
+      balance: newBalance,
+      note,
+      date: new Date(),
+    },
+  });
+}
 
 export async function createExpense(input: CreateExpenseInput) {
   const { userId } = await auth();
   if (!userId) throw new Error("Unauthorized");
 
-  const expense = await db.expense.create({
-    data: {
-      userId,
-      amount: input.amount,
-      category: input.category,
-      merchant: input.merchant,
-      description: input.description,
-      date: input.date || new Date(),
-      source: "WEB",
-      paymentMethod: input.paymentMethod as "PNB" | "SBI" | "CASH" | "CREDIT" | undefined,
-      receiptUrl: input.receiptUrl,
-    },
+  const expense = await db.$transaction(async (tx) => {
+    const created = await tx.expense.create({
+      data: {
+        userId,
+        amount: input.amount,
+        category: input.category,
+        merchant: input.merchant,
+        description: input.description,
+        date: input.date || new Date(),
+        source: "WEB",
+        paymentMethod: input.paymentMethod,
+        accountId: input.accountId,
+        receiptUrl: input.receiptUrl,
+      },
+    });
+
+    // Adjust account balance if linked
+    if (input.accountId) {
+      const account = await tx.account.findUnique({ where: { id: input.accountId } });
+      if (account) {
+        const adjustment = getBalanceAdjustment(account.type, input.amount);
+        const updatedAccount = await tx.account.update({
+          where: { id: input.accountId },
+          data: { currentBalance: { increment: adjustment } },
+        });
+        const label = input.description || input.category || "Expense";
+        await recordBalanceHistory(tx, input.accountId, updatedAccount.currentBalance, `Expense: ${label} (₹${input.amount})`);
+      }
+    }
+
+    return created;
   });
 
   revalidatePath("/dashboard");
   revalidatePath("/expenses");
+  revalidatePath("/accounts");
 
   // Check and send subscription alerts (non-blocking)
   checkAndSendSubscriptionAlerts(userId).catch(console.error);
@@ -137,33 +184,99 @@ export async function updateExpense(
   const { userId } = await auth();
   if (!userId) throw new Error("Unauthorized");
 
-  const expense = await db.expense.updateMany({
-    where: { id, userId },
-    data: {
-      ...input,
-      paymentMethod: input.paymentMethod as "PNB" | "SBI" | "CASH" | "CREDIT" | undefined,
-    },
+  const result = await db.$transaction(async (tx) => {
+    // Get existing expense to reverse old balance effect
+    const existing = await tx.expense.findFirst({ where: { id, userId } });
+    if (!existing) throw new Error("Expense not found");
+
+    // Reverse old balance effect if expense was linked to an account
+    if (existing.accountId) {
+      const oldAccount = await tx.account.findUnique({ where: { id: existing.accountId } });
+      if (oldAccount) {
+        const reversal = -getBalanceAdjustment(oldAccount.type, existing.amount);
+        const updatedOld = await tx.account.update({
+          where: { id: existing.accountId },
+          data: { currentBalance: { increment: reversal } },
+        });
+        await recordBalanceHistory(tx, existing.accountId, updatedOld.currentBalance, `Expense updated/moved (reversed ₹${existing.amount})`);
+      }
+    }
+
+    // Determine new accountId (use input if provided, keep existing if not specified)
+    const newAccountId = input.accountId !== undefined ? input.accountId : existing.accountId;
+    const newAmount = input.amount !== undefined ? input.amount : existing.amount;
+
+    // Apply new balance effect
+    if (newAccountId) {
+      const newAccount = await tx.account.findUnique({ where: { id: newAccountId } });
+      if (newAccount) {
+        const adjustment = getBalanceAdjustment(newAccount.type, newAmount);
+        const updatedNew = await tx.account.update({
+          where: { id: newAccountId },
+          data: { currentBalance: { increment: adjustment } },
+        });
+        const label = input.description || input.category || "Expense";
+        await recordBalanceHistory(tx, newAccountId, updatedNew.currentBalance, `Expense: ${label} (₹${newAmount})`);
+      }
+    }
+
+    // Update the expense
+    const updated = await tx.expense.update({
+      where: { id },
+      data: {
+        amount: input.amount,
+        category: input.category,
+        merchant: input.merchant,
+        description: input.description,
+        date: input.date,
+        paymentMethod: input.paymentMethod,
+        accountId: newAccountId,
+        receiptUrl: input.receiptUrl,
+      },
+    });
+
+    return updated;
   });
 
   revalidatePath("/dashboard");
   revalidatePath("/expenses");
+  revalidatePath("/accounts");
 
   // Check and send subscription alerts (non-blocking)
   checkAndSendSubscriptionAlerts(userId).catch(console.error);
 
-  return expense;
+  return result;
 }
 
 export async function deleteExpense(id: string) {
   const { userId } = await auth();
   if (!userId) throw new Error("Unauthorized");
 
-  await db.expense.deleteMany({
-    where: { id, userId },
+  await db.$transaction(async (tx) => {
+    // Get expense to reverse balance effect
+    const existing = await tx.expense.findFirst({ where: { id, userId } });
+    if (!existing) throw new Error("Expense not found");
+
+    // Reverse balance effect if linked to an account
+    if (existing.accountId) {
+      const account = await tx.account.findUnique({ where: { id: existing.accountId } });
+      if (account) {
+        const reversal = -getBalanceAdjustment(account.type, existing.amount);
+        const updatedAccount = await tx.account.update({
+          where: { id: existing.accountId },
+          data: { currentBalance: { increment: reversal } },
+        });
+        const label = existing.description || existing.category || "Expense";
+        await recordBalanceHistory(tx, existing.accountId, updatedAccount.currentBalance, `Expense deleted: ${label} (₹${existing.amount} refunded)`);
+      }
+    }
+
+    await tx.expense.delete({ where: { id } });
   });
 
   revalidatePath("/dashboard");
   revalidatePath("/expenses");
+  revalidatePath("/accounts");
 }
 
 export async function getMonthlyStats() {

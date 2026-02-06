@@ -50,6 +50,12 @@ import {
 } from "@tabler/icons-react";
 import { updateExpense, deleteExpense } from "@/lib/actions/expenses";
 
+type AccountOption = {
+  id: string;
+  name: string;
+  type: string;
+};
+
 const categories = [
   "Food",
   "Travel",
@@ -77,6 +83,7 @@ type Expense = {
   description: string | null;
   source: string;
   paymentMethod: string | null;
+  accountId: string | null;
   date: Date;
   isVerified: boolean;
   receiptUrl: string | null;  // Legacy single receipt
@@ -89,9 +96,10 @@ type SortOrder = "asc" | "desc";
 type ExpenseTableProps = {
   expenses: Expense[];
   currency: string;
+  accounts?: AccountOption[];
 };
 
-export function ExpenseTable({ expenses: initialExpenses, currency }: ExpenseTableProps) {
+export function ExpenseTable({ expenses: initialExpenses, currency, accounts = [] }: ExpenseTableProps) {
   const router = useRouter();
   const [expenses, setExpenses] = useState(initialExpenses);
   const [sortField, setSortField] = useState<SortField>("date");
@@ -109,7 +117,7 @@ export function ExpenseTable({ expenses: initialExpenses, currency }: ExpenseTab
   const [editDescription, setEditDescription] = useState("");
   const [editMerchant, setEditMerchant] = useState("");
   const [editDate, setEditDate] = useState("");
-  const [editPaymentMethod, setEditPaymentMethod] = useState("");
+  const [editAccountId, setEditAccountId] = useState("");
   const [editReceipt, setEditReceipt] = useState<File | null>(null);
   const [editLoading, setEditLoading] = useState(false);
   
@@ -223,7 +231,7 @@ export function ExpenseTable({ expenses: initialExpenses, currency }: ExpenseTab
     setEditDescription(expense.description || "");
     setEditMerchant(expense.merchant || "");
     setEditDate(new Date(expense.date).toISOString().split("T")[0]);
-    setEditPaymentMethod(expense.paymentMethod || "");
+    setEditAccountId(expense.accountId || "");
     setEditReceipt(null);
   };
 
@@ -231,13 +239,15 @@ export function ExpenseTable({ expenses: initialExpenses, currency }: ExpenseTab
     if (!editingExpense) return;
     setEditLoading(true);
     try {
+      const accountName = accounts.find(a => a.id === editAccountId)?.name;
       await updateExpense(editingExpense.id, {
         amount: parseFloat(editAmount),
         category: editCategory,
         description: editDescription || undefined,
         merchant: editMerchant || undefined,
         date: new Date(editDate),
-        paymentMethod: editPaymentMethod || undefined,
+        paymentMethod: accountName || undefined,
+        accountId: editAccountId || undefined,
       });
 
       // If there's a new receipt, upload it
@@ -511,15 +521,16 @@ export function ExpenseTable({ expenses: initialExpenses, currency }: ExpenseTab
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="edit-payment">Payment Method</Label>
-                <Select value={editPaymentMethod} onValueChange={setEditPaymentMethod}>
+                <Select value={editAccountId} onValueChange={setEditAccountId}>
                   <SelectTrigger>
-                    <SelectValue placeholder="Select method" />
+                    <SelectValue placeholder="Select account" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="PNB">PNB</SelectItem>
-                    <SelectItem value="SBI">SBI</SelectItem>
-                    <SelectItem value="CASH">Cash</SelectItem>
-                    <SelectItem value="CREDIT">Credit</SelectItem>
+                    {accounts.map((account) => (
+                      <SelectItem key={account.id} value={account.id}>
+                        {account.name}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>

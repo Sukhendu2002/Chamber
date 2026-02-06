@@ -5,6 +5,7 @@ import { ExpenseFilters } from "@/components/expense-filters";
 import { Pagination } from "@/components/pagination";
 import { getExpenses, getExpensesCount } from "@/lib/actions/expenses";
 import { getUserSettings } from "@/lib/actions/settings";
+import { getAccounts } from "@/lib/actions/accounts";
 
 const ITEMS_PER_PAGE = 10;
 
@@ -19,7 +20,7 @@ export default async function ExpensesPage({
   const category = params.category || "";
   const offset = (page - 1) * ITEMS_PER_PAGE;
 
-  const [expenses, totalCount, settings] = await Promise.all([
+  const [expenses, totalCount, settings, accounts] = await Promise.all([
     getExpenses({
       limit: ITEMS_PER_PAGE,
       offset,
@@ -31,6 +32,7 @@ export default async function ExpensesPage({
       category: category || undefined,
     }),
     getUserSettings(),
+    getAccounts(),
   ]);
 
   const totalPages = Math.ceil(totalCount / ITEMS_PER_PAGE);
@@ -45,7 +47,7 @@ export default async function ExpensesPage({
             Manage and track all your expenses
           </p>
         </div>
-        <AddExpenseDialog />
+        <AddExpenseDialog accounts={accounts.map(a => ({ id: a.id, name: a.name, type: a.type }))} />
       </div>
 
       {/* Filters */}
@@ -61,7 +63,7 @@ export default async function ExpensesPage({
         <CardContent>
           {expenses.length > 0 ? (
             <>
-              <ExpenseTable expenses={expenses} currency={settings.currency} />
+              <ExpenseTable expenses={expenses} currency={settings.currency} accounts={accounts.map(a => ({ id: a.id, name: a.name, type: a.type }))} />
               {totalPages > 1 && (
                 <Pagination
                   currentPage={page}

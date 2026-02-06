@@ -24,6 +24,12 @@ import { IconPlus } from "@tabler/icons-react";
 import { createSubscription } from "@/lib/actions/subscriptions";
 import { createExpense } from "@/lib/actions/expenses";
 
+type AccountOption = {
+  id: string;
+  name: string;
+  type: string;
+};
+
 const billingCycles = [
   { value: "ONCE", label: "One-time (non-recurring)" },
   { value: "WEEKLY", label: "Weekly" },
@@ -32,14 +38,11 @@ const billingCycles = [
   { value: "YEARLY", label: "Yearly" },
 ];
 
-const paymentMethods = [
-  { value: "PNB", label: "PNB" },
-  { value: "SBI", label: "SBI" },
-  { value: "CASH", label: "Cash" },
-  { value: "CREDIT", label: "Credit" },
-];
+type AddSubscriptionDialogProps = {
+  accounts?: AccountOption[];
+};
 
-export function AddSubscriptionDialog() {
+export function AddSubscriptionDialog({ accounts = [] }: AddSubscriptionDialogProps) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -168,9 +171,9 @@ export function AddSubscriptionDialog() {
                   <SelectValue placeholder="Select method" />
                 </SelectTrigger>
                 <SelectContent>
-                  {paymentMethods.map((method) => (
-                    <SelectItem key={method.value} value={method.value}>
-                      {method.label}
+                  {accounts.map((account) => (
+                    <SelectItem key={account.id} value={account.name}>
+                      {account.name}
                     </SelectItem>
                   ))}
                 </SelectContent>

@@ -124,6 +124,7 @@ export function ExpenseTable({ expenses: initialExpenses, currency, accounts = [
   // Delete state
   const [deletingExpense, setDeletingExpense] = useState<Expense | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
+  const [reverseBalance, setReverseBalance] = useState(true);
 
   // Receipt state
   const [viewingReceipt, setViewingReceipt] = useState<string | null>(null);
@@ -274,8 +275,9 @@ export function ExpenseTable({ expenses: initialExpenses, currency, accounts = [
     if (!deletingExpense) return;
     setDeleteLoading(true);
     try {
-      await deleteExpense(deletingExpense.id);
+      await deleteExpense(deletingExpense.id, reverseBalance);
       setDeletingExpense(null);
+      setReverseBalance(true);
       router.refresh();
     } catch (error) {
       console.error("Failed to delete expense:", error);
@@ -597,7 +599,7 @@ export function ExpenseTable({ expenses: initialExpenses, currency, accounts = [
       )}
 
       {/* Delete Confirmation */}
-      <AlertDialog open={!!deletingExpense} onOpenChange={() => setDeletingExpense(null)}>
+      <AlertDialog open={!!deletingExpense} onOpenChange={(open) => { if (!open) { setDeletingExpense(null); setReverseBalance(true); } }}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Delete Expense</AlertDialogTitle>
@@ -605,6 +607,33 @@ export function ExpenseTable({ expenses: initialExpenses, currency, accounts = [
               Are you sure you want to delete this expense? This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
+          {deletingExpense?.accountId && (
+            <div className="flex items-center gap-3 rounded-md border p-3">
+              <button
+                type="button"
+                role="switch"
+                aria-checked={reverseBalance}
+                onClick={() => setReverseBalance(!reverseBalance)}
+                className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+                  reverseBalance ? "bg-primary" : "bg-muted"
+                }`}
+              >
+                <span
+                  className={`pointer-events-none block h-4 w-4 rounded-full bg-background shadow-lg ring-0 transition-transform ${
+                    reverseBalance ? "translate-x-4" : "translate-x-0"
+                  }`}
+                />
+              </button>
+              <div className="text-sm">
+                <div className="font-medium">Reverse balance deduction</div>
+                <div className="text-muted-foreground text-xs">
+                  {reverseBalance
+                    ? "The account balance will be restored"
+                    : "The account balance will remain unchanged"}
+                </div>
+              </div>
+            </div>
+          )}
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction

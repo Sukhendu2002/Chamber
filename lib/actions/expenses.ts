@@ -248,7 +248,7 @@ export async function updateExpense(
   return result;
 }
 
-export async function deleteExpense(id: string) {
+export async function deleteExpense(id: string, reverseBalance: boolean = true) {
   const { userId } = await auth();
   if (!userId) throw new Error("Unauthorized");
 
@@ -257,8 +257,8 @@ export async function deleteExpense(id: string) {
     const existing = await tx.expense.findFirst({ where: { id, userId } });
     if (!existing) throw new Error("Expense not found");
 
-    // Reverse balance effect if linked to an account
-    if (existing.accountId) {
+    // Reverse balance effect if linked to an account (only if requested)
+    if (reverseBalance && existing.accountId) {
       const account = await tx.account.findUnique({ where: { id: existing.accountId } });
       if (account) {
         const reversal = -getBalanceAdjustment(account.type, existing.amount);

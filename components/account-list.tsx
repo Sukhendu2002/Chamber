@@ -461,6 +461,7 @@ export function AccountList({ accounts, currency }: AccountListProps) {
                 id="updateDate"
                 type="date"
                 value={updateDate}
+                max={new Date().toISOString().split("T")[0]}
                 onChange={(e) => setUpdateDate(e.target.value)}
               />
             </div>

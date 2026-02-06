@@ -277,20 +277,20 @@ export function SettingsForm({ initialSettings }: SettingsFormProps) {
           <CardTitle className="text-sm font-medium">Data Management</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <p className="font-medium">Export Data</p>
               <p className="text-sm text-muted-foreground">
                 Download all your expenses and subscriptions as CSV
               </p>
             </div>
-            <Button variant="outline" size="sm" onClick={handleExport} disabled={exporting}>
+            <Button variant="outline" size="sm" className="self-start sm:self-auto" onClick={handleExport} disabled={exporting}>
               <IconDownload className="mr-2 h-4 w-4" />
               {exporting ? "Exporting..." : "Export CSV"}
             </Button>
           </div>
           <Separator />
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <p className="font-medium text-destructive">Delete All Data</p>
               <p className="text-sm text-muted-foreground">

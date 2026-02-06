@@ -114,9 +114,9 @@ export default async function DashboardPage() {
     widgets.showCalendar || widgets.showCategories || widgets.showRecent;
 
   return (
-    <div className="p-6">
+    <div className="p-4 md:p-6">
       {/* Header */}
-      <div className="mb-8 flex items-center justify-between">
+      <div className="mb-6 flex flex-col gap-4 sm:mb-8 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold">Dashboard</h1>
           <p className="text-sm text-muted-foreground">
@@ -128,7 +128,7 @@ export default async function DashboardPage() {
 
       {/* Stats Grid - Always full width row */}
       {widgets.showStats && (
-        <div className="mb-6 grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <div className="mb-6 grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
           {statsData.map((stat) => (
             <Card key={stat.title} className="border">
               <CardHeader className="flex flex-row items-center justify-between pb-2">
@@ -152,7 +152,7 @@ export default async function DashboardPage() {
 
       {/* Main Widget Grid - Responsive flowing layout */}
       {(widgets.showNetWorth || widgets.showBalanceTrend || widgets.showCalendar || widgets.showCategories || widgets.showRecent) && (
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-4 sm:gap-6 md:grid-cols-2 lg:grid-cols-3">
           {/* Net Worth Widget */}
           {widgets.showNetWorth && (
             <Card className="border">

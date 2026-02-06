@@ -80,16 +80,16 @@ export function ExpenseFilters({ currentSearch, currentCategory }: ExpenseFilter
   const hasFilters = currentSearch || currentCategory;
 
   return (
-    <div className="mb-6 flex flex-wrap items-center gap-4">
+    <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:gap-4">
       <form onSubmit={handleSearch} className="flex items-center gap-2">
-        <div className="relative">
+        <div className="relative flex-1 sm:flex-initial">
           <IconSearch className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             type="text"
             placeholder="Search expenses..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-64 pl-9"
+            className="w-full pl-9 sm:w-64"
           />
         </div>
         <Button type="submit" variant="secondary" disabled={isPending}>
@@ -97,33 +97,35 @@ export function ExpenseFilters({ currentSearch, currentCategory }: ExpenseFilter
         </Button>
       </form>
 
-      <Select
-        value={currentCategory || "All"}
-        onValueChange={handleCategoryChange}
-      >
-        <SelectTrigger className="w-40">
-          <SelectValue placeholder="Category" />
-        </SelectTrigger>
-        <SelectContent>
-          {categories.map((cat) => (
-            <SelectItem key={cat} value={cat}>
-              {cat}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-
-      {hasFilters && (
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={clearFilters}
-          disabled={isPending}
+      <div className="flex items-center gap-3">
+        <Select
+          value={currentCategory || "All"}
+          onValueChange={handleCategoryChange}
         >
-          <IconX className="mr-1 h-4 w-4" />
-          Clear filters
-        </Button>
-      )}
+          <SelectTrigger className="w-40">
+            <SelectValue placeholder="Category" />
+          </SelectTrigger>
+          <SelectContent>
+            {categories.map((cat) => (
+              <SelectItem key={cat} value={cat}>
+                {cat}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+
+        {hasFilters && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={clearFilters}
+            disabled={isPending}
+          >
+            <IconX className="mr-1 h-4 w-4" />
+            Clear
+          </Button>
+        )}
+      </div>
     </div>
   );
 }

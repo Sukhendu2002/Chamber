@@ -9,9 +9,9 @@ export default async function AnalyticsPage() {
   ]);
 
   return (
-    <div className="p-6">
+    <div className="p-4 md:p-6">
       {/* Header */}
-      <div className="mb-8">
+      <div className="mb-6 sm:mb-8">
         <h1 className="text-2xl font-bold">Analytics</h1>
         <p className="text-sm text-muted-foreground">
           Visualize your spending patterns and track budgets

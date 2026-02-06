@@ -281,168 +281,219 @@ export function ExpenseTable({ expenses: initialExpenses, currency, accounts = [
     );
   };
 
+  const renderActions = (expense: Expense) => (
+    <div className="flex gap-1">
+      {(() => {
+        const receipts = getReceipts(expense);
+        if (receipts.length > 0) {
+          return (
+            <>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 text-blue-600 hover:text-blue-700"
+                onClick={() => openReceiptViewer(expense.id)}
+                title={`View ${receipts.length} receipt(s)`}
+              >
+                <span className="relative">
+                  <IconPhoto className="h-4 w-4" />
+                  {receipts.length > 1 && (
+                    <span className="absolute -right-1 -top-1 flex h-3 w-3 items-center justify-center rounded-full bg-blue-600 text-[8px] text-white">
+                      {receipts.length}
+                    </span>
+                  )}
+                </span>
+              </Button>
+              <label className="cursor-pointer">
+                <input
+                  type="file"
+                  accept="image/*,.pdf"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) handleReceiptUpload(expense.id, file);
+                  }}
+                  disabled={uploadingExpenseId === expense.id}
+                />
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8"
+                  disabled={uploadingExpenseId === expense.id}
+                  asChild
+                >
+                  <span title="Add Receipt">
+                    <IconUpload className="h-4 w-4" />
+                  </span>
+                </Button>
+              </label>
+            </>
+          );
+        }
+        return (
+          <label className="cursor-pointer">
+            <input
+              type="file"
+              accept="image/*,.pdf"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) handleReceiptUpload(expense.id, file);
+              }}
+              disabled={uploadingExpenseId === expense.id}
+            />
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8"
+              disabled={uploadingExpenseId === expense.id}
+              asChild
+            >
+              <span title="Upload Receipt">
+                <IconUpload className="h-4 w-4" />
+              </span>
+            </Button>
+          </label>
+        );
+      })()}
+      <Button
+        variant="ghost"
+        size="icon"
+        className="h-8 w-8"
+        onClick={() => openEditDialogSafe(expense)}
+      >
+        <IconEdit className="h-4 w-4" />
+      </Button>
+      <Button
+        variant="ghost"
+        size="icon"
+        className="h-8 w-8 text-destructive hover:text-destructive"
+        onClick={() => setDeletingExpense(expense)}
+      >
+        <IconTrash className="h-4 w-4" />
+      </Button>
+    </div>
+  );
+
   return (
     <>
-      <Table>
-        <TableHeader>
-          <TableRow>
-            <TableHead
-              className="cursor-pointer hover:bg-muted"
-              onClick={() => handleSort("date")}
-            >
-              Date <SortIcon field="date" />
-            </TableHead>
-            <TableHead>Description</TableHead>
-            <TableHead
-              className="cursor-pointer hover:bg-muted"
-              onClick={() => handleSort("category")}
-            >
-              Category <SortIcon field="category" />
-            </TableHead>
-            <TableHead>Source</TableHead>
-            <TableHead>Payment</TableHead>
-            <TableHead
-              className="cursor-pointer hover:bg-muted text-right"
-              onClick={() => handleSort("amount")}
-            >
-              Amount <SortIcon field="amount" />
-            </TableHead>
-            <TableHead className="text-right">Actions</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {sortedExpenses.map((expense) => (
-            <TableRow key={expense.id}>
-              <TableCell className="text-muted-foreground">
-                {new Date(expense.date).toLocaleDateString("en-US", {
-                  month: "short",
-                  day: "numeric",
-                })}
-              </TableCell>
-              <TableCell className="font-medium">
-                {expense.description || expense.merchant || "-"}
-              </TableCell>
-              <TableCell>
-                <Badge variant="secondary">{expense.category}</Badge>
-              </TableCell>
-              <TableCell>
-                <span
-                  className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${
-                    sourceColors[expense.source] || "bg-gray-100 text-gray-800"
-                  }`}
-                >
-                  {expense.source}
-                </span>
-              </TableCell>
-              <TableCell>
-                {expense.paymentMethod ? (
-                  <span className="inline-flex items-center rounded-full bg-slate-100 px-2 py-1 text-xs font-medium text-slate-700 dark:bg-slate-800 dark:text-slate-300">
+      {/* Mobile card layout */}
+      <div className="space-y-3 md:hidden">
+        {sortedExpenses.map((expense) => (
+          <div key={expense.id} className="rounded-lg border p-3">
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0 flex-1">
+                <p className="font-medium truncate">
+                  {expense.description || expense.merchant || expense.category}
+                </p>
+                <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                  <span>
+                    {new Date(expense.date).toLocaleDateString("en-US", {
+                      month: "short",
+                      day: "numeric",
+                    })}
+                  </span>
+                  <Badge variant="secondary" className="text-xs">{expense.category}</Badge>
+                  <span
+                    className={`inline-flex items-center rounded-full px-1.5 py-0.5 text-xs font-medium ${
+                      sourceColors[expense.source] || "bg-gray-100 text-gray-800"
+                    }`}
+                  >
+                    {expense.source}
+                  </span>
+                </div>
+                {expense.paymentMethod && (
+                  <span className="mt-1 inline-flex items-center rounded-full bg-slate-100 px-1.5 py-0.5 text-xs font-medium text-slate-700 dark:bg-slate-800 dark:text-slate-300">
                     {expense.paymentMethod}
                   </span>
-                ) : (
-                  <span className="text-muted-foreground">-</span>
                 )}
-              </TableCell>
-              <TableCell className="text-right font-medium">
+              </div>
+              <p className="text-sm font-bold whitespace-nowrap">
                 {formatCurrency(expense.amount)}
-              </TableCell>
-              <TableCell className="text-right">
-                <div className="flex justify-end gap-1">
-                  {(() => {
-                    const receipts = getReceipts(expense);
-                    if (receipts.length > 0) {
-                      return (
-                        <>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-8 w-8 text-blue-600 hover:text-blue-700"
-                            onClick={() => openReceiptViewer(expense.id)}
-                            title={`View ${receipts.length} receipt(s)`}
-                          >
-                            <span className="relative">
-                              <IconPhoto className="h-4 w-4" />
-                              {receipts.length > 1 && (
-                                <span className="absolute -right-1 -top-1 flex h-3 w-3 items-center justify-center rounded-full bg-blue-600 text-[8px] text-white">
-                                  {receipts.length}
-                                </span>
-                              )}
-                            </span>
-                          </Button>
-                          <label className="cursor-pointer">
-                            <input
-                              type="file"
-                              accept="image/*,.pdf"
-                              className="hidden"
-                              onChange={(e) => {
-                                const file = e.target.files?.[0];
-                                if (file) handleReceiptUpload(expense.id, file);
-                              }}
-                              disabled={uploadingExpenseId === expense.id}
-                            />
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-8 w-8"
-                              disabled={uploadingExpenseId === expense.id}
-                              asChild
-                            >
-                              <span title="Add Receipt">
-                                <IconUpload className="h-4 w-4" />
-                              </span>
-                            </Button>
-                          </label>
-                        </>
-                      );
-                    }
-                    return (
-                      <label className="cursor-pointer">
-                        <input
-                          type="file"
-                          accept="image/*,.pdf"
-                          className="hidden"
-                          onChange={(e) => {
-                            const file = e.target.files?.[0];
-                            if (file) handleReceiptUpload(expense.id, file);
-                          }}
-                          disabled={uploadingExpenseId === expense.id}
-                        />
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8"
-                          disabled={uploadingExpenseId === expense.id}
-                          asChild
-                        >
-                          <span title="Upload Receipt">
-                            <IconUpload className="h-4 w-4" />
-                          </span>
-                        </Button>
-                      </label>
-                    );
-                  })()}
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8"
-                    onClick={() => openEditDialogSafe(expense)}
-                  >
-                    <IconEdit className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8 text-destructive hover:text-destructive"
-                    onClick={() => setDeletingExpense(expense)}
-                  >
-                    <IconTrash className="h-4 w-4" />
-                  </Button>
-                </div>
-              </TableCell>
+              </p>
+            </div>
+            <div className="mt-2 flex justify-end border-t pt-2">
+              {renderActions(expense)}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Desktop table layout */}
+      <div className="hidden md:block">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead
+                className="cursor-pointer hover:bg-muted"
+                onClick={() => handleSort("date")}
+              >
+                Date <SortIcon field="date" />
+              </TableHead>
+              <TableHead>Description</TableHead>
+              <TableHead
+                className="cursor-pointer hover:bg-muted"
+                onClick={() => handleSort("category")}
+              >
+                Category <SortIcon field="category" />
+              </TableHead>
+              <TableHead>Source</TableHead>
+              <TableHead>Payment</TableHead>
+              <TableHead
+                className="cursor-pointer hover:bg-muted text-right"
+                onClick={() => handleSort("amount")}
+              >
+                Amount <SortIcon field="amount" />
+              </TableHead>
+              <TableHead className="text-right">Actions</TableHead>
             </TableRow>
-          ))}
-        </TableBody>
-      </Table>
+          </TableHeader>
+          <TableBody>
+            {sortedExpenses.map((expense) => (
+              <TableRow key={expense.id}>
+                <TableCell className="text-muted-foreground">
+                  {new Date(expense.date).toLocaleDateString("en-US", {
+                    month: "short",
+                    day: "numeric",
+                  })}
+                </TableCell>
+                <TableCell className="font-medium">
+                  {expense.description || expense.merchant || "-"}
+                </TableCell>
+                <TableCell>
+                  <Badge variant="secondary">{expense.category}</Badge>
+                </TableCell>
+                <TableCell>
+                  <span
+                    className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${
+                      sourceColors[expense.source] || "bg-gray-100 text-gray-800"
+                    }`}
+                  >
+                    {expense.source}
+                  </span>
+                </TableCell>
+                <TableCell>
+                  {expense.paymentMethod ? (
+                    <span className="inline-flex items-center rounded-full bg-slate-100 px-2 py-1 text-xs font-medium text-slate-700 dark:bg-slate-800 dark:text-slate-300">
+                      {expense.paymentMethod}
+                    </span>
+                  ) : (
+                    <span className="text-muted-foreground">-</span>
+                  )}
+                </TableCell>
+                <TableCell className="text-right font-medium">
+                  {formatCurrency(expense.amount)}
+                </TableCell>
+                <TableCell className="text-right">
+                  <div className="flex justify-end">
+                    {renderActions(expense)}
+                  </div>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
 
       {/* Edit Dialog */}
       {!viewingReceipt && (

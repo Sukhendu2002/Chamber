@@ -19,8 +19,8 @@ export default async function SubscriptionsPage() {
   const accountOptions = accounts.map(a => ({ id: a.id, name: a.name, type: a.type }));
 
   return (
-    <div className="flex flex-col gap-6 p-6">
-      <div className="flex items-center justify-between">
+    <div className="flex flex-col gap-4 p-4 sm:gap-6 md:p-6">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold">Subscriptions</h1>
           <p className="text-muted-foreground">

@@ -2,6 +2,8 @@
 
 Chamber is a comprehensive financial management application with AI-powered receipt parsing, Telegram bot integration, account tracking, and loan management.
 
+<img width="1871" height="846" alt="Screenshot 2026-02-06 at 9 37 18 PM" src="https://github.com/user-attachments/assets/ec64199e-3636-497d-9d81-1a1b64ea29fc" />
+
 ## Features
 
 ### Core Features

@@ -378,7 +378,8 @@ export async function getAllBalanceHistory(months: number = 6) {
     });
   }
 
-  // Collect ALL history entries within range with full timestamps
+  // Collect ALL history entries within range, grouped by day
+  // For each day, keep only the LAST balance entry per account
   type HistoryEntry = { timestamp: number; date: Date; accountId: string; balance: number };
   const allEntries: HistoryEntry[] = [];
 
@@ -401,7 +402,7 @@ export async function getAllBalanceHistory(months: number = 6) {
   if (allEntries.length === 0) {
     // No history in range, return current state
     const point: Record<string, number | string> = {
-      date: new Date().toISOString().split("T")[0],
+      date: new Date().toLocaleDateString("en-IN", { month: "short", day: "numeric" }),
     };
     for (const account of accounts) {
       point[account.id] = account.currentBalance;
@@ -412,32 +413,45 @@ export async function getAllBalanceHistory(months: number = 6) {
   // Track which accounts have been "seen" (had their first entry)
   const seenAccounts = new Set<string>();
   
-  // Build timeline - create a data point for EACH history entry
-  // Use null for accounts that haven't been created yet
+  // Aggregate entries by day — keep last balance per account per day
+  // dayKey -> { accountId -> lastBalance }
+  const dayMap = new Map<string, { dateObj: Date; balances: Map<string, number> }>();
+  const dayOrder: string[] = [];
+
+  for (const entry of allEntries) {
+    seenAccounts.add(entry.accountId);
+    const d = entry.date;
+    const dayKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+
+    if (!dayMap.has(dayKey)) {
+      dayMap.set(dayKey, { dateObj: d, balances: new Map() });
+      dayOrder.push(dayKey);
+    }
+    // Overwrite with latest balance for this account on this day
+    dayMap.get(dayKey)!.balances.set(entry.accountId, entry.balance);
+  }
+
+  // Build timeline with one point per day, carrying forward balances
   const currentBalances: Record<string, number | null> = {};
   for (const account of accounts) {
     currentBalances[account.id] = null; // null means "not yet created"
   }
-  
+
   const timeline: Record<string, number | string | null>[] = [];
 
-  for (let i = 0; i < allEntries.length; i++) {
-    const entry = allEntries[i];
-    // Mark this account as seen and update its balance
-    seenAccounts.add(entry.accountId);
-    currentBalances[entry.accountId] = entry.balance;
+  for (const dayKey of dayOrder) {
+    const dayData = dayMap.get(dayKey)!;
+    
+    // Update balances for accounts that had entries on this day
+    for (const [accountId, balance] of dayData.balances) {
+      currentBalances[accountId] = balance;
+    }
 
-    // Format date with time and seconds for uniqueness
-    const d = entry.date;
-    const dateStr = `${d.getDate()} ${d.toLocaleString("en-IN", { month: "short" })}, ${d.getHours().toString().padStart(2, "0")}:${d.getMinutes().toString().padStart(2, "0")}:${d.getSeconds().toString().padStart(2, "0")}`;
+    // Format date as "Feb 1", "Mar 15" etc.
+    const dateStr = dayData.dateObj.toLocaleDateString("en-IN", { month: "short", day: "numeric" });
 
-    // Build data point - only include accounts that have been seen
-    const point: Record<string, number | string | null> = { 
-      date: dateStr,
-      _index: i,
-    };
+    const point: Record<string, number | string | null> = { date: dateStr };
     for (const account of accounts) {
-      // Only include balance if account has been seen, otherwise null (won't plot)
       point[account.id] = currentBalances[account.id];
     }
     timeline.push(point);

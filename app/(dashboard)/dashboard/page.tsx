@@ -188,7 +188,7 @@ export default async function DashboardPage() {
 
           {/* Balance Trend Widget */}
           {widgets.showBalanceTrend && (
-            <Card className="border">
+            <Card className="border md:col-span-2 lg:col-span-3">
               <CardHeader>
                 <CardTitle className="text-sm font-medium">Balance Trend</CardTitle>
               </CardHeader>

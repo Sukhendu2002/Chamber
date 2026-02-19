@@ -26,31 +26,26 @@ type BalanceHistoryChartProps = {
 const STORAGE_KEY = "chamber-balance-chart-hidden";
 
 export function BalanceHistoryChart({ accounts, timeline, currency }: BalanceHistoryChartProps) {
-  const [hiddenAccounts, setHiddenAccounts] = useState<Set<string>>(new Set());
-  const [mounted, setMounted] = useState(false);
-
-  // Load persisted hidden accounts from localStorage on mount
-  useEffect(() => {
+  const [hiddenAccounts, setHiddenAccounts] = useState<Set<string>>(() => {
     try {
       const stored = localStorage.getItem(STORAGE_KEY);
       if (stored) {
-        setHiddenAccounts(new Set(JSON.parse(stored) as string[]));
+        return new Set(JSON.parse(stored) as string[]);
       }
     } catch {
       // Storage unavailable — ignore
     }
-    setMounted(true);
-  }, []);
+    return new Set();
+  });
 
-  // Persist to localStorage on change (skip initial mount to avoid overwriting with empty set)
+  // Persist to localStorage on change
   useEffect(() => {
-    if (!mounted) return;
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify([...hiddenAccounts]));
     } catch {
       // Storage full or unavailable — ignore
     }
-  }, [hiddenAccounts, mounted]);
+  }, [hiddenAccounts]);
 
   const toggleAccount = useCallback((accountId: string) => {
     setHiddenAccounts((prev) => {

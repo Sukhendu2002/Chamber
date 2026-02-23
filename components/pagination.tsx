@@ -9,6 +9,7 @@ type PaginationProps = {
   totalPages: number;
   search?: string;
   category?: string;
+  excludeCategory?: string;
 };
 
 export function Pagination({
@@ -16,19 +17,21 @@ export function Pagination({
   totalPages,
   search,
   category,
+  excludeCategory,
 }: PaginationProps) {
   const buildUrl = (page: number) => {
     const params = new URLSearchParams();
     params.set("page", page.toString());
     if (search) params.set("search", search);
     if (category) params.set("category", category);
+    if (excludeCategory) params.set("excludeCategory", excludeCategory);
     return `/expenses?${params.toString()}`;
   };
 
   const getPageNumbers = () => {
     const pages: (number | string)[] = [];
     const showPages = 5;
-    
+
     if (totalPages <= showPages) {
       for (let i = 1; i <= totalPages; i++) {
         pages.push(i);
@@ -50,7 +53,7 @@ export function Pagination({
         pages.push(totalPages);
       }
     }
-    
+
     return pages;
   };
 

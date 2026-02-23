@@ -462,15 +462,18 @@ describe("Expense Actions", () => {
     });
 
     describe("getExpensesCount", () => {
-        it("should return total count of expenses", async () => {
-            mockDb.expense.count.mockResolvedValue(42);
+        it("should return total count and amount of expenses", async () => {
+            mockDb.expense.aggregate.mockResolvedValue({
+                _count: { id: 42 },
+                _sum: { amount: 15000 },
+            });
 
             vi.resetModules();
             const { getExpensesCount } = await import("@/lib/actions/expenses");
 
             const result = await getExpensesCount();
 
-            expect(result).toBe(42);
+            expect(result).toEqual({ count: 42, totalAmount: 15000 });
         });
     });
 });

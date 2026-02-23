@@ -12,30 +12,41 @@ const ITEMS_PER_PAGE = 10;
 export default async function ExpensesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ page?: string; search?: string; category?: string }>;
+  searchParams: Promise<{ page?: string; search?: string; category?: string; excludeCategory?: string }>;
 }) {
   const params = await searchParams;
   const page = parseInt(params.page || "1", 10);
   const search = params.search || "";
   const category = params.category || "";
+  const excludeCategory = params.excludeCategory || "";
   const offset = (page - 1) * ITEMS_PER_PAGE;
 
-  const [expenses, totalCount, settings, accounts] = await Promise.all([
+  const [expenses, { count: totalCount, totalAmount }, settings, accounts] = await Promise.all([
     getExpenses({
       limit: ITEMS_PER_PAGE,
       offset,
       search: search || undefined,
       category: category || undefined,
+      excludeCategory: excludeCategory || undefined,
     }),
     getExpensesCount({
       search: search || undefined,
       category: category || undefined,
+      excludeCategory: excludeCategory || undefined,
     }),
     getUserSettings(),
     getAccounts(),
   ]);
 
   const totalPages = Math.ceil(totalCount / ITEMS_PER_PAGE);
+
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat("en-IN", {
+      style: "currency",
+      currency: settings.currency,
+      minimumFractionDigits: 2,
+    }).format(amount);
+  };
 
   return (
     <div className="p-4 md:p-6">
@@ -51,13 +62,19 @@ export default async function ExpensesPage({
       </div>
 
       {/* Filters */}
-      <ExpenseFilters currentSearch={search} currentCategory={category} />
+      <ExpenseFilters
+        currentSearch={search}
+        currentCategory={category}
+        currentExcludeCategory={excludeCategory}
+      />
 
       {/* Expenses Table */}
       <Card className="border">
         <CardHeader>
           <CardTitle className="text-sm font-medium">
-            {search || category ? `Filtered Expenses (${totalCount})` : `All Expenses (${totalCount})`}
+            {search || category || excludeCategory
+              ? `Filtered Expenses (${totalCount}) - ${formatCurrency(totalAmount)}`
+              : `All Expenses (${totalCount}) - ${formatCurrency(totalAmount)}`}
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -70,13 +87,14 @@ export default async function ExpensesPage({
                   totalPages={totalPages}
                   search={search}
                   category={category}
+                  excludeCategory={excludeCategory}
                 />
               )}
             </>
           ) : (
             <div className="flex h-48 items-center justify-center">
               <p className="text-sm text-muted-foreground">
-                {search || category
+                {search || category || excludeCategory
                   ? "No expenses match your filters."
                   : "No expenses yet. Add your first expense to get started."}
               </p>

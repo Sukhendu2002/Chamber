@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useState, useRef } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -313,6 +313,51 @@ function Ticker() {
     );
 }
 
+// ─── FAQ Item (accordion) ─────────────────────────────────────────────────────
+
+function FAQItem({ question, answer, delay }: { question: string; answer: string; delay: number }) {
+    const [open, setOpen] = useState(false);
+    const ref = useRef(null);
+    const inView = useInView(ref, { once: true, margin: "-40px" });
+
+    return (
+        <motion.div
+            ref={ref}
+            className="overflow-hidden rounded-xl border bg-card"
+            initial={{ opacity: 0, y: 20 }}
+            animate={inView ? { opacity: 1, y: 0 } : {}}
+            transition={{ delay, duration: 0.4 }}
+        >
+            <button
+                className="flex w-full items-center justify-between px-5 py-4 text-left text-sm font-medium"
+                onClick={() => setOpen((o) => !o)}
+            >
+                <span>{question}</span>
+                <motion.span
+                    animate={{ rotate: open ? 45 : 0 }}
+                    transition={{ duration: 0.2 }}
+                    className="ml-4 shrink-0 text-lg text-muted-foreground"
+                >
+                    +
+                </motion.span>
+            </button>
+            <AnimatePresence initial={false}>
+                {open && (
+                    <motion.div
+                        key="content"
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: "auto", opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        transition={{ duration: 0.3, ease: "easeInOut" }}
+                    >
+                        <p className="px-5 pb-4 text-sm text-muted-foreground leading-relaxed">{answer}</p>
+                    </motion.div>
+                )}
+            </AnimatePresence>
+        </motion.div>
+    );
+}
+
 // ─── Main page ────────────────────────────────────────────────────────────────
 
 export function AnimatedLanding() {
@@ -504,6 +549,222 @@ export function AnimatedLanding() {
                     </div>
                 </section>
 
+                {/* ── Dashboard Preview ───────────────────────────────────── */}
+                <section className="container mx-auto px-4 py-14 sm:py-16 md:py-24">
+                    <FadeUpSection className="mb-12 text-center">
+                        <h2 className="text-2xl font-bold tracking-tight sm:text-3xl">
+                            Your Finances at a Glance
+                        </h2>
+                        <p className="mt-2 text-sm text-muted-foreground sm:text-base">
+                            A beautiful, real-time dashboard that shows you exactly where your money goes
+                        </p>
+                    </FadeUpSection>
+
+                    <FadeUpSection delay={0.1}>
+                        <div className="mx-auto max-w-4xl overflow-hidden rounded-2xl border bg-card shadow-2xl">
+                            {/* Mock browser bar */}
+                            <div className="flex items-center gap-2 border-b bg-muted/50 px-4 py-3">
+                                <div className="flex gap-1.5">
+                                    <div className="h-3 w-3 rounded-full bg-red-400" />
+                                    <div className="h-3 w-3 rounded-full bg-yellow-400" />
+                                    <div className="h-3 w-3 rounded-full bg-green-400" />
+                                </div>
+                                <div className="mx-auto flex h-6 w-56 items-center justify-center rounded-md bg-background px-3 text-xs text-muted-foreground border">
+                                    chamber.app/dashboard
+                                </div>
+                            </div>
+
+                            {/* Mock dashboard content */}
+                            <div className="grid grid-cols-2 gap-3 p-4 sm:grid-cols-4 sm:p-6">
+                                {[
+                                    { label: "Total Spent", value: "₹28,450", color: "text-foreground", bg: "bg-primary/5", delay: 0.2 },
+                                    { label: "Budget Left", value: "₹11,550", color: "text-green-500", bg: "bg-green-500/5", delay: 0.3 },
+                                    { label: "Transactions", value: "47", color: "text-blue-500", bg: "bg-blue-500/5", delay: 0.4 },
+                                    { label: "Top Category", value: "Food", color: "text-orange-500", bg: "bg-orange-500/5", delay: 0.5 },
+                                ].map((card) => (
+                                    <motion.div
+                                        key={card.label}
+                                        className={`rounded-xl border ${card.bg} p-3 sm:p-4`}
+                                        initial={{ opacity: 0, y: 20 }}
+                                        whileInView={{ opacity: 1, y: 0 }}
+                                        viewport={{ once: true }}
+                                        transition={{ delay: card.delay, duration: 0.5 }}
+                                    >
+                                        <p className="text-xs text-muted-foreground">{card.label}</p>
+                                        <p className={`mt-1 text-lg font-bold sm:text-xl ${card.color}`}>{card.value}</p>
+                                    </motion.div>
+                                ))}
+                            </div>
+
+                            {/* Mock bar chart */}
+                            <div className="px-4 pb-4 sm:px-6 sm:pb-6">
+                                <p className="mb-3 text-xs font-medium text-muted-foreground">Monthly Spending Trend</p>
+                                <div className="flex items-end gap-2 h-24">
+                                    {[35, 55, 40, 70, 60, 85, 72].map((h, i) => (
+                                        <motion.div
+                                            key={i}
+                                            className="flex-1 rounded-t-md bg-primary/80"
+                                            initial={{ scaleY: 0, originY: 1 }}
+                                            whileInView={{ scaleY: 1 }}
+                                            viewport={{ once: true }}
+                                            style={{ height: `${h}%` }}
+                                            transition={{ delay: 0.3 + i * 0.07, duration: 0.5, ease: "easeOut" }}
+                                        />
+                                    ))}
+                                </div>
+                                <div className="mt-2 flex gap-2">
+                                    {["Aug", "Sep", "Oct", "Nov", "Dec", "Jan", "Feb"].map((m) => (
+                                        <p key={m} className="flex-1 text-center text-xs text-muted-foreground">{m}</p>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+                    </FadeUpSection>
+                </section>
+
+                {/* ── Comparison Section ──────────────────────────────────── */}
+                <section className="border-y bg-muted/20">
+                    <div className="container mx-auto px-4 py-14 sm:py-16 md:py-24">
+                        <FadeUpSection className="mb-12 text-center">
+                            <h2 className="text-2xl font-bold tracking-tight sm:text-3xl">
+                                Why Chamber?
+                            </h2>
+                            <p className="mt-2 text-sm text-muted-foreground sm:text-base">
+                                See how Chamber stacks up against traditional methods
+                            </p>
+                        </FadeUpSection>
+
+                        <FadeUpSection delay={0.1}>
+                            <div className="mx-auto max-w-2xl overflow-hidden rounded-2xl border">
+                                <div className="grid grid-cols-3 border-b bg-muted/30 px-4 py-3 text-sm font-semibold">
+                                    <span>Feature</span>
+                                    <span className="text-center">📒 Spreadsheet</span>
+                                    <span className="text-center text-primary">⚡ Chamber</span>
+                                </div>
+                                {[
+                                    ["AI Categorization", false, true],
+                                    ["Telegram Input", false, true],
+                                    ["Receipt Scanning", false, true],
+                                    ["Budget Alerts", false, true],
+                                    ["Analytics & Charts", "Manual", true],
+                                    ["Multi-Account", false, true],
+                                    ["Subscription Tracking", false, true],
+                                    ["Free & Open Source", "Sometimes", true],
+                                ].map(([label, spreadsheet, chamber], i) => (
+                                    <motion.div
+                                        key={label as string}
+                                        className={`grid grid-cols-3 items-center px-4 py-3 text-sm ${i % 2 === 0 ? "" : "bg-muted/10"}`}
+                                        initial={{ opacity: 0, x: -20 }}
+                                        whileInView={{ opacity: 1, x: 0 }}
+                                        viewport={{ once: true }}
+                                        transition={{ delay: i * 0.05, duration: 0.4 }}
+                                    >
+                                        <span className="font-medium">{label as string}</span>
+                                        <span className="text-center">
+                                            {spreadsheet === false ? (
+                                                <span className="text-red-500">✗</span>
+                                            ) : (
+                                                <span className="text-muted-foreground text-xs">{spreadsheet as string}</span>
+                                            )}
+                                        </span>
+                                        <span className="text-center text-green-500 font-medium">✓</span>
+                                    </motion.div>
+                                ))}
+                            </div>
+                        </FadeUpSection>
+                    </div>
+                </section>
+
+                {/* ── Privacy & Open Source ───────────────────────────────── */}
+                <section className="container mx-auto px-4 py-14 sm:py-16 md:py-24">
+                    <div className="grid gap-8 md:grid-cols-3">
+                        {[
+                            {
+                                emoji: "🔒",
+                                title: "Privacy First",
+                                body: "Your financial data never leaves your control. Chamber is self-hostable — run it on your own server if you want full ownership.",
+                                delay: 0,
+                                accent: "border-blue-500/20 bg-blue-500/5",
+                            },
+                            {
+                                emoji: "⚡",
+                                title: "Open Source",
+                                body: "Every line of code is on GitHub. No black boxes, no hidden fees. Fork it, extend it, make it yours.",
+                                delay: 0.1,
+                                accent: "border-green-500/20 bg-green-500/5",
+                            },
+                            {
+                                emoji: "🚀",
+                                title: "Always Free",
+                                body: "Core features are free forever. No trial periods, no credit card required, no surprise paywalls.",
+                                delay: 0.2,
+                                accent: "border-purple-500/20 bg-purple-500/5",
+                            },
+                        ].map((item) => (
+                            <motion.div
+                                key={item.title}
+                                className={`rounded-2xl border p-6 sm:p-8 ${item.accent}`}
+                                initial={{ opacity: 0, y: 30 }}
+                                whileInView={{ opacity: 1, y: 0 }}
+                                viewport={{ once: true }}
+                                transition={{ delay: item.delay, duration: 0.5 }}
+                                whileHover={{ y: -4 }}
+                            >
+                                <motion.span
+                                    className="mb-4 block text-4xl"
+                                    animate={{ rotate: [0, 8, -5, 8, 0] }}
+                                    transition={{ duration: 3, repeat: Infinity, repeatDelay: 4, delay: item.delay * 2 }}
+                                >
+                                    {item.emoji}
+                                </motion.span>
+                                <h3 className="mb-2 text-lg font-bold">{item.title}</h3>
+                                <p className="text-sm text-muted-foreground leading-relaxed">{item.body}</p>
+                            </motion.div>
+                        ))}
+                    </div>
+                </section>
+
+                {/* ── FAQ Section ─────────────────────────────────────────── */}
+                <section className="border-t bg-muted/10">
+                    <div className="container mx-auto px-4 py-14 sm:py-16 md:py-24">
+                        <FadeUpSection className="mb-12 text-center">
+                            <h2 className="text-2xl font-bold tracking-tight sm:text-3xl">Frequently Asked Questions</h2>
+                            <p className="mt-2 text-sm text-muted-foreground sm:text-base">Everything you need to know about Chamber</p>
+                        </FadeUpSection>
+
+                        <div className="mx-auto max-w-2xl space-y-3">
+                            {[
+                                {
+                                    q: "Is Chamber really free?",
+                                    a: "Yes — completely free and open source. No credit card required. Core features will always be free.",
+                                },
+                                {
+                                    q: "How does the Telegram bot work?",
+                                    a: "Link your Telegram account in Settings, then message the bot anything like \"Coffee 80\" or send a photo of your receipt. AI does the rest — categorizes, logs the amount, and confirms with you.",
+                                },
+                                {
+                                    q: "Is my financial data secure?",
+                                    a: "Yes. Data is stored securely and never shared with third parties. The app is open source so you can inspect every line. You can also self-host it entirely.",
+                                },
+                                {
+                                    q: "Can I import from my bank?",
+                                    a: "Yes — Chamber supports CSV import from most Indian banks. Upload your bank statement and it parses and categorizes transactions automatically.",
+                                },
+                                {
+                                    q: "Does it work without Telegram?",
+                                    a: "Absolutely. You can use the full web dashboard to add, edit, and manage expenses without ever touching the Telegram bot.",
+                                },
+                                {
+                                    q: "Can I track shared expenses or money I lent?",
+                                    a: "Yes — the Loans section lets you log money you've lent, set due dates, track repayments, and even attach receipt photos.",
+                                },
+                            ].map((item, i) => (
+                                <FAQItem key={i} question={item.q} answer={item.a} delay={i * 0.05} />
+                            ))}
+                        </div>
+                    </div>
+                </section>
+
                 {/* ── CTA Section ─────────────────────────────────────────── */}
                 <section className="relative container mx-auto overflow-hidden px-4">
                     <div className="pointer-events-none absolute inset-0" aria-hidden>
@@ -572,3 +833,4 @@ export function AnimatedLanding() {
         </div>
     );
 }
+

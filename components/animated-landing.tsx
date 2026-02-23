@@ -512,6 +512,31 @@ function FAQItem({ question, answer, delay }: { question: string; answer: string
     );
 }
 
+// ─── Connected steps (3-col with an absolute line behind circles) ─────────────
+
+function ConnectedSteps() {
+    const ref = useRef(null);
+    const inView = useInView(ref, { once: true, margin: "-80px" });
+    return (
+        <div ref={ref} className="relative">
+            {/* Animated line — runs behind the circles, hidden on mobile */}
+            <div className="absolute top-6 left-[calc(100%/6)] right-[calc(100%/6)] hidden h-px overflow-hidden md:block">
+                <motion.div
+                    className="h-full bg-gradient-to-r from-primary/30 via-primary/60 to-primary/30"
+                    initial={{ scaleX: 0, originX: 0 }}
+                    animate={inView ? { scaleX: 1 } : {}}
+                    transition={{ duration: 1, ease: "easeOut", delay: 0.4 }}
+                />
+            </div>
+            <div className="grid gap-12 md:grid-cols-3">
+                <StepItem number="1" icon={IconShieldLock} title="Sign Up" description="Create your account in seconds. Set your monthly budget and preferred currency." delay={0} />
+                <StepItem number="2" icon={IconMessagePlus} title="Add Expenses" description="Log expenses via the web dashboard or send a quick message to our Telegram bot. AI handles the rest." delay={1} />
+                <StepItem number="3" icon={IconLayoutDashboard} title="Get Insights" description="View spending breakdowns, track budgets, and discover patterns with beautiful charts and analytics." delay={2} />
+            </div>
+        </div>
+    );
+}
+
 // ─── Animated stat item ────────────────────────────────────────────────────────
 
 function AnimatedStat({ display, label, delay }: { display: string; label: string; delay: number }) {
@@ -594,8 +619,6 @@ export function AnimatedLanding() {
                         animate={{ opacity: 1, x: 0 }}
                         transition={{ duration: 0.5 }}
                     >
-                        <GitHubStars />
-                        <ThemeToggle />
                         <Link href="/dashboard">
                             <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.97 }}>
                                 <Button variant="default" size="sm" className="rounded-md">
@@ -730,13 +753,8 @@ export function AnimatedLanding() {
                             </p>
                         </FadeUpSection>
 
-                        <div className="grid gap-12 md:grid-cols-5 md:items-start">
-                            <StepItem number="1" icon={IconShieldLock} title="Sign Up" description="Create your account in seconds. Set your monthly budget and preferred currency." delay={0} />
-                            <StepConnector />
-                            <StepItem number="2" icon={IconMessagePlus} title="Add Expenses" description="Log expenses via the web dashboard or send a quick message to our Telegram bot. AI handles the rest." delay={1} />
-                            <StepConnector />
-                            <StepItem number="3" icon={IconLayoutDashboard} title="Get Insights" description="View spending breakdowns, track budgets, and discover patterns with beautiful charts and analytics." delay={2} />
-                        </div>
+                        {/* Steps with animated connecting line */}
+                        <ConnectedSteps />
                     </div>
                 </section>
 

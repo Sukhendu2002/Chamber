@@ -636,7 +636,7 @@ export function AnimatedLanding() {
                 {/* ── Hero Section ─────────────────────────────────────── */}
                 <section className="relative container mx-auto max-w-6xl px-4 overflow-hidden">
                     <FloatingOrbs />
-                    <div className="relative flex flex-col items-center justify-center px-2 py-16 text-center sm:py-20 md:py-28 lg:flex-row lg:gap-16 lg:text-left lg:py-32">
+                    <div className="relative flex flex-col items-center justify-center px-2 py-14 text-center sm:py-20 md:py-24 lg:flex-row lg:gap-16 lg:text-left lg:py-32">
                         {/* Hero text */}
                         <div className="flex-1">
                             <motion.div
@@ -702,8 +702,8 @@ export function AnimatedLanding() {
                             </motion.div>
                         </div>
 
-                        {/* Hero visual: Telegram mock */}
-                        <div className="mt-12 lg:mt-0 lg:flex-shrink-0">
+                        {/* Hero visual: Telegram mock — hidden below lg */}
+                        <div className="hidden lg:block lg:mt-0 lg:flex-shrink-0">
                             <motion.div
                                 animate={{ y: [0, -12, 0] }}
                                 transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
@@ -1017,7 +1017,7 @@ export function AnimatedLanding() {
 
                 {/* ── Footer ──────────────────────────────────────────────── */}
                 <footer className="border-t">
-                    <div className="container mx-auto flex flex-col items-center gap-2 px-4 py-6 sm:flex-row sm:justify-between sm:py-8">
+                    <div className="container mx-auto max-w-6xl flex flex-col items-center gap-2 px-4 py-6 sm:flex-row sm:justify-between sm:py-8">
                         <div className="flex items-center gap-2">
                             <div className="flex h-6 w-6 items-center justify-center rounded bg-primary text-primary-foreground text-xs font-bold">
                                 C

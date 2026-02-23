@@ -450,10 +450,66 @@ export async function getAnalyticsData() {
     color: categoryColors[name] || "#95A5A6",
   }));
 
+  // Daily spending for current month (area chart)
+  const dailySpendingMap: Record<string, number> = {};
+  for (const exp of currentMonthExpenses) {
+    const day = new Date(exp.date).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+    dailySpendingMap[day] = (dailySpendingMap[day] || 0) + exp.amount;
+  }
+  const dailySpending = Object.entries(dailySpendingMap).map(([date, amount]) => ({
+    date,
+    amount,
+  }));
+
+  // Top 5 merchants by total spend this month
+  const merchantMap: Record<string, number> = {};
+  for (const exp of currentMonthExpenses) {
+    const merchant = exp.merchant || exp.description || exp.category;
+    if (merchant) {
+      merchantMap[merchant] = (merchantMap[merchant] || 0) + exp.amount;
+    }
+  }
+  const topMerchants = Object.entries(merchantMap)
+    .map(([name, amount]) => ({ name, amount }))
+    .sort((a, b) => b.amount - a.amount)
+    .slice(0, 5);
+
+  // Average daily spend for current month
+  const daysElapsed = Math.max(1, now.getDate());
+  const averageDailySpend = analyticsTotalSpent / daysElapsed;
+
+  // Previous month total for MoM comparison
+  const prevMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+  const prevMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0);
+  let previousMonthSpent = 0;
+  for (const exp of expenses) {
+    const d = new Date(exp.date);
+    if (d >= prevMonthStart && d <= prevMonthEnd) {
+      previousMonthSpent += exp.amount;
+    }
+  }
+
+  // Highest spending day this month
+  let highestSpendingDay = { date: "", amount: 0 };
+  for (const [date, amount] of Object.entries(dailySpendingMap)) {
+    if (amount > highestSpendingDay.amount) {
+      highestSpendingDay = { date, amount };
+    }
+  }
+
+  // Transaction count this month
+  const transactionCount = currentMonthExpenses.length;
+
   return {
     totalSpent: analyticsTotalSpent,
     categoryBreakdown: analyticsCategoryBreakdown,
     categoryData,
     monthlyData,
+    dailySpending,
+    topMerchants,
+    averageDailySpend,
+    previousMonthSpent,
+    highestSpendingDay,
+    transactionCount,
   };
 }

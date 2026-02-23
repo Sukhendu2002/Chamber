@@ -29,6 +29,7 @@ import {
     IconExternalLink,
     IconX,
     IconPhoto,
+    IconFileTypePdf,
 } from "@tabler/icons-react";
 import type { ReceiptExpense } from "@/lib/actions/receipts";
 
@@ -62,6 +63,7 @@ const CATEGORY_COLORS: Record<string, string> = {
 type LightboxState = {
     expense: ReceiptExpense;
     currentIndex: number;
+    currentIsPdf: boolean;
 };
 
 type ReceiptGalleryProps = {
@@ -83,6 +85,7 @@ export function ReceiptGallery({
     const [search, setSearch] = useState(currentSearch);
     const [lightbox, setLightbox] = useState<LightboxState | null>(null);
     const [imageErrors, setImageErrors] = useState<Set<string>>(new Set());
+    const [lightboxPdfIndexes, setLightboxPdfIndexes] = useState<Set<number>>(new Set());
 
     const formatCurrency = (amount: number) =>
         new Intl.NumberFormat("en-IN", {
@@ -119,10 +122,11 @@ export function ReceiptGallery({
     };
 
     const openLightbox = (expense: ReceiptExpense) => {
-        setLightbox({ expense, currentIndex: 0 });
+        setLightboxPdfIndexes(new Set());
+        setLightbox({ expense, currentIndex: 0, currentIsPdf: expense.thumbnailIsPdf });
     };
 
-    const closeLightbox = () => setLightbox(null);
+    const closeLightbox = () => { setLightbox(null); setLightboxPdfIndexes(new Set()); };
 
     const navigateLightbox = useCallback((direction: "prev" | "next") => {
         if (!lightbox) return;
@@ -130,7 +134,15 @@ export function ReceiptGallery({
         const next = direction === "next"
             ? (lightbox.currentIndex + 1) % total
             : (lightbox.currentIndex - 1 + total) % total;
-        setLightbox({ ...lightbox, currentIndex: next });
+        const nextIsPdf = lightboxPdfIndexes.has(next);
+        setLightbox({ ...lightbox, currentIndex: next, currentIsPdf: nextIsPdf });
+    }, [lightbox, lightboxPdfIndexes]);
+
+    const handleLightboxImageError = useCallback(() => {
+        if (!lightbox) return;
+        const idx = lightbox.currentIndex;
+        setLightboxPdfIndexes((prev) => new Set(prev).add(idx));
+        setLightbox((prev) => prev ? { ...prev, currentIsPdf: true } : null);
     }, [lightbox]);
 
     const handleImageError = (id: string) => {
@@ -202,9 +214,10 @@ export function ReceiptGallery({
                             >
                                 {/* Thumbnail */}
                                 <div className="relative aspect-square overflow-hidden bg-muted">
-                                    {hasError ? (
-                                        <div className="flex h-full w-full items-center justify-center">
-                                            <IconPhoto className="h-10 w-10 text-muted-foreground/40" />
+                                    {hasError || expense.thumbnailIsPdf ? (
+                                        <div className="flex h-full w-full flex-col items-center justify-center gap-1 bg-red-50 dark:bg-red-950/20">
+                                            <IconFileTypePdf className="h-10 w-10 text-red-500" />
+                                            <span className="text-xs font-medium text-red-600 dark:text-red-400">PDF</span>
                                         </div>
                                     ) : (
                                         // eslint-disable-next-line @next/next/no-img-element
@@ -297,13 +310,31 @@ export function ReceiptGallery({
 
                     {lightbox && (
                         <div className="relative bg-black/5 dark:bg-black/40">
-                            <div className="relative flex min-h-[400px] max-h-[70vh] items-center justify-center">
-                                {/* eslint-disable-next-line @next/next/no-img-element */}
-                                <img
-                                    src={`/api/receipt/${lightbox.expense.id}?index=${lightbox.currentIndex}`}
-                                    alt="Receipt"
-                                    className="max-h-[70vh] w-auto object-contain"
-                                />
+                            <div className="relative flex min-h-[400px] max-h-[70vh] items-center justify-center overflow-hidden">
+                                {lightbox.currentIsPdf ? (
+                                    <div className="flex w-full flex-col items-center justify-center gap-4 p-10">
+                                        <IconFileTypePdf className="h-20 w-20 text-red-500" />
+                                        <p className="text-sm font-medium">PDF Receipt</p>
+                                        <a
+                                            href={`/api/receipt/${lightbox.expense.id}?index=${lightbox.currentIndex}`}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="inline-flex items-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
+                                        >
+                                            <IconExternalLink className="h-4 w-4" />
+                                            Open PDF in new tab
+                                        </a>
+                                    </div>
+                                ) : (
+                                    // eslint-disable-next-line @next/next/no-img-element
+                                    <img
+                                        key={`${lightbox.expense.id}-${lightbox.currentIndex}`}
+                                        src={`/api/receipt/${lightbox.expense.id}?index=${lightbox.currentIndex}`}
+                                        alt="Receipt"
+                                        className="max-h-[70vh] w-auto object-contain"
+                                        onError={handleLightboxImageError}
+                                    />
+                                )}
                             </div>
 
                             {/* Prev / Next arrows */}

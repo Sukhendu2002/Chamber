@@ -12,6 +12,7 @@ export type ReceiptExpense = {
     description: string | null;
     receiptCount: number;
     thumbnailUrl: string;
+    thumbnailIsPdf: boolean;
 };
 
 export async function getExpensesWithReceipts(options?: {
@@ -88,6 +89,8 @@ export async function getExpensesWithReceipts(options?: {
         if (e.receiptUrl && !receipts.includes(e.receiptUrl)) {
             receipts.unshift(e.receiptUrl);
         }
+        const firstKey = receipts[0] || "";
+        const isPdf = firstKey.toLowerCase().endsWith(".pdf");
         return {
             id: e.id,
             date: e.date,
@@ -97,6 +100,7 @@ export async function getExpensesWithReceipts(options?: {
             description: e.description,
             receiptCount: receipts.length,
             thumbnailUrl: `/api/receipt/${e.id}?index=0`,
+            thumbnailIsPdf: isPdf,
         };
     });
 }

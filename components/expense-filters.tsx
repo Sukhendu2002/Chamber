@@ -30,9 +30,10 @@ const categories = [
 type ExpenseFiltersProps = {
   currentSearch: string;
   currentCategory: string;
+  currentExcludeCategory?: string;
 };
 
-export function ExpenseFilters({ currentSearch, currentCategory }: ExpenseFiltersProps) {
+export function ExpenseFilters({ currentSearch, currentCategory, currentExcludeCategory }: ExpenseFiltersProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [isPending, startTransition] = useTransition();
@@ -40,22 +41,27 @@ export function ExpenseFilters({ currentSearch, currentCategory }: ExpenseFilter
 
   const updateFilters = (newSearch: string, newCategory: string) => {
     const params = new URLSearchParams(searchParams.toString());
-    
+
     if (newSearch) {
       params.set("search", newSearch);
     } else {
       params.delete("search");
     }
-    
+
     if (newCategory && newCategory !== "All") {
       params.set("category", newCategory);
+      // Optional: remove excludeCategory if a specific category is chosen
+      params.delete("excludeCategory");
     } else {
       params.delete("category");
+      if (currentExcludeCategory) {
+        params.set("excludeCategory", currentExcludeCategory);
+      }
     }
-    
+
     // Reset to page 1 when filters change
     params.delete("page");
-    
+
     startTransition(() => {
       router.push(`/expenses?${params.toString()}`);
     });
@@ -77,7 +83,7 @@ export function ExpenseFilters({ currentSearch, currentCategory }: ExpenseFilter
     });
   };
 
-  const hasFilters = currentSearch || currentCategory;
+  const hasFilters = currentSearch || currentCategory || currentExcludeCategory;
 
   return (
     <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:gap-4">

@@ -97,6 +97,7 @@ export async function getExpenses(options?: {
   startDate?: Date;
   endDate?: Date;
   category?: string;
+  excludeCategory?: string;
   search?: string;
 }) {
   const { userId } = await auth();
@@ -112,6 +113,8 @@ export async function getExpenses(options?: {
 
   if (options?.category) {
     where.category = options.category;
+  } else if (options?.excludeCategory) {
+    where.category = { not: options.excludeCategory };
   }
 
   if (options?.search) {
@@ -139,6 +142,7 @@ export async function getExpensesCount(options?: {
   startDate?: Date;
   endDate?: Date;
   category?: string;
+  excludeCategory?: string;
   search?: string;
 }) {
   const { userId } = await auth();
@@ -154,6 +158,8 @@ export async function getExpensesCount(options?: {
 
   if (options?.category) {
     where.category = options.category;
+  } else if (options?.excludeCategory) {
+    where.category = { not: options.excludeCategory };
   }
 
   if (options?.search) {
@@ -164,8 +170,16 @@ export async function getExpensesCount(options?: {
     ];
   }
 
-  const count = await db.expense.count({ where });
-  return count;
+  const result = await db.expense.aggregate({
+    where,
+    _count: { id: true },
+    _sum: { amount: true },
+  });
+
+  return {
+    count: result._count.id,
+    totalAmount: result._sum.amount || 0,
+  };
 }
 
 export async function getExpenseById(id: string) {
@@ -363,10 +377,10 @@ export async function getAnalyticsData() {
   if (!userId) throw new Error("Unauthorized");
 
   const now = new Date();
-  
+
   // Get expenses for the last 6 months
   const sixMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 5, 1);
-  
+
   const expenses = await db.expense.findMany({
     where: {
       userId,
@@ -402,7 +416,7 @@ export async function getAnalyticsData() {
     const monthDate = new Date(now.getFullYear(), now.getMonth() - i, 1);
     const monthEnd = new Date(now.getFullYear(), now.getMonth() - i + 1, 0);
     const monthName = monthDate.toLocaleDateString("en-US", { month: "short" });
-    
+
     const monthExpenses: typeof expenses = [];
     for (const exp of expenses) {
       const expenseDate = new Date(exp.date);
@@ -410,7 +424,7 @@ export async function getAnalyticsData() {
         monthExpenses.push(exp);
       }
     }
-    
+
     let spent = 0;
     for (const exp of monthExpenses) {
       spent += exp.amount;

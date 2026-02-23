@@ -76,12 +76,21 @@ export default async function DashboardPage() {
       value: formatCurrency(stats.totalSpent),
       subtitle: "This month",
       icon: CurrencyIcon,
+      href: "/expenses",
+    },
+    {
+      title: "Spent (Excl. Inv)",
+      value: formatCurrency(stats.spentExcludingInvestment),
+      subtitle: "This month",
+      icon: CurrencyIcon,
+      href: "/expenses?excludeCategory=Investments",
     },
     {
       title: "Transactions",
       value: stats.transactionCount.toString(),
       subtitle: "This month",
       icon: IconReceipt,
+      href: "/expenses",
     },
     {
       title: "Budget",
@@ -128,25 +137,37 @@ export default async function DashboardPage() {
 
       {/* Stats Grid - Always full width row */}
       {widgets.showStats && (
-        <div className="mb-6 grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
-          {statsData.map((stat) => (
-            <Card key={stat.title} className="border">
-              <CardHeader className="flex flex-row items-center justify-between pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">
-                  {stat.title}
-                </CardTitle>
-                <stat.icon className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div
-                  className={`text-2xl font-bold ${stat.valueColor || ""}`}
-                >
-                  {stat.value}
-                </div>
-                <p className="text-xs text-muted-foreground">{stat.subtitle}</p>
-              </CardContent>
-            </Card>
-          ))}
+        <div className="mb-6 grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3 lg:grid-cols-5">
+          {statsData.map((stat) => {
+            const cardContent = (
+              <Card className={`border ${stat.href ? "hover:border-primary transition-colors cursor-pointer" : ""}`}>
+                <CardHeader className="flex flex-row items-center justify-between pb-2">
+                  <CardTitle className="text-sm font-medium text-muted-foreground">
+                    {stat.title}
+                  </CardTitle>
+                  <stat.icon className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div
+                    className={`text-2xl font-bold ${stat.valueColor || ""}`}
+                  >
+                    {stat.value}
+                  </div>
+                  <p className="text-xs text-muted-foreground">{stat.subtitle}</p>
+                </CardContent>
+              </Card>
+            );
+
+            if (stat.href) {
+              return (
+                <Link key={stat.title} href={stat.href}>
+                  {cardContent}
+                </Link>
+              );
+            }
+
+            return <div key={stat.title}>{cardContent}</div>;
+          })}
         </div>
       )}
 

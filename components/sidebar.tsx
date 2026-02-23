@@ -35,6 +35,7 @@ import {
   IconEyeOff,
   IconEye,
   IconMenu2,
+  IconPhoto,
 } from "@tabler/icons-react";
 
 const navItems = [
@@ -67,6 +68,11 @@ const navItems = [
     title: "Analytics",
     href: "/analytics",
     icon: IconChartPie,
+  },
+  {
+    title: "Receipts",
+    href: "/receipts",
+    icon: IconPhoto,
   },
   {
     title: "Import",

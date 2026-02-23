@@ -513,7 +513,7 @@ export function AnimatedLanding() {
                 </section>
 
                 {/* ── Features Section ────────────────────────────────────── */}
-                <section id="features" className="container mx-auto max-w-5xl px-4 py-14 sm:py-16 md:py-24">
+                <section id="features" className="container mx-auto px-4 py-14 sm:py-16 md:py-24">
                     <FadeUpSection className="mb-12 text-center">
                         <h2 className="text-2xl font-bold tracking-tight sm:text-3xl">
                             Everything You Need

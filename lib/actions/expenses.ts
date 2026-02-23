@@ -513,3 +513,117 @@ export async function getAnalyticsData() {
     transactionCount,
   };
 }
+
+export type MonthSummary = {
+  month: number; // 0-indexed (0 = January)
+  monthName: string;
+  year: number;
+  totalSpent: number;
+  transactionCount: number;
+  topCategory: string | null;
+  avgPerTransaction: number;
+  categoryBreakdown: Record<string, number>;
+  hasData: boolean;
+};
+
+export async function getMonthlyHistory(year?: number): Promise<{
+  months: MonthSummary[];
+  yearTotal: number;
+  bestMonth: MonthSummary | null;
+  worstMonth: MonthSummary | null;
+  avgMonthlySpend: number;
+  availableYears: number[];
+}> {
+  const { userId } = await auth();
+  if (!userId) throw new Error("Unauthorized");
+
+  const now = new Date();
+  const targetYear = year || now.getFullYear();
+
+  // Fetch all expenses for the target year
+  const startOfYear = new Date(targetYear, 0, 1);
+  const endOfYear = new Date(targetYear, 11, 31, 23, 59, 59);
+
+  const expenses = await db.expense.findMany({
+    where: {
+      userId,
+      date: { gte: startOfYear, lte: endOfYear },
+    },
+    select: {
+      date: true,
+      amount: true,
+      category: true,
+    },
+    orderBy: { date: "asc" },
+  });
+
+  // Also get min year for year selector
+  const oldestExpense = await db.expense.findFirst({
+    where: { userId },
+    orderBy: { date: "asc" },
+    select: { date: true },
+  });
+
+  const oldestYear = oldestExpense ? new Date(oldestExpense.date).getFullYear() : now.getFullYear();
+  const availableYears: number[] = [];
+  for (let y = now.getFullYear(); y >= oldestYear; y--) {
+    availableYears.push(y);
+  }
+
+  const MONTH_NAMES = [
+    "January", "February", "March", "April", "May", "June",
+    "July", "August", "September", "October", "November", "December",
+  ];
+
+  // Group by month
+  const monthData: MonthSummary[] = MONTH_NAMES.map((monthName, idx) => ({
+    month: idx,
+    monthName,
+    year: targetYear,
+    totalSpent: 0,
+    transactionCount: 0,
+    topCategory: null,
+    avgPerTransaction: 0,
+    categoryBreakdown: {},
+    hasData: false,
+  }));
+
+  for (const exp of expenses) {
+    const m = new Date(exp.date).getMonth();
+    const ms = monthData[m];
+    ms.totalSpent += exp.amount;
+    ms.transactionCount += 1;
+    ms.categoryBreakdown[exp.category] = (ms.categoryBreakdown[exp.category] || 0) + exp.amount;
+    ms.hasData = true;
+  }
+
+  // Compute derived fields per month
+  for (const ms of monthData) {
+    if (ms.hasData) {
+      ms.avgPerTransaction = ms.totalSpent / ms.transactionCount;
+      const topCat = Object.entries(ms.categoryBreakdown).sort((a, b) => b[1] - a[1])[0];
+      ms.topCategory = topCat ? topCat[0] : null;
+    }
+  }
+
+  const monthsWithData = monthData.filter((m) => m.hasData);
+  const yearTotal = monthsWithData.reduce((sum, m) => sum + m.totalSpent, 0);
+  const avgMonthlySpend = monthsWithData.length > 0 ? yearTotal / monthsWithData.length : 0;
+
+  const bestMonth = monthsWithData.length > 0
+    ? monthsWithData.reduce((min, m) => m.totalSpent < min.totalSpent ? m : min)
+    : null;
+  const worstMonth = monthsWithData.length > 0
+    ? monthsWithData.reduce((max, m) => m.totalSpent > max.totalSpent ? m : max)
+    : null;
+
+  return {
+    months: monthData,
+    yearTotal,
+    bestMonth,
+    worstMonth,
+    avgMonthlySpend,
+    availableYears,
+  };
+}
+

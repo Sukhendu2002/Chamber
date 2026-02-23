@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -43,6 +43,66 @@ const slideLeft = {
     hidden: { opacity: 0, x: -30 },
     visible: { opacity: 1, x: 0 },
 };
+
+// ─── useCountUp hook ──────────────────────────────────────────────────────────
+
+function useCountUp(target: number, duration = 1.5, decimals = 0) {
+    const [count, setCount] = useState(0);
+    const ref = useRef(null);
+    const inView = useInView(ref, { once: true });
+    useEffect(() => {
+        if (!inView) return;
+        let start = 0;
+        const step = target / (duration * 60);
+        const timer = setInterval(() => {
+            start += step;
+            if (start >= target) { setCount(target); clearInterval(timer); }
+            else setCount(parseFloat(start.toFixed(decimals)));
+        }, 1000 / 60);
+        return () => clearInterval(timer);
+    }, [inView, target, duration, decimals]);
+    return { count, ref };
+}
+
+// ─── GradientText (animated shimmer) ─────────────────────────────────────────
+
+function GradientText({ children, className = "" }: { children: React.ReactNode; className?: string }) {
+    return (
+        <span
+            className={`bg-clip-text text-transparent ${className}`}
+            style={{
+                backgroundImage: "linear-gradient(90deg, hsl(var(--primary)), #818cf8, hsl(var(--primary)), #06b6d4, hsl(var(--primary)))",
+                backgroundSize: "300% 100%",
+                animation: "shimmer 4s linear infinite",
+            }}
+        >
+            {children}
+        </span>
+    );
+}
+
+// ─── Word-by-word heading reveal ─────────────────────────────────────────────
+
+function AnimatedHeading({ children, className = "", delay = 0 }: { children: string; className?: string; delay?: number }) {
+    const ref = useRef(null);
+    const inView = useInView(ref, { once: true, margin: "-60px" });
+    const words = children.split(" ");
+    return (
+        <h2 ref={ref} className={className}>
+            {words.map((word, i) => (
+                <motion.span
+                    key={i}
+                    className="inline-block mr-[0.25em]"
+                    initial={{ opacity: 0, y: 24 }}
+                    animate={inView ? { opacity: 1, y: 0 } : {}}
+                    transition={{ duration: 0.5, delay: delay + i * 0.08, ease: "easeOut" }}
+                >
+                    {word}
+                </motion.span>
+            ))}
+        </h2>
+    );
+}
 
 // ─── Scroll-triggered section wrapper ──────────────────────────────────────────
 
@@ -357,11 +417,39 @@ function FAQItem({ question, answer, delay }: { question: string; answer: string
     );
 }
 
+// ─── Animated stat item ────────────────────────────────────────────────────────
+
+function AnimatedStat({ display, label, delay }: { display: string; label: string; delay: number }) {
+    const ref = useRef(null);
+    const inView = useInView(ref, { once: true });
+    return (
+        <div ref={ref} className="text-center">
+            <motion.div
+                className="text-2xl font-bold sm:text-3xl"
+                initial={{ opacity: 0, scale: 0.4, y: 20 }}
+                animate={inView ? { opacity: 1, scale: 1, y: 0 } : {}}
+                transition={{ type: "spring", stiffness: 260, damping: 18, delay: delay * 0.12 }}
+            >
+                {display}
+            </motion.div>
+            <motion.div
+                className="mt-1 text-xs text-muted-foreground sm:text-sm"
+                initial={{ opacity: 0 }}
+                animate={inView ? { opacity: 1 } : {}}
+                transition={{ delay: delay * 0.12 + 0.3, duration: 0.4 }}
+            >
+                {label}
+            </motion.div>
+        </div>
+    );
+}
+
 // ─── Main page ────────────────────────────────────────────────────────────────
 
 export function AnimatedLanding() {
     const { scrollYProgress } = useScroll();
     const headerOpacity = useTransform(scrollYProgress, [0, 0.05], [1, 0.95]);
+    const progressWidth = useTransform(scrollYProgress, [0, 1], ["0%", "100%"]);
 
     const features = [
         { icon: IconBrain, iconColor: "text-primary", iconBg: "bg-primary/10", title: "Smart Capture", description: "Send \"Lunch 450\" via Telegram and AI extracts amount, category, and merchant automatically." },
@@ -376,6 +464,15 @@ export function AnimatedLanding() {
 
     return (
         <div className="min-h-screen bg-background">
+            {/* Shimmer keyframe */}
+            <style>{`@keyframes shimmer { 0% { background-position: 100% 0 } 100% { background-position: -200% 0 } }`}</style>
+
+            {/* Scroll progress bar */}
+            <motion.div
+                className="fixed top-0 left-0 z-[60] h-0.5 bg-primary origin-left"
+                style={{ width: progressWidth }}
+            />
+
             {/* Header */}
             <motion.header
                 style={{ opacity: headerOpacity }}
@@ -443,14 +540,7 @@ export function AnimatedLanding() {
                                 transition={{ duration: 0.7, delay: 0.2 }}
                             >
                                 Track Every Rupee,{" "}
-                                <motion.span
-                                    className="text-primary"
-                                    initial={{ opacity: 0 }}
-                                    animate={{ opacity: 1 }}
-                                    transition={{ delay: 0.5, duration: 0.5 }}
-                                >
-                                    Effortlessly
-                                </motion.span>
+                                <GradientText>Effortlessly</GradientText>
                             </motion.h1>
 
                             <motion.p
@@ -493,7 +583,12 @@ export function AnimatedLanding() {
 
                         {/* Hero visual: Telegram mock */}
                         <div className="mt-12 lg:mt-0 lg:flex-shrink-0">
-                            <TelegramMock />
+                            <motion.div
+                                animate={{ y: [0, -12, 0] }}
+                                transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
+                            >
+                                <TelegramMock />
+                            </motion.div>
                         </div>
                     </div>
                 </section>
@@ -504,19 +599,17 @@ export function AnimatedLanding() {
                 {/* ── Stats Section ───────────────────────────────────────── */}
                 <section className="border-b bg-muted/20">
                     <div className="container mx-auto max-w-6xl grid grid-cols-2 gap-4 px-4 py-10 sm:py-14 md:grid-cols-4 md:gap-8">
-                        <StatItem value="100%" label="Free & Open Source" delay={0} />
-                        <StatItem value="10+" label="Expense Categories" delay={1} />
-                        <StatItem value="AI" label="Smart Categorization" delay={2} />
-                        <StatItem value="24/7" label="Telegram Bot Access" delay={3} />
+                        <AnimatedStat display="100%" label="Free & Open Source" delay={0} />
+                        <AnimatedStat display="10+" label="Expense Categories" delay={1} />
+                        <AnimatedStat display="AI" label="Smart Categorization" delay={2} />
+                        <AnimatedStat display="24/7" label="Telegram Bot Access" delay={3} />
                     </div>
                 </section>
 
                 {/* ── Features Section ────────────────────────────────────── */}
                 <section id="features" className="container mx-auto max-w-6xl px-4 py-14 sm:py-16 md:py-24">
                     <FadeUpSection className="mb-12 text-center">
-                        <h2 className="text-2xl font-bold tracking-tight sm:text-3xl">
-                            Everything You Need
-                        </h2>
+                        <AnimatedHeading className="text-2xl font-bold tracking-tight sm:text-3xl">Everything You Need</AnimatedHeading>
                         <p className="mt-2 text-sm text-muted-foreground sm:text-base">
                             Powerful features to take control of your finances
                         </p>

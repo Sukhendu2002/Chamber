@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
+import { useTheme } from "next-themes";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -14,6 +15,7 @@ import {
 import {
     IconBrain,
     IconBrandTelegram,
+    IconBrandGithub,
     IconChartBar,
     IconMessagePlus,
     IconSparkles,
@@ -25,6 +27,9 @@ import {
     IconArrowRight,
     IconReceipt,
     IconCamera,
+    IconSun,
+    IconMoon,
+    IconStar,
 } from "@tabler/icons-react";
 
 // ─── Animation Variants ────────────────────────────────────────────────────────
@@ -97,6 +102,100 @@ function AnimatedHeading({ children, className = "", delay = 0 }: { children: st
                 </motion.span>
             ))}
         </h2>
+    );
+}
+
+// ─── Theme Toggle ─────────────────────────────────────────────────────────────
+
+function ThemeToggle() {
+    const { theme, setTheme } = useTheme();
+    const [mounted, setMounted] = useState(false);
+    useEffect(() => setMounted(true), []);
+    if (!mounted) return <div className="h-8 w-8" />;
+    return (
+        <motion.button
+            onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+            className="flex h-8 w-8 items-center justify-center rounded-md border bg-muted/50 text-muted-foreground hover:text-foreground transition-colors"
+            whileHover={{ scale: 1.1 }}
+            whileTap={{ scale: 0.9 }}
+            title="Toggle theme"
+        >
+            <AnimatePresence mode="wait" initial={false}>
+                {theme === "dark" ? (
+                    <motion.span key="sun" initial={{ rotate: -90, opacity: 0 }} animate={{ rotate: 0, opacity: 1 }} exit={{ rotate: 90, opacity: 0 }} transition={{ duration: 0.2 }}>
+                        <IconSun className="h-4 w-4" />
+                    </motion.span>
+                ) : (
+                    <motion.span key="moon" initial={{ rotate: 90, opacity: 0 }} animate={{ rotate: 0, opacity: 1 }} exit={{ rotate: -90, opacity: 0 }} transition={{ duration: 0.2 }}>
+                        <IconMoon className="h-4 w-4" />
+                    </motion.span>
+                )}
+            </AnimatePresence>
+        </motion.button>
+    );
+}
+
+// ─── GitHub Stars Badge ───────────────────────────────────────────────────────
+
+function GitHubStars() {
+    const [stars, setStars] = useState<number | null>(null);
+    useEffect(() => {
+        fetch("https://api.github.com/repos/Sukhendu2002/Chamber")
+            .then((r) => r.json())
+            .then((d) => setStars(d.stargazers_count))
+            .catch(() => { });
+    }, []);
+    return (
+        <motion.a
+            href="https://github.com/Sukhendu2002/Chamber"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="hidden sm:flex items-center gap-1.5 rounded-md border bg-muted/50 px-2.5 py-1 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.97 }}
+        >
+            <IconBrandGithub className="h-3.5 w-3.5" />
+            <AnimatePresence mode="wait">
+                {stars !== null ? (
+                    <motion.span key="stars" initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} className="flex items-center gap-1">
+                        <IconStar className="h-3 w-3 text-yellow-500 fill-yellow-500" />
+                        {stars.toLocaleString()}
+                    </motion.span>
+                ) : (
+                    <motion.span key="loading" className="h-3 w-8 animate-pulse rounded bg-muted" />
+                )}
+            </AnimatePresence>
+        </motion.a>
+    );
+}
+
+// ─── Animated step connector line ────────────────────────────────────────────
+
+function StepConnector() {
+    const ref = useRef(null);
+    const inView = useInView(ref, { once: true, margin: "-80px" });
+    return (
+        <div ref={ref} className="hidden md:flex items-center justify-center" aria-hidden>
+            <svg width="80" height="2" viewBox="0 0 80 2" className="overflow-visible">
+                <motion.line
+                    x1="0" y1="1" x2="80" y2="1"
+                    stroke="currentColor"
+                    strokeWidth="1.5"
+                    strokeDasharray="80"
+                    strokeDashoffset={80}
+                    className="text-primary/40"
+                    animate={inView ? { strokeDashoffset: 0 } : {}}
+                    transition={{ duration: 0.8, ease: "easeOut", delay: 0.4 }}
+                />
+                <motion.circle
+                    cx="80" cy="1" r="3"
+                    className="fill-primary"
+                    initial={{ scale: 0, opacity: 0 }}
+                    animate={inView ? { scale: 1, opacity: 1 } : {}}
+                    transition={{ delay: 1.1, duration: 0.3, type: "spring" }}
+                />
+            </svg>
+        </div>
     );
 }
 
@@ -490,10 +589,13 @@ export function AnimatedLanding() {
                         <span className="font-semibold">Chamber</span>
                     </motion.div>
                     <motion.div
+                        className="flex items-center gap-2"
                         initial={{ opacity: 0, x: 20 }}
                         animate={{ opacity: 1, x: 0 }}
                         transition={{ duration: 0.5 }}
                     >
+                        <GitHubStars />
+                        <ThemeToggle />
                         <Link href="/dashboard">
                             <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.97 }}>
                                 <Button variant="default" size="sm" className="rounded-md">
@@ -628,10 +730,11 @@ export function AnimatedLanding() {
                             </p>
                         </FadeUpSection>
 
-                        <div className="grid gap-12 md:grid-cols-3">
-                            {/* Connector lines (decorative, hidden on mobile) */}
+                        <div className="grid gap-12 md:grid-cols-5 md:items-start">
                             <StepItem number="1" icon={IconShieldLock} title="Sign Up" description="Create your account in seconds. Set your monthly budget and preferred currency." delay={0} />
+                            <StepConnector />
                             <StepItem number="2" icon={IconMessagePlus} title="Add Expenses" description="Log expenses via the web dashboard or send a quick message to our Telegram bot. AI handles the rest." delay={1} />
+                            <StepConnector />
                             <StepItem number="3" icon={IconLayoutDashboard} title="Get Insights" description="View spending breakdowns, track budgets, and discover patterns with beautiful charts and analytics." delay={2} />
                         </div>
                     </div>

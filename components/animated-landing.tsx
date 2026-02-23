@@ -69,12 +69,8 @@ function useCountUp(target: number, duration = 1.5, decimals = 0) {
 function GradientText({ children, className = "" }: { children: React.ReactNode; className?: string }) {
     return (
         <span
-            className={`bg-clip-text text-transparent ${className}`}
-            style={{
-                backgroundImage: "linear-gradient(90deg, hsl(var(--primary)), #818cf8, hsl(var(--primary)), #06b6d4, hsl(var(--primary)))",
-                backgroundSize: "300% 100%",
-                animation: "shimmer 4s linear infinite",
-            }}
+            className={`bg-clip-text text-transparent bg-gradient-to-r from-primary via-violet-500 to-cyan-500 ${className}`}
+            style={{ backgroundSize: "200% 100%", animation: "shimmer 3s linear infinite" }}
         >
             {children}
         </span>

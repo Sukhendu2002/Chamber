@@ -382,7 +382,7 @@ export function AnimatedLanding() {
                 style={{ opacity: headerOpacity }}
                 className="sticky top-0 z-50 border-b bg-background/80 backdrop-blur-md"
             >
-                <div className="container mx-auto max-w-5xl flex h-14 items-center justify-between px-4 sm:h-16">
+                <div className="container mx-auto max-w-6xl flex h-14 items-center justify-between px-4 sm:h-16">
                     <motion.div
                         className="flex items-center gap-2"
                         initial={{ opacity: 0, x: -20 }}
@@ -417,7 +417,7 @@ export function AnimatedLanding() {
 
             <main>
                 {/* ── Hero Section ─────────────────────────────────────── */}
-                <section className="relative container mx-auto max-w-5xl px-4 overflow-hidden">
+                <section className="relative container mx-auto max-w-6xl px-4 overflow-hidden">
                     <FloatingOrbs />
                     <div className="relative flex flex-col items-center justify-center px-2 py-16 text-center sm:py-20 md:py-28 lg:flex-row lg:gap-16 lg:text-left lg:py-32">
                         {/* Hero text */}
@@ -504,7 +504,7 @@ export function AnimatedLanding() {
 
                 {/* ── Stats Section ───────────────────────────────────────── */}
                 <section className="border-b bg-muted/20">
-                    <div className="container mx-auto max-w-5xl grid grid-cols-2 gap-4 px-4 py-10 sm:py-14 md:grid-cols-4 md:gap-8">
+                    <div className="container mx-auto max-w-6xl grid grid-cols-2 gap-4 px-4 py-10 sm:py-14 md:grid-cols-4 md:gap-8">
                         <StatItem value="100%" label="Free & Open Source" delay={0} />
                         <StatItem value="10+" label="Expense Categories" delay={1} />
                         <StatItem value="AI" label="Smart Categorization" delay={2} />
@@ -513,7 +513,7 @@ export function AnimatedLanding() {
                 </section>
 
                 {/* ── Features Section ────────────────────────────────────── */}
-                <section id="features" className="container mx-auto px-4 py-14 sm:py-16 md:py-24">
+                <section id="features" className="container mx-auto max-w-6xl px-4 py-14 sm:py-16 md:py-24">
                     <FadeUpSection className="mb-12 text-center">
                         <h2 className="text-2xl font-bold tracking-tight sm:text-3xl">
                             Everything You Need
@@ -532,7 +532,7 @@ export function AnimatedLanding() {
 
                 {/* ── How It Works ────────────────────────────────────────── */}
                 <section className="border-y bg-muted/20">
-                    <div className="container mx-auto max-w-5xl px-4 py-14 sm:py-16 md:py-24">
+                    <div className="container mx-auto max-w-6xl px-4 py-14 sm:py-16 md:py-24">
                         <FadeUpSection className="mb-12 text-center">
                             <h2 className="text-2xl font-bold tracking-tight sm:text-3xl">How It Works</h2>
                             <p className="mt-2 text-sm text-muted-foreground sm:text-base">
@@ -550,7 +550,7 @@ export function AnimatedLanding() {
                 </section>
 
                 {/* ── Dashboard Preview ───────────────────────────────────── */}
-                <section className="container mx-auto max-w-5xl px-4 py-14 sm:py-16 md:py-24">
+                <section className="container mx-auto max-w-6xl px-4 py-14 sm:py-16 md:py-24">
                     <FadeUpSection className="mb-12 text-center">
                         <h2 className="text-2xl font-bold tracking-tight sm:text-3xl">
                             Your Finances at a Glance
@@ -622,7 +622,7 @@ export function AnimatedLanding() {
 
                 {/* ── Comparison Section ──────────────────────────────────── */}
                 <section className="border-y bg-muted/20">
-                    <div className="container mx-auto max-w-5xl px-4 py-14 sm:py-16 md:py-24">
+                    <div className="container mx-auto max-w-6xl px-4 py-14 sm:py-16 md:py-24">
                         <FadeUpSection className="mb-12 text-center">
                             <h2 className="text-2xl font-bold tracking-tight sm:text-3xl">
                                 Why Chamber?
@@ -674,7 +674,7 @@ export function AnimatedLanding() {
                 </section>
 
                 {/* ── Privacy & Open Source ───────────────────────────────── */}
-                <section className="container mx-auto max-w-5xl px-4 py-14 sm:py-16 md:py-24">
+                <section className="container mx-auto max-w-6xl px-4 py-14 sm:py-16 md:py-24">
                     <div className="grid gap-8 md:grid-cols-3">
                         {[
                             {
@@ -724,7 +724,7 @@ export function AnimatedLanding() {
 
                 {/* ── FAQ Section ─────────────────────────────────────────── */}
                 <section className="border-t bg-muted/10">
-                    <div className="container mx-auto max-w-5xl px-4 py-14 sm:py-16 md:py-24">
+                    <div className="container mx-auto max-w-6xl px-4 py-14 sm:py-16 md:py-24">
                         <FadeUpSection className="mb-12 text-center">
                             <h2 className="text-2xl font-bold tracking-tight sm:text-3xl">Frequently Asked Questions</h2>
                             <p className="mt-2 text-sm text-muted-foreground sm:text-base">Everything you need to know about Chamber</p>
@@ -764,7 +764,7 @@ export function AnimatedLanding() {
                 </section>
 
                 {/* ── CTA Section ─────────────────────────────────────────── */}
-                <section className="relative container mx-auto max-w-5xl overflow-hidden px-4">
+                <section className="relative container mx-auto max-w-6xl overflow-hidden px-4">
                     <div className="pointer-events-none absolute inset-0" aria-hidden>
                         <motion.div
                             className="absolute left-1/2 top-1/2 h-80 w-80 -translate-x-1/2 -translate-y-1/2 rounded-full bg-primary/10 blur-3xl"

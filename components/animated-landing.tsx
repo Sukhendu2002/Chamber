@@ -158,25 +158,24 @@ function FeatureCard({
             initial="hidden"
             animate={inView ? "visible" : "hidden"}
             variants={fadeIn}
-            transition={{ duration: 0.5, delay: delay * 0.08 }}
+            transition={{ duration: 0.4, delay: delay * 0.06 }}
         >
             <motion.div
-                whileHover={{ y: -6, scale: 1.02 }}
+                whileHover={{ y: -3, boxShadow: "0 8px 30px rgba(0,0,0,0.08)" }}
                 transition={{ type: "spring", stiffness: 300 }}
+                className="flex items-start gap-4 rounded-2xl border bg-card p-5"
             >
-                <Card className="h-full border bg-card">
-                    <CardContent className="flex flex-col items-center p-6 text-center sm:p-8">
-                        <motion.div
-                            className={`mb-4 flex h-12 w-12 items-center justify-center rounded-full ${iconBg} ${iconColor}`}
-                            whileHover={{ rotate: 10, scale: 1.15 }}
-                            transition={{ type: "spring", stiffness: 400 }}
-                        >
-                            <Icon className="h-6 w-6" />
-                        </motion.div>
-                        <h3 className="mb-2 font-semibold">{title}</h3>
-                        <p className="text-sm text-muted-foreground">{description}</p>
-                    </CardContent>
-                </Card>
+                <motion.div
+                    className={`mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${iconBg} ${iconColor}`}
+                    whileHover={{ rotate: 8, scale: 1.1 }}
+                    transition={{ type: "spring", stiffness: 400 }}
+                >
+                    <Icon className="h-5 w-5" />
+                </motion.div>
+                <div>
+                    <h3 className="mb-1 font-semibold">{title}</h3>
+                    <p className="text-sm text-muted-foreground leading-relaxed">{description}</p>
+                </div>
             </motion.div>
         </motion.div>
     );
@@ -523,7 +522,7 @@ export function AnimatedLanding() {
                         </p>
                     </FadeUpSection>
 
-                    <div className="grid gap-4 sm:gap-6 md:grid-cols-3 md:gap-6 lg:grid-cols-4">
+                    <div className="grid gap-3 sm:gap-4 md:grid-cols-2">
                         {features.map((f, i) => (
                             <FeatureCard key={f.title} {...f} delay={i} />
                         ))}

@@ -106,3 +106,90 @@ Respond with a JSON array of exactly 4 insight strings. Example format:
         return ["Unable to generate insights at this time."];
     }
 }
+
+// Generate a short AI summary (2 sentences) for each month in the given year
+export async function getAIMonthlyInsights(year?: number): Promise<Record<number, string>> {
+    const { userId } = await auth();
+    if (!userId) throw new Error("Unauthorized");
+
+    if (!OPENROUTER_API_KEY) return {};
+
+    try {
+        const { getMonthlyHistory } = await import("@/lib/actions/expenses");
+        const { getUserSettings } = await import("@/lib/actions/settings");
+        const [history, settings] = await Promise.all([getMonthlyHistory(year), getUserSettings()]);
+
+        const formatCurrency = (amount: number) =>
+            new Intl.NumberFormat("en-IN", {
+                style: "currency",
+                currency: settings.currency,
+                minimumFractionDigits: 0,
+            }).format(amount);
+
+        const monthsWithData = history.months.filter((m) => m.hasData);
+        if (monthsWithData.length === 0) return {};
+
+        const monthDescriptions = monthsWithData
+            .map((m) => {
+                const cats = Object.entries(m.categoryBreakdown)
+                    .sort((a, b) => b[1] - a[1])
+                    .slice(0, 3)
+                    .map(([cat, amt]) => `${cat} ${formatCurrency(amt)}`)
+                    .join(", ");
+                return `${m.monthName}: total ${formatCurrency(m.totalSpent)}, ${m.transactionCount} transactions, top categories: ${cats}`;
+            })
+            .join("\n");
+
+        const prompt = `You are a personal finance advisor. For each month below, write exactly ONE sentence summarizing the month's spending. Be specific and mention top category or a comparison.
+
+${monthDescriptions}
+
+Respond with a JSON object where keys are month names (e.g. "January") and values are single sentence strings. No other text.`;
+
+        const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+            method: "POST",
+            headers: {
+                "Authorization": `Bearer ${OPENROUTER_API_KEY}`,
+                "Content-Type": "application/json",
+                "HTTP-Referer": "https://chamber.app",
+                "X-Title": "Chamber Expense Tracker",
+            },
+            body: JSON.stringify({
+                model: AI_MODELS[0],
+                route: "fallback",
+                models: AI_MODELS,
+                messages: [{ role: "user", content: prompt }],
+                temperature: 0.4,
+                max_tokens: 800,
+            }),
+        });
+
+        if (!response.ok) return {};
+
+        const data = await response.json();
+        const content = data.choices?.[0]?.message?.content;
+        if (!content) return {};
+
+        const jsonMatch = content.match(/\{[\s\S]*\}/);
+        if (!jsonMatch) return {};
+
+        const MONTH_NAMES = [
+            "January", "February", "March", "April", "May", "June",
+            "July", "August", "September", "October", "November", "December",
+        ];
+
+        const raw = JSON.parse(jsonMatch[0]) as Record<string, string>;
+        const result: Record<number, string> = {};
+        for (const [monthName, summary] of Object.entries(raw)) {
+            const idx = MONTH_NAMES.indexOf(monthName);
+            if (idx !== -1 && typeof summary === "string") {
+                result[idx] = summary;
+            }
+        }
+        return result;
+    } catch (error) {
+        console.error("AI monthly insights error:", error);
+        return {};
+    }
+}
+

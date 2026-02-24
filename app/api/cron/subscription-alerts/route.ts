@@ -77,10 +77,10 @@ export async function GET(request: NextRequest) {
 
         if (userSettings?.telegramChatId) {
           // Send alert
-          const daysText = daysUntilBilling === 0 
-            ? "today" 
-            : daysUntilBilling === 1 
-              ? "tomorrow" 
+          const daysText = daysUntilBilling === 0
+            ? "today"
+            : daysUntilBilling === 1
+              ? "tomorrow"
               : `in ${daysUntilBilling} days`;
 
           const message = `🔔 <b>Subscription Reminder</b>\n\n` +
@@ -98,11 +98,79 @@ export async function GET(request: NextRequest) {
               where: { id: sub.id },
               data: { lastAlertSent: now },
             });
-
             alertsSent.push(`${sub.name} (${sub.userId})`);
           }
         }
       }
+    }
+
+    // Month-end summary: send spending recap on last day of month
+    const lastDayOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+    const isLastDayOfMonth = now.getDate() === lastDayOfMonth;
+
+    if (isLastDayOfMonth) {
+      const monthSummariesSent: string[] = [];
+
+      // Get all users with Telegram linked
+      const usersWithTelegram = await db.userSettings.findMany({
+        where: { telegramChatId: { not: null } },
+      });
+
+      for (const userSettings of usersWithTelegram) {
+        if (!userSettings.telegramChatId) continue;
+
+        // Get current month expenses
+        const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+        const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
+
+        const expenses = await db.expense.findMany({
+          where: {
+            userId: userSettings.userId,
+            date: { gte: startOfMonth, lte: endOfMonth },
+          },
+          select: { amount: true, category: true },
+        });
+
+        if (expenses.length === 0) continue;
+
+        let totalSpent = 0;
+        const categoryMap: Record<string, number> = {};
+        for (const exp of expenses) {
+          totalSpent += exp.amount;
+          categoryMap[exp.category] = (categoryMap[exp.category] || 0) + exp.amount;
+        }
+
+        const budget = userSettings.monthlyBudget || 0;
+        const budgetPct = budget > 0 ? Math.round((totalSpent / budget) * 100) : null;
+        const topCats = Object.entries(categoryMap)
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, 3)
+          .map(([cat, amt]) => `  • ${cat}: ₹${amt.toFixed(0)}`)
+          .join("\n");
+
+        const monthName = now.toLocaleDateString("en-US", { month: "long" });
+        const budgetLine = budgetPct !== null
+          ? `📊 Budget: ₹${totalSpent.toFixed(0)} / ₹${budget.toFixed(0)} (${budgetPct}%)\n`
+          : "";
+
+        const message =
+          `📅 <b>${monthName} Summary</b>\n\n` +
+          `💰 Total spent: ₹${totalSpent.toFixed(0)}\n` +
+          budgetLine +
+          `🧾 Transactions: ${expenses.length}\n\n` +
+          `<b>Top Categories:</b>\n${topCats}\n\n` +
+          `<i>View full summary at Chamber → Monthly Summary</i>`;
+
+        const sent = await sendTelegramMessage(userSettings.telegramChatId, message);
+        if (sent) monthSummariesSent.push(userSettings.userId);
+      }
+
+      return NextResponse.json({
+        success: true,
+        alertsSent: alertsSent.length,
+        monthSummariesSent: monthSummariesSent.length,
+        details: alertsSent,
+      });
     }
 
     return NextResponse.json({

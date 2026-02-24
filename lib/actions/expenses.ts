@@ -97,6 +97,7 @@ export async function getExpenses(options?: {
   startDate?: Date;
   endDate?: Date;
   category?: string;
+  excludeCategory?: string;
   search?: string;
 }) {
   const { userId } = await auth();
@@ -112,6 +113,8 @@ export async function getExpenses(options?: {
 
   if (options?.category) {
     where.category = options.category;
+  } else if (options?.excludeCategory) {
+    where.category = { not: options.excludeCategory };
   }
 
   if (options?.search) {
@@ -139,6 +142,7 @@ export async function getExpensesCount(options?: {
   startDate?: Date;
   endDate?: Date;
   category?: string;
+  excludeCategory?: string;
   search?: string;
 }) {
   const { userId } = await auth();
@@ -154,6 +158,8 @@ export async function getExpensesCount(options?: {
 
   if (options?.category) {
     where.category = options.category;
+  } else if (options?.excludeCategory) {
+    where.category = { not: options.excludeCategory };
   }
 
   if (options?.search) {
@@ -164,8 +170,16 @@ export async function getExpensesCount(options?: {
     ];
   }
 
-  const count = await db.expense.count({ where });
-  return count;
+  const result = await db.expense.aggregate({
+    where,
+    _count: { id: true },
+    _sum: { amount: true },
+  });
+
+  return {
+    count: result._count.id,
+    totalAmount: result._sum.amount || 0,
+  };
 }
 
 export async function getExpenseById(id: string) {
@@ -363,10 +377,10 @@ export async function getAnalyticsData() {
   if (!userId) throw new Error("Unauthorized");
 
   const now = new Date();
-  
+
   // Get expenses for the last 6 months
   const sixMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 5, 1);
-  
+
   const expenses = await db.expense.findMany({
     where: {
       userId,
@@ -402,7 +416,7 @@ export async function getAnalyticsData() {
     const monthDate = new Date(now.getFullYear(), now.getMonth() - i, 1);
     const monthEnd = new Date(now.getFullYear(), now.getMonth() - i + 1, 0);
     const monthName = monthDate.toLocaleDateString("en-US", { month: "short" });
-    
+
     const monthExpenses: typeof expenses = [];
     for (const exp of expenses) {
       const expenseDate = new Date(exp.date);
@@ -410,7 +424,7 @@ export async function getAnalyticsData() {
         monthExpenses.push(exp);
       }
     }
-    
+
     let spent = 0;
     for (const exp of monthExpenses) {
       spent += exp.amount;
@@ -436,10 +450,180 @@ export async function getAnalyticsData() {
     color: categoryColors[name] || "#95A5A6",
   }));
 
+  // Daily spending for current month (area chart)
+  const dailySpendingMap: Record<string, number> = {};
+  for (const exp of currentMonthExpenses) {
+    const day = new Date(exp.date).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+    dailySpendingMap[day] = (dailySpendingMap[day] || 0) + exp.amount;
+  }
+  const dailySpending = Object.entries(dailySpendingMap).map(([date, amount]) => ({
+    date,
+    amount,
+  }));
+
+  // Top 5 merchants by total spend this month
+  const merchantMap: Record<string, number> = {};
+  for (const exp of currentMonthExpenses) {
+    const merchant = exp.merchant || exp.description || exp.category;
+    if (merchant) {
+      merchantMap[merchant] = (merchantMap[merchant] || 0) + exp.amount;
+    }
+  }
+  const topMerchants = Object.entries(merchantMap)
+    .map(([name, amount]) => ({ name, amount }))
+    .sort((a, b) => b.amount - a.amount)
+    .slice(0, 5);
+
+  // Average daily spend for current month
+  const daysElapsed = Math.max(1, now.getDate());
+  const averageDailySpend = analyticsTotalSpent / daysElapsed;
+
+  // Previous month total for MoM comparison
+  const prevMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+  const prevMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0);
+  let previousMonthSpent = 0;
+  for (const exp of expenses) {
+    const d = new Date(exp.date);
+    if (d >= prevMonthStart && d <= prevMonthEnd) {
+      previousMonthSpent += exp.amount;
+    }
+  }
+
+  // Highest spending day this month
+  let highestSpendingDay = { date: "", amount: 0 };
+  for (const [date, amount] of Object.entries(dailySpendingMap)) {
+    if (amount > highestSpendingDay.amount) {
+      highestSpendingDay = { date, amount };
+    }
+  }
+
+  // Transaction count this month
+  const transactionCount = currentMonthExpenses.length;
+
   return {
     totalSpent: analyticsTotalSpent,
     categoryBreakdown: analyticsCategoryBreakdown,
     categoryData,
     monthlyData,
+    dailySpending,
+    topMerchants,
+    averageDailySpend,
+    previousMonthSpent,
+    highestSpendingDay,
+    transactionCount,
   };
 }
+
+export type MonthSummary = {
+  month: number; // 0-indexed (0 = January)
+  monthName: string;
+  year: number;
+  totalSpent: number;
+  transactionCount: number;
+  topCategory: string | null;
+  avgPerTransaction: number;
+  categoryBreakdown: Record<string, number>;
+  hasData: boolean;
+};
+
+export async function getMonthlyHistory(year?: number): Promise<{
+  months: MonthSummary[];
+  yearTotal: number;
+  bestMonth: MonthSummary | null;
+  worstMonth: MonthSummary | null;
+  avgMonthlySpend: number;
+  availableYears: number[];
+}> {
+  const { userId } = await auth();
+  if (!userId) throw new Error("Unauthorized");
+
+  const now = new Date();
+  const targetYear = year || now.getFullYear();
+
+  // Fetch all expenses for the target year
+  const startOfYear = new Date(targetYear, 0, 1);
+  const endOfYear = new Date(targetYear, 11, 31, 23, 59, 59);
+
+  const expenses = await db.expense.findMany({
+    where: {
+      userId,
+      date: { gte: startOfYear, lte: endOfYear },
+    },
+    select: {
+      date: true,
+      amount: true,
+      category: true,
+    },
+    orderBy: { date: "asc" },
+  });
+
+  // Also get min year for year selector
+  const oldestExpense = await db.expense.findFirst({
+    where: { userId },
+    orderBy: { date: "asc" },
+    select: { date: true },
+  });
+
+  const oldestYear = oldestExpense ? new Date(oldestExpense.date).getFullYear() : now.getFullYear();
+  const availableYears: number[] = [];
+  for (let y = now.getFullYear(); y >= oldestYear; y--) {
+    availableYears.push(y);
+  }
+
+  const MONTH_NAMES = [
+    "January", "February", "March", "April", "May", "June",
+    "July", "August", "September", "October", "November", "December",
+  ];
+
+  // Group by month
+  const monthData: MonthSummary[] = MONTH_NAMES.map((monthName, idx) => ({
+    month: idx,
+    monthName,
+    year: targetYear,
+    totalSpent: 0,
+    transactionCount: 0,
+    topCategory: null,
+    avgPerTransaction: 0,
+    categoryBreakdown: {},
+    hasData: false,
+  }));
+
+  for (const exp of expenses) {
+    const m = new Date(exp.date).getMonth();
+    const ms = monthData[m];
+    ms.totalSpent += exp.amount;
+    ms.transactionCount += 1;
+    ms.categoryBreakdown[exp.category] = (ms.categoryBreakdown[exp.category] || 0) + exp.amount;
+    ms.hasData = true;
+  }
+
+  // Compute derived fields per month
+  for (const ms of monthData) {
+    if (ms.hasData) {
+      ms.avgPerTransaction = ms.totalSpent / ms.transactionCount;
+      const topCat = Object.entries(ms.categoryBreakdown).sort((a, b) => b[1] - a[1])[0];
+      ms.topCategory = topCat ? topCat[0] : null;
+    }
+  }
+
+  const monthsWithData = monthData.filter((m) => m.hasData);
+  const yearTotal = monthsWithData.reduce((sum, m) => sum + m.totalSpent, 0);
+  const avgMonthlySpend = monthsWithData.length > 0 ? yearTotal / monthsWithData.length : 0;
+
+  const bestMonth = monthsWithData.length > 0
+    ? monthsWithData.reduce((min, m) => m.totalSpent < min.totalSpent ? m : min)
+    : null;
+  const worstMonth = monthsWithData.length > 0
+    ? monthsWithData.reduce((max, m) => m.totalSpent > max.totalSpent ? m : max)
+    : null;
+
+  return {
+    months: monthData,
+    yearTotal,
+    bestMonth,
+    worstMonth,
+    avgMonthlySpend,
+    availableYears,
+  };
+}
+

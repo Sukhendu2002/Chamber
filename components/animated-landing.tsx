@@ -1,10 +1,8 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
-import { useTheme } from "next-themes";
+import { useState, useRef } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import {
     motion,
     useInView,
@@ -15,7 +13,6 @@ import {
 import {
     IconBrain,
     IconBrandTelegram,
-    IconBrandGithub,
     IconChartBar,
     IconMessagePlus,
     IconSparkles,
@@ -27,9 +24,6 @@ import {
     IconArrowRight,
     IconReceipt,
     IconCamera,
-    IconSun,
-    IconMoon,
-    IconStar,
 } from "@tabler/icons-react";
 
 // ─── Animation Variants ────────────────────────────────────────────────────────
@@ -49,25 +43,6 @@ const slideLeft = {
     visible: { opacity: 1, x: 0 },
 };
 
-// ─── useCountUp hook ──────────────────────────────────────────────────────────
-
-function useCountUp(target: number, duration = 1.5, decimals = 0) {
-    const [count, setCount] = useState(0);
-    const ref = useRef(null);
-    const inView = useInView(ref, { once: true });
-    useEffect(() => {
-        if (!inView) return;
-        let start = 0;
-        const step = target / (duration * 60);
-        const timer = setInterval(() => {
-            start += step;
-            if (start >= target) { setCount(target); clearInterval(timer); }
-            else setCount(parseFloat(start.toFixed(decimals)));
-        }, 1000 / 60);
-        return () => clearInterval(timer);
-    }, [inView, target, duration, decimals]);
-    return { count, ref };
-}
 
 // ─── GradientText (animated shimmer) ─────────────────────────────────────────
 
@@ -105,99 +80,6 @@ function AnimatedHeading({ children, className = "", delay = 0 }: { children: st
     );
 }
 
-// ─── Theme Toggle ─────────────────────────────────────────────────────────────
-
-function ThemeToggle() {
-    const { theme, setTheme } = useTheme();
-    const [mounted, setMounted] = useState(false);
-    useEffect(() => setMounted(true), []);
-    if (!mounted) return <div className="h-8 w-8" />;
-    return (
-        <motion.button
-            onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-            className="flex h-8 w-8 items-center justify-center rounded-md border bg-muted/50 text-muted-foreground hover:text-foreground transition-colors"
-            whileHover={{ scale: 1.1 }}
-            whileTap={{ scale: 0.9 }}
-            title="Toggle theme"
-        >
-            <AnimatePresence mode="wait" initial={false}>
-                {theme === "dark" ? (
-                    <motion.span key="sun" initial={{ rotate: -90, opacity: 0 }} animate={{ rotate: 0, opacity: 1 }} exit={{ rotate: 90, opacity: 0 }} transition={{ duration: 0.2 }}>
-                        <IconSun className="h-4 w-4" />
-                    </motion.span>
-                ) : (
-                    <motion.span key="moon" initial={{ rotate: 90, opacity: 0 }} animate={{ rotate: 0, opacity: 1 }} exit={{ rotate: -90, opacity: 0 }} transition={{ duration: 0.2 }}>
-                        <IconMoon className="h-4 w-4" />
-                    </motion.span>
-                )}
-            </AnimatePresence>
-        </motion.button>
-    );
-}
-
-// ─── GitHub Stars Badge ───────────────────────────────────────────────────────
-
-function GitHubStars() {
-    const [stars, setStars] = useState<number | null>(null);
-    useEffect(() => {
-        fetch("https://api.github.com/repos/Sukhendu2002/Chamber")
-            .then((r) => r.json())
-            .then((d) => setStars(d.stargazers_count))
-            .catch(() => { });
-    }, []);
-    return (
-        <motion.a
-            href="https://github.com/Sukhendu2002/Chamber"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="hidden sm:flex items-center gap-1.5 rounded-md border bg-muted/50 px-2.5 py-1 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.97 }}
-        >
-            <IconBrandGithub className="h-3.5 w-3.5" />
-            <AnimatePresence mode="wait">
-                {stars !== null ? (
-                    <motion.span key="stars" initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} className="flex items-center gap-1">
-                        <IconStar className="h-3 w-3 text-yellow-500 fill-yellow-500" />
-                        {stars.toLocaleString()}
-                    </motion.span>
-                ) : (
-                    <motion.span key="loading" className="h-3 w-8 animate-pulse rounded bg-muted" />
-                )}
-            </AnimatePresence>
-        </motion.a>
-    );
-}
-
-// ─── Animated step connector line ────────────────────────────────────────────
-
-function StepConnector() {
-    const ref = useRef(null);
-    const inView = useInView(ref, { once: true, margin: "-80px" });
-    return (
-        <div ref={ref} className="hidden md:flex items-center justify-center" aria-hidden>
-            <svg width="80" height="2" viewBox="0 0 80 2" className="overflow-visible">
-                <motion.line
-                    x1="0" y1="1" x2="80" y2="1"
-                    stroke="currentColor"
-                    strokeWidth="1.5"
-                    strokeDasharray="80"
-                    strokeDashoffset={80}
-                    className="text-primary/40"
-                    animate={inView ? { strokeDashoffset: 0 } : {}}
-                    transition={{ duration: 0.8, ease: "easeOut", delay: 0.4 }}
-                />
-                <motion.circle
-                    cx="80" cy="1" r="3"
-                    className="fill-primary"
-                    initial={{ scale: 0, opacity: 0 }}
-                    animate={inView ? { scale: 1, opacity: 1 } : {}}
-                    transition={{ delay: 1.1, duration: 0.3, type: "spring" }}
-                />
-            </svg>
-        </div>
-    );
-}
 
 // ─── Scroll-triggered section wrapper ──────────────────────────────────────────
 
@@ -260,32 +142,6 @@ function FloatingOrbs() {
     );
 }
 
-// ─── Animated stat counter ────────────────────────────────────────────────────
-
-function StatItem({ value, label, delay }: { value: string; label: string; delay: number }) {
-    const ref = useRef(null);
-    const inView = useInView(ref, { once: true });
-    return (
-        <motion.div
-            ref={ref}
-            className="text-center"
-            initial="hidden"
-            animate={inView ? "visible" : "hidden"}
-            variants={fadeUp}
-            transition={{ duration: 0.5, delay: delay * 0.1 }}
-        >
-            <motion.div
-                className="text-2xl font-bold sm:text-3xl"
-                initial={{ scale: 0.5, opacity: 0 }}
-                animate={inView ? { scale: 1, opacity: 1 } : {}}
-                transition={{ duration: 0.5, delay: delay * 0.1 + 0.2, type: "spring", stiffness: 200 }}
-            >
-                {value}
-            </motion.div>
-            <div className="mt-1 text-xs text-muted-foreground sm:text-sm">{label}</div>
-        </motion.div>
-    );
-}
 
 // ─── Feature card ─────────────────────────────────────────────────────────────
 
@@ -857,7 +713,7 @@ export function AnimatedLanding() {
                                     ["Multi-Account", false, true],
                                     ["Subscription Tracking", false, true],
                                     ["Free & Open Source", "Sometimes", true],
-                                ].map(([label, spreadsheet, chamber], i) => (
+                                ].map(([label, spreadsheet], i) => (
                                     <motion.div
                                         key={label as string}
                                         className={`grid grid-cols-3 items-center px-4 py-3 text-sm ${i % 2 === 0 ? "" : "bg-muted/10"}`}

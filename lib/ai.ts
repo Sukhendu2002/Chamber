@@ -145,8 +145,8 @@ export async function parseExpenseWithAI(text: string): Promise<AIResponse> {
         route: "fallback",
         models: FREE_TEXT_MODELS,
         messages: [
-          { role: "system", content: TEXT_SYSTEM_PROMPT },
-          { role: "user", content: `Parse: "${text}"` },
+          // Free models (Gemma, Llama) don't support system role, so inline it
+          { role: "user", content: `${TEXT_SYSTEM_PROMPT}\n\nParse: "${text}"` },
         ],
         temperature: 0.1,
         max_tokens: 150,

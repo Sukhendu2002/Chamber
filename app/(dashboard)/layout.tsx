@@ -1,6 +1,7 @@
 import { Sidebar } from "@/components/sidebar";
 import { AutoRefresh } from "@/components/auto-refresh";
 import { DemoModeProvider } from "@/components/demo-mode-provider";
+import { ChatSidebar } from "@/components/chat-sidebar";
 
 export default function DashboardLayout({
   children,
@@ -15,6 +16,7 @@ export default function DashboardLayout({
           <AutoRefresh />
           {children}
         </main>
+        <ChatSidebar />
       </div>
     </DemoModeProvider>
   );

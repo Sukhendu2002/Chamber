@@ -36,31 +36,39 @@ const JSON_FORMAT = '{"amount":<number>,"category":"<category>","description":"<
 const JSON_ERROR_FORMAT = '{"error":"<reason>"}';
 
 // Text prompt for free models (verbose is fine — no cost)
-const TEXT_SYSTEM_PROMPT = `Extract expense info from text. Categories: ${CATEGORIES}.
+function getTextSystemPrompt(currency: string) {
+  return `Extract expense info from text. Categories: ${CATEGORIES}.
+Amount must be in ${currency}. If a different currency is mentioned, convert it approximately.
 Respond ONLY with JSON: ${JSON_FORMAT}
 If unparseable: ${JSON_ERROR_FORMAT}`;
+}
 
 // Vision prompt — concise for token efficiency (paid model)
-const VISION_SYSTEM_PROMPT = `Extract expense from this receipt/screenshot/invoice. Indian UPI apps (GPay, PhonePe, Paytm) common. Categories: ${CATEGORIES}.`;
+function getVisionSystemPrompt(currency: string) {
+  return `Extract expense from this receipt/screenshot/invoice. Indian UPI apps (GPay, PhonePe, Paytm) common. Categories: ${CATEGORIES}.
+IMPORTANT: Amount MUST be in ${currency}. If receipt shows a different currency, convert approximately.`;
+}
 
 // Structured output schema for GPT-4.1 Nano (guarantees valid JSON)
-const EXPENSE_JSON_SCHEMA = {
-  name: "expense",
-  strict: true,
-  schema: {
-    type: "object",
-    properties: {
-      amount: { type: "number", description: "Expense amount in INR" },
-      category: { type: "string", description: "Expense category" },
-      description: { type: "string", description: "Brief description" },
-      merchant: { type: ["string", "null"], description: "Merchant/recipient name if known" },
-      confidence: { type: "number", description: "Confidence score 0-1" },
-      error: { type: ["string", "null"], description: "Error message if expense cannot be parsed, null otherwise" },
+function getExpenseJsonSchema(currency: string) {
+  return {
+    name: "expense",
+    strict: true,
+    schema: {
+      type: "object",
+      properties: {
+        amount: { type: "number", description: `Expense amount in ${currency}. Convert from other currencies if needed.` },
+        category: { type: "string", description: "Expense category" },
+        description: { type: "string", description: "Brief description" },
+        merchant: { type: ["string", "null"], description: "Merchant/recipient name if known" },
+        confidence: { type: "number", description: "Confidence score 0-1" },
+        error: { type: ["string", "null"], description: "Error message if expense cannot be parsed, null otherwise" },
+      },
+      required: ["amount", "category", "description", "merchant", "confidence", "error"],
+      additionalProperties: false,
     },
-    required: ["amount", "category", "description", "merchant", "confidence", "error"],
-    additionalProperties: false,
-  },
-};
+  };
+}
 
 // Shared headers for all OpenRouter requests
 function getHeaders(): Record<string, string> {
@@ -129,14 +137,16 @@ function parseStructuredResponse(content: string): AIResponse {
 
 /**
  * Parse expense from plain text using FREE models (no credits used).
+ * @param currency - User's currency setting (e.g. "INR", "USD", "EUR")
  */
-export async function parseExpenseWithAI(text: string): Promise<AIResponse> {
+export async function parseExpenseWithAI(text: string, currency: string = "INR"): Promise<AIResponse> {
   if (!OPENROUTER_API_KEY) {
     console.error("OPENROUTER_API_KEY not configured");
     return { success: false, error: "AI not configured" };
   }
 
   try {
+    const systemPrompt = getTextSystemPrompt(currency);
     const response = await fetch(OPENROUTER_API_URL, {
       method: "POST",
       headers: getHeaders(),
@@ -146,7 +156,7 @@ export async function parseExpenseWithAI(text: string): Promise<AIResponse> {
         models: FREE_TEXT_MODELS,
         messages: [
           // Free models (Gemma, Llama) don't support system role, so inline it
-          { role: "user", content: `${TEXT_SYSTEM_PROMPT}\n\nParse: "${text}"` },
+          { role: "user", content: `${systemPrompt}\n\nParse: "${text}"` },
         ],
         temperature: 0.1,
         max_tokens: 150,
@@ -183,6 +193,7 @@ export async function parseReceiptWithVision(
   imageBase64: string,
   mimeType: string = "image/jpeg",
   caption?: string,
+  currency: string = "INR",
 ): Promise<AIResponse> {
   if (!OPENROUTER_API_KEY) {
     console.error("OPENROUTER_API_KEY not configured");
@@ -212,12 +223,12 @@ export async function parseReceiptWithVision(
       body: JSON.stringify({
         model: VISION_MODEL,
         messages: [
-          { role: "system", content: VISION_SYSTEM_PROMPT },
+          { role: "system", content: getVisionSystemPrompt(currency) },
           { role: "user", content: userContent },
         ],
         response_format: {
           type: "json_schema",
-          json_schema: EXPENSE_JSON_SCHEMA,
+          json_schema: getExpenseJsonSchema(currency),
         },
         temperature: 0.1,
         max_tokens: 150,
@@ -253,6 +264,7 @@ export async function parseReceiptWithVision(
 export async function parsePDFWithVision(
   pdfBase64: string,
   caption?: string,
+  currency: string = "INR",
 ): Promise<AIResponse> {
   if (!OPENROUTER_API_KEY) {
     console.error("OPENROUTER_API_KEY not configured");
@@ -283,7 +295,7 @@ export async function parsePDFWithVision(
       body: JSON.stringify({
         model: VISION_MODEL,
         messages: [
-          { role: "system", content: VISION_SYSTEM_PROMPT },
+          { role: "system", content: getVisionSystemPrompt(currency) },
           { role: "user", content: userContent },
         ],
         // Use pdf-text engine (free) instead of mistral-ocr ($2/1K pages)
@@ -295,7 +307,7 @@ export async function parsePDFWithVision(
         ],
         response_format: {
           type: "json_schema",
-          json_schema: EXPENSE_JSON_SCHEMA,
+          json_schema: getExpenseJsonSchema(currency),
         },
         temperature: 0.1,
         max_tokens: 150,

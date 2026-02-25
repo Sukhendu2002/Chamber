@@ -304,7 +304,7 @@ async function handleExpenseMessage(chatId: number, text: string) {
   // Use AI to parse the expense
   await sendTelegramMessage(chatId, "🤖 Processing...");
 
-  const aiResult = await parseExpenseWithAI(text);
+  const aiResult = await parseExpenseWithAI(text, userSettings.currency || "INR");
 
   let amount: number;
   let category: string;
@@ -412,11 +412,11 @@ async function handlePhotoMessage(chatId: number, photo: TelegramMessage["photo"
   // If caption has useful expense info (contains amount), use free text model to save credits
   if (caption && caption.trim().length > 5 && hasUsefulExpenseInfo(caption)) {
     console.log("Caption has expense info, using free text model:", caption);
-    aiResult = await parseExpenseWithAI(`User sent a payment screenshot with this caption: "${caption}"`);
+    aiResult = await parseExpenseWithAI(`User sent a payment screenshot with this caption: "${caption}"`, userSettings.currency || "INR");
   } else {
     // Send image directly to GPT-4.1 Nano vision — no OCR needed
     console.log("Sending image to Vision AI (GPT-4.1 Nano)...");
-    aiResult = await parseReceiptWithVision(imageBase64, "image/jpeg", caption);
+    aiResult = await parseReceiptWithVision(imageBase64, "image/jpeg", caption, userSettings.currency || "INR");
   }
 
   if (!aiResult.success || !aiResult.expense) {
@@ -526,14 +526,15 @@ async function handleDocumentMessage(chatId: number, document: TelegramMessage["
   if (caption && caption.trim().length > 5 && hasUsefulExpenseInfo(caption)) {
     console.log("Caption has expense info, using free text model:", caption);
     aiResult = await parseExpenseWithAI(
-      `User sent a ${isPdf ? "PDF invoice" : "image"} with caption: "${caption}"`
+      `User sent a ${isPdf ? "PDF invoice" : "image"} with caption: "${caption}"`,
+      userSettings.currency || "INR"
     );
   } else if (isPdf) {
     // Send PDF directly to vision model
-    aiResult = await parsePDFWithVision(fileBase64, caption);
+    aiResult = await parsePDFWithVision(fileBase64, caption, userSettings.currency || "INR");
   } else {
     // Send image directly to vision model
-    aiResult = await parseReceiptWithVision(fileBase64, mimeType, caption);
+    aiResult = await parseReceiptWithVision(fileBase64, mimeType, caption, userSettings.currency || "INR");
   }
 
   if (!aiResult.success || !aiResult.expense) {

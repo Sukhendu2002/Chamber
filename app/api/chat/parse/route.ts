@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { parseExpenseWithAI, parseReceiptWithVision, parsePDFWithVision } from "@/lib/ai";
+import { db } from "@/lib/db";
 import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 
 function getR2Client() {
@@ -29,15 +30,19 @@ export async function POST(request: NextRequest) {
         const body = await request.json();
         const { type, text, imageBase64, mimeType, caption } = body;
 
+        // Fetch user's currency setting
+        const settings = await db.userSettings.findUnique({ where: { userId } });
+        const currency = settings?.currency || "INR";
+
         if (type === "text" && text) {
             // Parse text expense — uses free models
-            const result = await parseExpenseWithAI(text);
+            const result = await parseExpenseWithAI(text, currency);
             return NextResponse.json(result);
         }
 
         if (type === "image" && imageBase64) {
             // Parse image receipt — uses GPT-4.1 Nano vision
-            const result = await parseReceiptWithVision(imageBase64, mimeType || "image/jpeg", caption);
+            const result = await parseReceiptWithVision(imageBase64, mimeType || "image/jpeg", caption, currency);
 
             // Upload image to R2 if parsing succeeded
             let receiptUrl: string | undefined;
@@ -68,7 +73,7 @@ export async function POST(request: NextRequest) {
 
         if (type === "pdf" && imageBase64) {
             // Parse PDF — uses GPT-4.1 Nano with file-parser plugin
-            const result = await parsePDFWithVision(imageBase64, caption);
+            const result = await parsePDFWithVision(imageBase64, caption, currency);
 
             // Upload PDF to R2 if parsing succeeded
             let receiptUrl: string | undefined;

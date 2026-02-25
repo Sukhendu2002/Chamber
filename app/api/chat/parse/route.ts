@@ -33,6 +33,7 @@ export async function POST(request: NextRequest) {
         // Fetch user's currency setting
         const settings = await db.userSettings.findUnique({ where: { userId } });
         const currency = settings?.currency || "INR";
+        console.log("[Chat Parse] userId:", userId, "currency:", currency, "settings found:", !!settings);
 
         if (type === "text" && text) {
             // Parse text expense — uses free models

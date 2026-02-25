@@ -36,47 +36,46 @@ const JSON_FORMAT = '{"amount":<number>,"category":"<category>","description":"<
 const JSON_ERROR_FORMAT = '{"error":"<reason>"}';
 
 // Text prompt for free models (verbose is fine — no cost)
-function getTextSystemPrompt(currency: string) {
+function getTextSystemPrompt() {
   return `Extract expense info from text. Categories: ${CATEGORIES}.
-Amount must be in ${currency}. If a different currency is mentioned, convert it approximately.
 Respond ONLY with JSON: ${JSON_FORMAT}
 If unparseable: ${JSON_ERROR_FORMAT}`;
 }
 
-// Vision prompt — concise for token efficiency (paid model)
-function getVisionSystemPrompt(currency: string) {
-  // Give concrete conversion examples based on user's currency
-  const conversionExamples = currency === "INR"
-    ? "Example: $10.80 USD on receipt → amount=918 (10.80×85). ₹500 on receipt → amount=500."
-    : currency === "USD"
-      ? "Example: ₹918 INR on receipt → amount=10.80 (918÷85). $10 on receipt → amount=10."
-      : currency === "EUR"
-        ? "Example: $10 USD on receipt → amount=9.20 (10×0.92). €50 on receipt → amount=50."
-        : `Convert any foreign currency to ${currency} using current approximate rates.`;
-
-  return `Extract expense from this receipt/screenshot/invoice. Indian UPI apps (GPay, PhonePe, Paytm) common. Categories: ${CATEGORIES}.
-CURRENCY RULE: Output amount MUST be in ${currency}. If receipt currency differs, CONVERT it. ${conversionExamples} NEVER return the foreign amount as-is.`;
-}
+// Vision prompt — let the model read accurately, we handle conversion
+const VISION_SYSTEM_PROMPT = `Extract expense from this receipt/screenshot/invoice. Read the exact amount and currency shown. Indian UPI apps (GPay, PhonePe, Paytm) common. Categories: ${CATEGORIES}.`;
 
 // Structured output schema for GPT-4.1 Nano (guarantees valid JSON)
-function getExpenseJsonSchema(currency: string) {
-  return {
-    name: "expense",
-    strict: true,
-    schema: {
-      type: "object",
-      properties: {
-        amount: { type: "number", description: `Expense amount in ${currency}. Convert from other currencies if needed.` },
-        category: { type: "string", description: "Expense category" },
-        description: { type: "string", description: "Brief description" },
-        merchant: { type: ["string", "null"], description: "Merchant/recipient name if known" },
-        confidence: { type: "number", description: "Confidence score 0-1" },
-        error: { type: ["string", "null"], description: "Error message if expense cannot be parsed, null otherwise" },
-      },
-      required: ["amount", "category", "description", "merchant", "confidence", "error"],
-      additionalProperties: false,
+const EXPENSE_JSON_SCHEMA = {
+  name: "expense",
+  strict: true,
+  schema: {
+    type: "object",
+    properties: {
+      amount: { type: "number", description: "Exact amount shown on receipt (do NOT convert)" },
+      detectedCurrency: { type: "string", description: "ISO 4217 currency code shown on receipt (e.g. USD, INR, EUR, GBP). Use INR for ₹ symbol." },
+      category: { type: "string", description: "Expense category" },
+      description: { type: "string", description: "Brief description" },
+      merchant: { type: ["string", "null"], description: "Merchant/recipient name if known" },
+      confidence: { type: "number", description: "Confidence score 0-1" },
+      error: { type: ["string", "null"], description: "Error message if expense cannot be parsed, null otherwise" },
     },
-  };
+    required: ["amount", "detectedCurrency", "category", "description", "merchant", "confidence", "error"],
+    additionalProperties: false,
+  },
+};
+
+// Free exchange rate API (no API key needed)
+async function getExchangeRate(from: string, to: string): Promise<number> {
+  if (from === to) return 1;
+  try {
+    const response = await fetch(`https://api.exchangerate-api.com/v4/latest/${from}`);
+    const data = await response.json();
+    return data.rates[to] || 1;
+  } catch (error) {
+    console.error("Failed to fetch exchange rate:", error);
+    return 1;
+  }
 }
 
 // Shared headers for all OpenRouter requests
@@ -118,9 +117,9 @@ function parseAIJsonResponse(content: string): AIResponse {
 }
 
 /**
- * Parse structured output from GPT-4.1 Nano (guaranteed valid JSON).
+ * Parse structured output from GPT-4.1 Nano and convert currency if needed.
  */
-function parseStructuredResponse(content: string): AIResponse {
+async function parseStructuredResponse(content: string, targetCurrency: string): Promise<AIResponse> {
   try {
     const parsed = JSON.parse(content);
 
@@ -128,10 +127,21 @@ function parseStructuredResponse(content: string): AIResponse {
       return { success: false, error: parsed.error };
     }
 
+    let amount = parsed.amount;
+    const detectedCurrency = parsed.detectedCurrency || targetCurrency;
+
+    // Convert currency if receipt currency differs from user's currency
+    if (detectedCurrency !== targetCurrency) {
+      const rate = await getExchangeRate(detectedCurrency, targetCurrency);
+      const originalAmount = amount;
+      amount = Math.round(amount * rate * 100) / 100;
+      console.log(`[Currency Convert] ${originalAmount} ${detectedCurrency} → ${amount} ${targetCurrency} (rate: ${rate})`);
+    }
+
     return {
       success: true,
       expense: {
-        amount: parsed.amount,
+        amount,
         category: parsed.category || "General",
         description: parsed.description || "",
         merchant: parsed.merchant,
@@ -155,7 +165,7 @@ export async function parseExpenseWithAI(text: string, currency: string = "INR")
   }
 
   try {
-    const systemPrompt = getTextSystemPrompt(currency);
+    const systemPrompt = getTextSystemPrompt();
     const response = await fetch(OPENROUTER_API_URL, {
       method: "POST",
       headers: getHeaders(),
@@ -210,7 +220,7 @@ export async function parseReceiptWithVision(
   }
 
   try {
-    console.log("Sending image directly to GPT-4.1 Nano vision...");
+    console.log("[Vision AI] currency:", currency);
 
     const userContent: Array<Record<string, unknown>> = [
       {
@@ -232,12 +242,12 @@ export async function parseReceiptWithVision(
       body: JSON.stringify({
         model: VISION_MODEL,
         messages: [
-          { role: "system", content: getVisionSystemPrompt(currency) },
+          { role: "system", content: VISION_SYSTEM_PROMPT },
           { role: "user", content: userContent },
         ],
         response_format: {
           type: "json_schema",
-          json_schema: getExpenseJsonSchema(currency),
+          json_schema: EXPENSE_JSON_SCHEMA,
         },
         temperature: 0.1,
         max_tokens: 150,
@@ -258,7 +268,7 @@ export async function parseReceiptWithVision(
     }
 
     console.log("Vision AI response:", content);
-    return parseStructuredResponse(content);
+    return await parseStructuredResponse(content, currency);
   } catch (error) {
     console.error("Vision AI error:", error);
     return { success: false, error: "Failed to process image with Vision AI" };
@@ -304,7 +314,7 @@ export async function parsePDFWithVision(
       body: JSON.stringify({
         model: VISION_MODEL,
         messages: [
-          { role: "system", content: getVisionSystemPrompt(currency) },
+          { role: "system", content: VISION_SYSTEM_PROMPT },
           { role: "user", content: userContent },
         ],
         // Use pdf-text engine (free) instead of mistral-ocr ($2/1K pages)
@@ -316,7 +326,7 @@ export async function parsePDFWithVision(
         ],
         response_format: {
           type: "json_schema",
-          json_schema: getExpenseJsonSchema(currency),
+          json_schema: EXPENSE_JSON_SCHEMA,
         },
         temperature: 0.1,
         max_tokens: 150,
@@ -337,7 +347,7 @@ export async function parsePDFWithVision(
     }
 
     console.log("PDF Vision AI response:", content);
-    return parseStructuredResponse(content);
+    return await parseStructuredResponse(content, currency);
   } catch (error) {
     console.error("PDF Vision AI error:", error);
     return { success: false, error: "Failed to process PDF with Vision AI" };

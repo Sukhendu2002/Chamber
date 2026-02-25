@@ -24,41 +24,20 @@ type AIResponse = {
   error?: string;
 };
 
-const TEXT_SYSTEM_PROMPT = `You are an expense parsing assistant. Extract expense information from user messages.
+// Shared categories and JSON format to avoid repetition
+const CATEGORIES = "Food, Travel, Entertainment, Bills, Shopping, Health, Education, Investments, Subscription, General";
+const JSON_FORMAT = '{"amount":<number>,"category":"<category>","description":"<brief>","merchant":"<name|null>","confidence":<0-1>}';
+const JSON_ERROR_FORMAT = '{"error":"<reason>"}';
 
-Categories available: Food, Travel, Entertainment, Bills, Shopping, Health, Education, Investments, Subscription, General
+// Text prompt for free models (verbose is fine — no cost)
+const TEXT_SYSTEM_PROMPT = `Extract expense info from text. Categories: ${CATEGORIES}.
+Respond ONLY with JSON: ${JSON_FORMAT}
+If unparseable: ${JSON_ERROR_FORMAT}`;
 
-For text messages like "Lunch 450" or "Uber to airport 250":
-- Extract the amount (number)
-- Determine the category based on context
-- Extract description/merchant if mentioned
-
-Always respond in this exact JSON format only, no other text:
-{"amount": <number>, "category": "<category>", "description": "<brief description>", "merchant": "<merchant name if known>", "confidence": <0.0 to 1.0>}
-
-If you cannot parse the expense, respond with:
-{"error": "<reason>"}`;
-
-const VISION_SYSTEM_PROMPT = `You are an expense parsing assistant. Extract payment/expense information from UPI payment screenshots, receipts, invoices, or transaction confirmations.
-
-Categories available: Food, Travel, Entertainment, Bills, Shopping, Health, Education, Investments, Subscription, General
-
-Look for:
-- Amount paid (₹ symbol, numbers)
-- Merchant/recipient name
-- Transaction description or purpose
-- Date if visible
-
-Common patterns in Indian UPI apps (Paytm, PhonePe, GPay):
-- "Paid to [merchant]" or "Sent to [person]"
-- Amount shown prominently with ₹ symbol
-- Transaction successful/completed indicators
-
-Always respond in this exact JSON format only, no other text:
-{"amount": <number>, "category": "<category>", "description": "<brief description>", "merchant": "<merchant/recipient name>", "confidence": <0.0 to 1.0>}
-
-If you cannot parse the expense, respond with:
-{"error": "<reason>"}`;
+// Vision prompt — optimized for token efficiency (paid model)
+const VISION_SYSTEM_PROMPT = `Extract expense from this receipt/screenshot/invoice. Indian UPI apps (GPay, PhonePe, Paytm) common. Categories: ${CATEGORIES}.
+JSON only: ${JSON_FORMAT}
+If unparseable: ${JSON_ERROR_FORMAT}`;
 
 /**
  * Parse a JSON response from AI, extracting the expense data.
@@ -110,10 +89,11 @@ export async function parseExpenseWithAI(text: string): Promise<AIResponse> {
         route: "fallback",
         models: FREE_TEXT_MODELS,
         messages: [
-          { role: "user", content: `${TEXT_SYSTEM_PROMPT}\n\nParse this expense: "${text}"` },
+          { role: "system", content: TEXT_SYSTEM_PROMPT },
+          { role: "user", content: `Parse: "${text}"` },
         ],
         temperature: 0.1,
-        max_tokens: 200,
+        max_tokens: 150,
       }),
     });
 
@@ -161,13 +141,12 @@ export async function parseReceiptWithVision(
           url: `data:${mimeType};base64,${imageBase64}`,
         },
       },
-      {
-        type: "text",
-        text: caption
-          ? `${VISION_SYSTEM_PROMPT}\n\nUser caption: "${caption}"\n\nExtract the expense from the image above.`
-          : `${VISION_SYSTEM_PROMPT}\n\nExtract the expense from the image above.`,
-      },
     ];
+
+    // Only add caption as text if provided
+    if (caption) {
+      userContent.push({ type: "text", text: `Caption: "${caption}"` });
+    }
 
     const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
@@ -180,10 +159,11 @@ export async function parseReceiptWithVision(
       body: JSON.stringify({
         model: VISION_MODEL,
         messages: [
+          { role: "system", content: VISION_SYSTEM_PROMPT },
           { role: "user", content: userContent },
         ],
         temperature: 0.1,
-        max_tokens: 300,
+        max_tokens: 150,
       }),
     });
 
@@ -226,7 +206,6 @@ export async function parsePDFWithVision(
     console.log("Sending PDF to GPT-4.1 Nano vision...");
 
     // GPT-4.1 Nano supports PDF as an image input via base64
-    // We send the first page as a rendered image
     const userContent: Array<Record<string, unknown>> = [
       {
         type: "image_url",
@@ -234,13 +213,12 @@ export async function parsePDFWithVision(
           url: `data:application/pdf;base64,${pdfBase64}`,
         },
       },
-      {
-        type: "text",
-        text: caption
-          ? `${VISION_SYSTEM_PROMPT}\n\nUser caption: "${caption}"\n\nExtract the expense from the PDF document above.`
-          : `${VISION_SYSTEM_PROMPT}\n\nExtract the expense from the PDF document above.`,
-      },
     ];
+
+    // Only add caption as text if provided
+    if (caption) {
+      userContent.push({ type: "text", text: `Caption: "${caption}"` });
+    }
 
     const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
@@ -253,10 +231,11 @@ export async function parsePDFWithVision(
       body: JSON.stringify({
         model: VISION_MODEL,
         messages: [
+          { role: "system", content: VISION_SYSTEM_PROMPT },
           { role: "user", content: userContent },
         ],
         temperature: 0.1,
-        max_tokens: 300,
+        max_tokens: 150,
       }),
     });
 

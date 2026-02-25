@@ -45,8 +45,17 @@ If unparseable: ${JSON_ERROR_FORMAT}`;
 
 // Vision prompt — concise for token efficiency (paid model)
 function getVisionSystemPrompt(currency: string) {
+  // Give concrete conversion examples based on user's currency
+  const conversionExamples = currency === "INR"
+    ? "Example: $10.80 USD on receipt → amount=918 (10.80×85). ₹500 on receipt → amount=500."
+    : currency === "USD"
+      ? "Example: ₹918 INR on receipt → amount=10.80 (918÷85). $10 on receipt → amount=10."
+      : currency === "EUR"
+        ? "Example: $10 USD on receipt → amount=9.20 (10×0.92). €50 on receipt → amount=50."
+        : `Convert any foreign currency to ${currency} using current approximate rates.`;
+
   return `Extract expense from this receipt/screenshot/invoice. Indian UPI apps (GPay, PhonePe, Paytm) common. Categories: ${CATEGORIES}.
-IMPORTANT: Amount MUST be in ${currency}. If receipt shows a different currency, convert approximately.`;
+CURRENCY RULE: Output amount MUST be in ${currency}. If receipt currency differs, CONVERT it. ${conversionExamples} NEVER return the foreign amount as-is.`;
 }
 
 // Structured output schema for GPT-4.1 Nano (guarantees valid JSON)

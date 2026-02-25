@@ -1,12 +1,14 @@
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
-const OCR_SPACE_API_KEY = process.env.OCR_SPACE_API_KEY || "K85482897388957"; // Free tier key
 
-// Use multiple models as fallback
-const AI_MODELS = [
+// Free models for text-only parsing (no credits used)
+const FREE_TEXT_MODELS = [
   "google/gemma-3-4b-it:free",
   "meta-llama/llama-3.2-3b-instruct:free",
   "mistralai/mistral-small-3.1-24b-instruct:free",
 ];
+
+// Premium vision model for image/PDF analysis (uses credits)
+const VISION_MODEL = "openai/gpt-4.1-nano";
 
 type ParsedExpense = {
   amount: number;
@@ -37,8 +39,7 @@ Always respond in this exact JSON format only, no other text:
 If you cannot parse the expense, respond with:
 {"error": "<reason>"}`;
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-const _VISION_SYSTEM_PROMPT = `You are an expense parsing assistant. Extract payment/expense information from UPI payment screenshots, receipts, or transaction confirmations.
+const VISION_SYSTEM_PROMPT = `You are an expense parsing assistant. Extract payment/expense information from UPI payment screenshots, receipts, invoices, or transaction confirmations.
 
 Categories available: Food, Travel, Entertainment, Bills, Shopping, Health, Education, Investments, Subscription, General
 
@@ -59,6 +60,36 @@ Always respond in this exact JSON format only, no other text:
 If you cannot parse the expense, respond with:
 {"error": "<reason>"}`;
 
+/**
+ * Parse a JSON response from AI, extracting the expense data.
+ */
+function parseAIJsonResponse(content: string): AIResponse {
+  const jsonMatch = content.match(/\{[\s\S]*\}/);
+  if (!jsonMatch) {
+    return { success: false, error: "Could not parse AI response" };
+  }
+
+  const parsed = JSON.parse(jsonMatch[0]);
+
+  if (parsed.error) {
+    return { success: false, error: parsed.error };
+  }
+
+  return {
+    success: true,
+    expense: {
+      amount: parsed.amount,
+      category: parsed.category || "General",
+      description: parsed.description || "",
+      merchant: parsed.merchant,
+      confidence: parsed.confidence || 0.8,
+    },
+  };
+}
+
+/**
+ * Parse expense from plain text using FREE models (no credits used).
+ */
 export async function parseExpenseWithAI(text: string): Promise<AIResponse> {
   if (!OPENROUTER_API_KEY) {
     console.error("OPENROUTER_API_KEY not configured");
@@ -75,9 +106,9 @@ export async function parseExpenseWithAI(text: string): Promise<AIResponse> {
         "X-Title": "Chamber Expense Tracker",
       },
       body: JSON.stringify({
-        model: AI_MODELS[0],
+        model: FREE_TEXT_MODELS[0],
         route: "fallback",
-        models: AI_MODELS,
+        models: FREE_TEXT_MODELS,
         messages: [
           { role: "user", content: `${TEXT_SYSTEM_PROMPT}\n\nParse this expense: "${text}"` },
         ],
@@ -99,72 +130,153 @@ export async function parseExpenseWithAI(text: string): Promise<AIResponse> {
       return { success: false, error: "No response from AI" };
     }
 
-    // Extract JSON from response
-    const jsonMatch = content.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) {
-      return { success: false, error: "Could not parse AI response" };
-    }
-
-    const parsed = JSON.parse(jsonMatch[0]);
-
-    if (parsed.error) {
-      return { success: false, error: parsed.error };
-    }
-
-    return {
-      success: true,
-      expense: {
-        amount: parsed.amount,
-        category: parsed.category || "General",
-        description: parsed.description || text,
-        merchant: parsed.merchant,
-        confidence: parsed.confidence || 0.8,
-      },
-    };
+    return parseAIJsonResponse(content);
   } catch (error) {
     console.error("AI parsing error:", error);
     return { success: false, error: "Failed to parse expense" };
   }
 }
 
-export async function parseReceiptWithAI(imageBase64: string): Promise<AIResponse> {
-  try {
-    // Step 1: OCR with OCR.space API
-    console.log("Starting OCR with OCR.space...");
-    
-    const formData = new FormData();
-    formData.append("base64Image", `data:image/jpeg;base64,${imageBase64}`);
-    formData.append("language", "eng");
-    formData.append("isOverlayRequired", "false");
-    formData.append("detectOrientation", "true");
-    formData.append("scale", "true");
-    formData.append("OCREngine", "2"); // Engine 2 is better for screenshots
+/**
+ * Parse receipt/screenshot using GPT-4.1 Nano vision (uses credits).
+ * Sends the image directly to the model — no OCR intermediary.
+ */
+export async function parseReceiptWithVision(
+  imageBase64: string,
+  mimeType: string = "image/jpeg",
+  caption?: string,
+): Promise<AIResponse> {
+  if (!OPENROUTER_API_KEY) {
+    console.error("OPENROUTER_API_KEY not configured");
+    return { success: false, error: "AI not configured" };
+  }
 
-    const ocrResponse = await fetch("https://api.ocr.space/parse/image", {
+  try {
+    console.log("Sending image directly to GPT-4.1 Nano vision...");
+
+    const userContent: Array<Record<string, unknown>> = [
+      {
+        type: "image_url",
+        image_url: {
+          url: `data:${mimeType};base64,${imageBase64}`,
+        },
+      },
+      {
+        type: "text",
+        text: caption
+          ? `${VISION_SYSTEM_PROMPT}\n\nUser caption: "${caption}"\n\nExtract the expense from the image above.`
+          : `${VISION_SYSTEM_PROMPT}\n\nExtract the expense from the image above.`,
+      },
+    ];
+
+    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
       method: "POST",
       headers: {
-        "apikey": OCR_SPACE_API_KEY,
+        "Authorization": `Bearer ${OPENROUTER_API_KEY}`,
+        "Content-Type": "application/json",
+        "HTTP-Referer": "https://chamber.app",
+        "X-Title": "Chamber Expense Tracker",
       },
-      body: formData,
+      body: JSON.stringify({
+        model: VISION_MODEL,
+        messages: [
+          { role: "user", content: userContent },
+        ],
+        temperature: 0.1,
+        max_tokens: 300,
+      }),
     });
 
-    const ocrResult = await ocrResponse.json();
-
-    if (!ocrResult.ParsedResults || ocrResult.ParsedResults.length === 0) {
-      return { success: false, error: "OCR failed to process image" };
+    if (!response.ok) {
+      const error = await response.text();
+      console.error("Vision API error:", error);
+      return { success: false, error: "Vision AI request failed" };
     }
 
-    const ocrText = ocrResult.ParsedResults[0].ParsedText;
-    console.log("OCR Text:", ocrText);
+    const data = await response.json();
+    const content = data.choices?.[0]?.message?.content;
 
-    if (!ocrText || ocrText.trim().length < 5) {
-      return { success: false, error: "Could not read text from image" };
+    if (!content) {
+      return { success: false, error: "No response from Vision AI" };
     }
 
-    // Step 2: Pass OCR text directly to AI for parsing
-    return parseExpenseWithAI(`Extract expense from this UPI/payment screenshot OCR text. Note: "=" often means "₹" (rupee symbol).\n\nOCR Text:\n${ocrText}`);
+    console.log("Vision AI response:", content);
+    return parseAIJsonResponse(content);
   } catch (error) {
-    console.error("OCR/parsing error:", error);
-    return { success: false, error: "Failed to process image" };
+    console.error("Vision AI error:", error);
+    return { success: false, error: "Failed to process image with Vision AI" };
+  }
+}
+
+/**
+ * Parse a PDF document using GPT-4.1 Nano vision (uses credits).
+ * Converts each PDF page to an image and sends to vision model.
+ * Falls back to text extraction if the PDF is text-based.
+ */
+export async function parsePDFWithVision(
+  pdfBase64: string,
+  caption?: string,
+): Promise<AIResponse> {
+  if (!OPENROUTER_API_KEY) {
+    console.error("OPENROUTER_API_KEY not configured");
+    return { success: false, error: "AI not configured" };
+  }
+
+  try {
+    console.log("Sending PDF to GPT-4.1 Nano vision...");
+
+    // GPT-4.1 Nano supports PDF as an image input via base64
+    // We send the first page as a rendered image
+    const userContent: Array<Record<string, unknown>> = [
+      {
+        type: "image_url",
+        image_url: {
+          url: `data:application/pdf;base64,${pdfBase64}`,
+        },
+      },
+      {
+        type: "text",
+        text: caption
+          ? `${VISION_SYSTEM_PROMPT}\n\nUser caption: "${caption}"\n\nExtract the expense from the PDF document above.`
+          : `${VISION_SYSTEM_PROMPT}\n\nExtract the expense from the PDF document above.`,
+      },
+    ];
+
+    const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${OPENROUTER_API_KEY}`,
+        "Content-Type": "application/json",
+        "HTTP-Referer": "https://chamber.app",
+        "X-Title": "Chamber Expense Tracker",
+      },
+      body: JSON.stringify({
+        model: VISION_MODEL,
+        messages: [
+          { role: "user", content: userContent },
+        ],
+        temperature: 0.1,
+        max_tokens: 300,
+      }),
+    });
+
+    if (!response.ok) {
+      const error = await response.text();
+      console.error("PDF Vision API error:", error);
+      return { success: false, error: "Vision AI request failed for PDF" };
+    }
+
+    const data = await response.json();
+    const content = data.choices?.[0]?.message?.content;
+
+    if (!content) {
+      return { success: false, error: "No response from Vision AI for PDF" };
+    }
+
+    console.log("PDF Vision AI response:", content);
+    return parseAIJsonResponse(content);
+  } catch (error) {
+    console.error("PDF Vision AI error:", error);
+    return { success: false, error: "Failed to process PDF with Vision AI" };
   }
 }

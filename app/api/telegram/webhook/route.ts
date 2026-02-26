@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { parseExpenseWithAI, parseReceiptWithAI } from "@/lib/ai";
+import { parseExpenseWithAI, parseReceiptWithVision, parsePDFWithVision } from "@/lib/ai";
 import { notifyUser } from "@/app/api/events/route";
 import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
-import pdfParse from "pdf-parse";
 import { checkAndSendSubscriptionAlerts } from "@/lib/subscription-alerts";
 import { getAccountsByUserId } from "@/lib/actions/accounts";
 
@@ -305,7 +304,7 @@ async function handleExpenseMessage(chatId: number, text: string) {
   // Use AI to parse the expense
   await sendTelegramMessage(chatId, "🤖 Processing...");
 
-  const aiResult = await parseExpenseWithAI(text);
+  const aiResult = await parseExpenseWithAI(text, userSettings.currency || "INR");
 
   let amount: number;
   let category: string;
@@ -390,7 +389,7 @@ async function handlePhotoMessage(chatId: number, photo: TelegramMessage["photo"
     return;
   }
 
-  await sendTelegramMessage(chatId, "🤖 Analyzing receipt...");
+  await sendTelegramMessage(chatId, "🤖 Analyzing receipt with AI vision...");
 
   // Get the largest photo (last in array)
   const largestPhoto = photo[photo.length - 1];
@@ -410,13 +409,14 @@ async function handlePhotoMessage(chatId: number, photo: TelegramMessage["photo"
 
   let aiResult;
 
-  // If caption has useful expense info (contains amount), use it; otherwise do OCR
+  // If caption has useful expense info (contains amount), use free text model to save credits
   if (caption && caption.trim().length > 5 && hasUsefulExpenseInfo(caption)) {
-    console.log("Using caption for parsing:", caption);
-    aiResult = await parseExpenseWithAI(`User sent a payment screenshot with this caption: "${caption}"`);
+    console.log("Caption has expense info, using free text model:", caption);
+    aiResult = await parseExpenseWithAI(`User sent a payment screenshot with this caption: "${caption}"`, userSettings.currency || "INR");
   } else {
-    console.log("Caption not useful, using OCR");
-    aiResult = await parseReceiptWithAI(imageBase64);
+    // Send image directly to GPT-4.1 Nano vision — no OCR needed
+    console.log("Sending image to Vision AI (GPT-4.1 Nano)...");
+    aiResult = await parseReceiptWithVision(imageBase64, "image/jpeg", caption, userSettings.currency || "INR");
   }
 
   if (!aiResult.success || !aiResult.expense) {
@@ -477,7 +477,7 @@ async function handlePhotoMessage(chatId: number, photo: TelegramMessage["photo"
   await sendTelegramMessage(chatId, confirmMsg, keyboard);
 }
 
-// Handle PDF document messages
+// Handle PDF document messages — now also supports image files
 async function handleDocumentMessage(chatId: number, document: TelegramMessage["document"], caption?: string) {
   // Find user by chat ID
   const userSettings = await db.userSettings.findFirst({
@@ -497,48 +497,45 @@ async function handleDocumentMessage(chatId: number, document: TelegramMessage["
     return;
   }
 
-  // Check if it's a PDF
-  const isPdf = document.mime_type === "application/pdf" || document.file_name?.toLowerCase().endsWith(".pdf");
+  const mimeType = document.mime_type || "";
+  const isPdf = mimeType === "application/pdf" || document.file_name?.toLowerCase().endsWith(".pdf");
+  const isImage = mimeType.startsWith("image/");
 
-  if (!isPdf) {
-    await sendTelegramMessage(chatId, "❌ Only PDF invoices are supported. Please send a PDF file or an image.");
+  if (!isPdf && !isImage) {
+    await sendTelegramMessage(chatId, "❌ Only PDF invoices and images are supported. Please send a PDF or image file.");
     return;
   }
 
-  await sendTelegramMessage(chatId, "📄 Extracting text from PDF...");
+  await sendTelegramMessage(chatId, "🤖 Analyzing document with AI vision...");
 
-  // Download the PDF
+  // Download the file
   const fileUrl = await getFileUrl(document.file_id);
   if (!fileUrl) {
-    await sendTelegramMessage(chatId, "❌ Could not download the PDF.");
+    await sendTelegramMessage(chatId, "❌ Could not download the document.");
     return;
   }
 
   const response = await fetch(fileUrl);
   const arrayBuffer = await response.arrayBuffer();
-  const pdfBuffer = Buffer.from(arrayBuffer);
+  const fileBuffer = Buffer.from(arrayBuffer);
+  const fileBase64 = fileBuffer.toString("base64");
 
-  // Extract text from PDF
-  let pdfText = "";
-  try {
-    const pdfData = await pdfParse(pdfBuffer);
-    pdfText = pdfData.text;
-    console.log("PDF text extracted:", pdfText.substring(0, 500));
-  } catch (error) {
-    console.error("PDF parse error:", error);
-    await sendTelegramMessage(chatId, "❌ Could not extract text from PDF. Please send an image instead.");
-    return;
+  let aiResult;
+
+  // If caption has useful expense info, use free text model to save credits
+  if (caption && caption.trim().length > 5 && hasUsefulExpenseInfo(caption)) {
+    console.log("Caption has expense info, using free text model:", caption);
+    aiResult = await parseExpenseWithAI(
+      `User sent a ${isPdf ? "PDF invoice" : "image"} with caption: "${caption}"`,
+      userSettings.currency || "INR"
+    );
+  } else if (isPdf) {
+    // Send PDF directly to vision model
+    aiResult = await parsePDFWithVision(fileBase64, caption, userSettings.currency || "INR");
+  } else {
+    // Send image directly to vision model
+    aiResult = await parseReceiptWithVision(fileBase64, mimeType, caption, userSettings.currency || "INR");
   }
-
-  // Use caption if provided, otherwise use extracted PDF text
-  const textToParse = caption && hasUsefulExpenseInfo(caption)
-    ? `User sent a PDF invoice with caption: "${caption}"`
-    : `Extract expense details from this invoice text:\n\n${pdfText.substring(0, 2000)}`;
-
-  await sendTelegramMessage(chatId, "🤖 Analyzing invoice...");
-
-  // Parse expense with AI
-  const aiResult = await parseExpenseWithAI(textToParse);
 
   if (!aiResult.success || !aiResult.expense) {
     await sendTelegramMessage(
@@ -550,7 +547,7 @@ async function handleDocumentMessage(chatId: number, document: TelegramMessage["
 
   const { amount, category, description, merchant } = aiResult.expense;
 
-  // Upload PDF to R2 (reuse the already downloaded buffer)
+  // Upload file to R2
   let receiptUrl: string | undefined;
   try {
     const accountId = process.env.R2_ACCOUNT_ID;
@@ -565,19 +562,20 @@ async function handleDocumentMessage(chatId: number, document: TelegramMessage["
         credentials: { accessKeyId, secretAccessKey },
       });
 
-      const key = `receipts/${userSettings.userId}/${Date.now()}.pdf`;
+      const ext = isPdf ? "pdf" : (mimeType.split("/")[1] || "jpg");
+      const key = `receipts/${userSettings.userId}/${Date.now()}.${ext}`;
       await r2Client.send(
         new PutObjectCommand({
           Bucket: bucketName,
           Key: key,
-          Body: pdfBuffer,
-          ContentType: "application/pdf",
+          Body: fileBuffer,
+          ContentType: mimeType || (isPdf ? "application/pdf" : "image/jpeg"),
         })
       );
       receiptUrl = key;
     }
   } catch (error) {
-    console.error("Failed to upload PDF to R2:", error);
+    console.error("Failed to upload document to R2:", error);
   }
 
   // Check for duplicate expense
@@ -601,7 +599,7 @@ async function handleDocumentMessage(chatId: number, document: TelegramMessage["
   let confirmMsg = `📋 <b>Select payment method:</b>\n\n`;
   if (merchant) confirmMsg += `🏪 ${merchant}\n`;
   confirmMsg += `💰 ₹${amount.toFixed(2)}\n📁 ${category}\n📝 ${description}`;
-  confirmMsg += `\n📄 PDF attached`;
+  confirmMsg += `\n📄 ${isPdf ? "PDF" : "Image"} attached`;
 
   if (isDuplicate) {
     confirmMsg += `\n\n⚠️ <b>Warning:</b> Duplicate amount today.`;

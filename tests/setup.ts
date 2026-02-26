@@ -71,7 +71,6 @@ vi.mock("@clerk/nextjs", () => ({
 // Mock environment variables
 process.env.DATABASE_URL = "postgresql://test:test@localhost:5432/test";
 process.env.OPENROUTER_API_KEY = "test-api-key";
-process.env.OCR_SPACE_API_KEY = "test-ocr-key";
 process.env.R2_ACCOUNT_ID = "test-account-id";
 process.env.R2_ACCESS_KEY_ID = "test-access-key";
 process.env.R2_SECRET_ACCESS_KEY = "test-secret-key";

@@ -117,13 +117,24 @@ feature/xyz (your work)  ← ALL changes happen here
    git commit -m "docs: update API documentation"
    ```
 
-3. **Push and create a Pull Request**:
+3. **Run all checks before committing** (MANDATORY):
+   ```bash
+   # Always run these before committing
+   pnpm lint        # Check code style
+   pnpm test:run    # Run unit tests
+   pnpm build       # Verify build passes
+   ```
+   **Never commit if any check fails.** Fix issues first.
+
+4. **Push and create a Pull Request**:
    ```bash
    git push origin feature/my-feature
    # Create PR from GitHub UI targeting `dev` branch
    ```
 
-4. **Never commit or merge directly to `dev` or `main`** — All changes go through PR review.
+5. **Never commit or merge directly to `dev` or `main`** — All changes go through PR review.
+
+6. **Never force push** — Force pushes (`git push --force` or `git push -f`) rewrite history and can cause issues for collaborators. If you need to update a branch, use `git pull origin dev` first, then resolve conflicts if needed.
 
 ### Commit Message Format
 

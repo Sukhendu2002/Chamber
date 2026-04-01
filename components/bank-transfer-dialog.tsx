@@ -57,10 +57,17 @@ export function BankTransferDialog({ accounts, currency }: BankTransferDialogPro
   const [note, setNote] = useState("");
   const [date, setDate] = useState(toLocalDateString());
 
-  const currencySymbol =
-    currency === "INR" ? "₹" :
-    currency === "USD" ? "$" :
-    currency === "EUR" ? "€" : "£";
+  const currencySymbol = (() => {
+    try {
+      return (
+        new Intl.NumberFormat("en", { style: "currency", currency, minimumFractionDigits: 0 })
+          .formatToParts(0)
+          .find((p) => p.type === "currency")?.value ?? currency
+      );
+    } catch {
+      return currency;
+    }
+  })();
 
   const formatCurrency = (val: number) =>
     new Intl.NumberFormat("en-IN", {

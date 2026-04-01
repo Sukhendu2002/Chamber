@@ -36,6 +36,7 @@ const txMock = {
     delete: vi.fn(),
   },
   account: {
+    findFirst: vi.fn(),
     update: vi.fn(),
   },
   balanceHistory: {
@@ -74,14 +75,15 @@ describe("Transfer Actions", () => {
       async (fn: (tx: typeof txMock) => Promise<unknown>) => fn(txMock)
     );
     txMock.transfer.create.mockResolvedValue(mockTransfer);
-    txMock.account.update.mockResolvedValue({});
+    txMock.account.findFirst.mockReset();
+    txMock.account.update.mockResolvedValue({ currentBalance: 0 });
     txMock.balanceHistory.create.mockResolvedValue({});
     txMock.transfer.delete.mockResolvedValue({});
   });
 
   describe("createTransfer", () => {
     it("should create a transfer and update both account balances", async () => {
-      mockDb.account.findFirst
+      txMock.account.findFirst
         .mockResolvedValueOnce(mockFromAccount)
         .mockResolvedValueOnce(mockToAccount);
 
@@ -107,20 +109,18 @@ describe("Transfer Actions", () => {
           }),
         })
       );
-      // Both accounts should be updated
+      // Both accounts should be updated with atomic increments
       expect(txMock.account.update).toHaveBeenCalledTimes(2);
-      // From account deducted: 10000 - 2000 = 8000
       expect(txMock.account.update).toHaveBeenCalledWith(
         expect.objectContaining({
           where: { id: "account-1" },
-          data: { currentBalance: 8000 },
+          data: { currentBalance: { increment: -2000 } },
         })
       );
-      // To account credited: 5000 + 2000 = 7000
       expect(txMock.account.update).toHaveBeenCalledWith(
         expect.objectContaining({
           where: { id: "account-2" },
-          data: { currentBalance: 7000 },
+          data: { currentBalance: { increment: 2000 } },
         })
       );
       // Balance history created for both accounts
@@ -152,7 +152,7 @@ describe("Transfer Actions", () => {
     });
 
     it("should throw when source account is not found", async () => {
-      mockDb.account.findFirst
+      txMock.account.findFirst
         .mockResolvedValueOnce(null)
         .mockResolvedValueOnce(mockToAccount);
 
@@ -165,7 +165,7 @@ describe("Transfer Actions", () => {
     });
 
     it("should throw when destination account is not found", async () => {
-      mockDb.account.findFirst
+      txMock.account.findFirst
         .mockResolvedValueOnce(mockFromAccount)
         .mockResolvedValueOnce(null);
 
@@ -177,11 +177,26 @@ describe("Transfer Actions", () => {
       ).rejects.toThrow("Destination account not found");
     });
 
+    it("should throw when source account has insufficient funds", async () => {
+      txMock.account.findFirst
+        .mockResolvedValueOnce({ ...mockFromAccount, currentBalance: 100 })
+        .mockResolvedValueOnce(mockToAccount);
+
+      vi.resetModules();
+      const { createTransfer } = await import("@/lib/actions/transfers");
+
+      await expect(
+        createTransfer({ fromAccountId: "account-1", toAccountId: "account-2", amount: 500 })
+      ).rejects.toThrow("Insufficient funds");
+
+      expect(txMock.transfer.create).not.toHaveBeenCalled();
+    });
+
     it("should throw for unauthenticated user", async () => {
+      vi.resetModules();
       const { auth } = await import("@clerk/nextjs/server");
       vi.mocked(auth).mockResolvedValueOnce({ userId: null } as never);
 
-      vi.resetModules();
       const { createTransfer } = await import("@/lib/actions/transfers");
 
       await expect(
@@ -254,18 +269,18 @@ describe("Transfer Actions", () => {
 
       expect(mockDb.$transaction).toHaveBeenCalledTimes(1);
       expect(txMock.transfer.delete).toHaveBeenCalledWith({ where: { id: "transfer-1" } });
-      // From account restored: 8000 + 2000 = 10000
+      // From account restored with atomic increment
       expect(txMock.account.update).toHaveBeenCalledWith(
         expect.objectContaining({
           where: { id: "account-1" },
-          data: { currentBalance: 10000 },
+          data: { currentBalance: { increment: 2000 } },
         })
       );
-      // To account reversed: 7000 - 2000 = 5000
+      // To account reversed with atomic increment
       expect(txMock.account.update).toHaveBeenCalledWith(
         expect.objectContaining({
           where: { id: "account-2" },
-          data: { currentBalance: 5000 },
+          data: { currentBalance: { increment: -2000 } },
         })
       );
     });

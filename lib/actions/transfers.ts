@@ -37,21 +37,23 @@ export async function createTransfer(input: CreateTransferInput) {
     throw new Error("Transfer amount must be greater than zero");
   }
 
-  // Verify both accounts belong to this user
-  const [fromAccount, toAccount] = await Promise.all([
-    db.account.findFirst({ where: { id: input.fromAccountId, userId, isActive: true } }),
-    db.account.findFirst({ where: { id: input.toAccountId, userId, isActive: true } }),
-  ]);
-
-  if (!fromAccount) throw new Error("Source account not found");
-  if (!toAccount) throw new Error("Destination account not found");
-
   const transferDate = input.date ?? new Date();
-  const newFromBalance = fromAccount.currentBalance - input.amount;
-  const newToBalance = toAccount.currentBalance + input.amount;
 
-  // Execute all DB operations in a transaction
+  // Accounts are fetched inside the transaction to prevent TOCTOU race conditions.
+  // Atomic increments are used for balance updates to avoid stale-read overwrites.
   const transfer = await db.$transaction(async (tx) => {
+    const [fromAccount, toAccount] = await Promise.all([
+      tx.account.findFirst({ where: { id: input.fromAccountId, userId, isActive: true } }),
+      tx.account.findFirst({ where: { id: input.toAccountId, userId, isActive: true } }),
+    ]);
+
+    if (!fromAccount) throw new Error("Source account not found");
+    if (!toAccount) throw new Error("Destination account not found");
+
+    if (fromAccount.currentBalance < input.amount) {
+      throw new Error("Insufficient funds");
+    }
+
     const created = await tx.transfer.create({
       data: {
         userId,
@@ -63,29 +65,29 @@ export async function createTransfer(input: CreateTransferInput) {
       },
     });
 
-    await tx.account.update({
+    const updatedFrom = await tx.account.update({
       where: { id: input.fromAccountId },
-      data: { currentBalance: newFromBalance },
+      data: { currentBalance: { increment: -input.amount } },
     });
 
     await tx.balanceHistory.create({
       data: {
         accountId: input.fromAccountId,
-        balance: newFromBalance,
+        balance: updatedFrom.currentBalance,
         note: `Transfer to ${toAccount.name}${input.note ? ` — ${input.note}` : ""}`,
         date: transferDate,
       },
     });
 
-    await tx.account.update({
+    const updatedTo = await tx.account.update({
       where: { id: input.toAccountId },
-      data: { currentBalance: newToBalance },
+      data: { currentBalance: { increment: input.amount } },
     });
 
     await tx.balanceHistory.create({
       data: {
         accountId: input.toAccountId,
-        balance: newToBalance,
+        balance: updatedTo.currentBalance,
         note: `Transfer from ${fromAccount.name}${input.note ? ` — ${input.note}` : ""}`,
         date: transferDate,
       },
@@ -135,44 +137,45 @@ export async function deleteTransfer(transferId: string) {
 
   const transfer = await db.transfer.findFirst({
     where: { id: transferId, userId },
-    include: {
-      fromAccount: true,
-      toAccount: true,
+    select: {
+      id: true,
+      amount: true,
+      fromAccountId: true,
+      toAccountId: true,
+      fromAccount: { select: { name: true } },
+      toAccount: { select: { name: true } },
     },
   });
 
   if (!transfer) throw new Error("Transfer not found");
 
-  // Reverse the balance changes in a transaction
+  // Reverse the balance changes using atomic increments to avoid TOCTOU race conditions
   await db.$transaction(async (tx) => {
     await tx.transfer.delete({ where: { id: transferId } });
 
-    const restoredFromBalance = transfer.fromAccount.currentBalance + transfer.amount;
-    const restoredToBalance = transfer.toAccount.currentBalance - transfer.amount;
-
-    await tx.account.update({
+    const updatedFrom = await tx.account.update({
       where: { id: transfer.fromAccountId },
-      data: { currentBalance: restoredFromBalance },
+      data: { currentBalance: { increment: transfer.amount } },
     });
 
     await tx.balanceHistory.create({
       data: {
         accountId: transfer.fromAccountId,
-        balance: restoredFromBalance,
+        balance: updatedFrom.currentBalance,
         note: `Transfer reversal — to ${transfer.toAccount.name}`,
         date: new Date(),
       },
     });
 
-    await tx.account.update({
+    const updatedTo = await tx.account.update({
       where: { id: transfer.toAccountId },
-      data: { currentBalance: restoredToBalance },
+      data: { currentBalance: { increment: -transfer.amount } },
     });
 
     await tx.balanceHistory.create({
       data: {
         accountId: transfer.toAccountId,
-        balance: restoredToBalance,
+        balance: updatedTo.currentBalance,
         note: `Transfer reversal — from ${transfer.fromAccount.name}`,
         date: new Date(),
       },

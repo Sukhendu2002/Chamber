@@ -10,6 +10,7 @@ import {
 } from "@tabler/icons-react";
 import { AccountList } from "@/components/account-list";
 import { AddAccountDialog } from "@/components/add-account-dialog";
+import { BankTransferDialog } from "@/components/bank-transfer-dialog";
 
 export default async function AccountsPage() {
   const [accounts, stats, settings] = await Promise.all([
@@ -36,7 +37,18 @@ export default async function AccountsPage() {
             Track your bank balances and investments
           </p>
         </div>
-        <AddAccountDialog currency={settings.currency} />
+        <div className="flex items-center gap-2">
+          <BankTransferDialog
+            accounts={accounts.map((a) => ({
+              id: a.id,
+              name: a.name,
+              type: a.type,
+              currentBalance: a.currentBalance,
+            }))}
+            currency={settings.currency}
+          />
+          <AddAccountDialog currency={settings.currency} />
+        </div>
       </div>
 
       {/* Stats Cards */}

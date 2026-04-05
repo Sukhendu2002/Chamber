@@ -149,6 +149,7 @@ model Account {
   creditLimit   Float?          // Credit limit (for CREDIT_CARD accounts)
   isActive      Boolean         @default(true)
   showOnTelegram Boolean        @default(true) // Whether to show in Telegram bot payment options
+  includeInNetWorth Boolean     @default(true) // Whether to include in net worth calculation
   createdAt     DateTime        @default(now())
   updatedAt     DateTime        @updatedAt
   balanceHistory BalanceHistory[]

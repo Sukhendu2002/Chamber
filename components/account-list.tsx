@@ -60,6 +60,7 @@ import {
   IconQuestionMark,
   IconHistory,
   IconBrandTelegram,
+  IconCalculator,
 } from "@tabler/icons-react";
 import { 
   updateBalance, 
@@ -68,6 +69,7 @@ import {
   getAccountWithHistory,
   deleteBalanceHistory,
   toggleShowOnTelegram,
+  toggleIncludeInNetWorth,
 } from "@/lib/actions/accounts";
 
 type BalanceHistoryItem = {
@@ -86,6 +88,7 @@ type Account = {
   description: string | null;
   isActive: boolean;
   showOnTelegram: boolean;
+  includeInNetWorth: boolean;
   balanceHistory: BalanceHistoryItem[];
 };
 
@@ -326,6 +329,15 @@ export function AccountList({ accounts, currency }: AccountListProps) {
           <IconBrandTelegram className="mr-2 h-4 w-4" />
           {account.showOnTelegram ? "Hide from Telegram" : "Show on Telegram"}
         </DropdownMenuItem>
+        <DropdownMenuItem
+          onClick={async () => {
+            await toggleIncludeInNetWorth(account.id);
+            router.refresh();
+          }}
+        >
+          <IconCalculator className="mr-2 h-4 w-4" />
+          {account.includeInNetWorth ? "Exclude from Net Worth" : "Include in Net Worth"}
+        </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem
           className="text-destructive"
@@ -393,6 +405,9 @@ export function AccountList({ accounts, currency }: AccountListProps) {
                       {account.showOnTelegram && (
                         <IconBrandTelegram className="h-3.5 w-3.5 shrink-0 text-blue-400" />
                       )}
+                      {!account.includeInNetWorth && (
+                        <IconCalculator className="h-3.5 w-3.5 shrink-0 text-muted-foreground" title="Excluded from Net Worth" />
+                      )}
                     </div>
                     {account.description && (
                       <div className="text-xs text-muted-foreground truncate">
@@ -449,6 +464,9 @@ export function AccountList({ accounts, currency }: AccountListProps) {
                           {account.name}
                           {account.showOnTelegram && (
                             <IconBrandTelegram className="h-3.5 w-3.5 text-blue-400" title="Visible on Telegram" />
+                          )}
+                          {!account.includeInNetWorth && (
+                            <IconCalculator className="h-3.5 w-3.5 text-muted-foreground" title="Excluded from Net Worth" />
                           )}
                         </div>
                         {account.description && (

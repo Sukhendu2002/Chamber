@@ -631,6 +631,8 @@ if (options?.search) {
 
 ## Testing
 
+> **CRITICAL RULE: All new features MUST include appropriate tests.**
+
 ### Running Tests
 
 ```bash

@@ -245,6 +245,17 @@ export async function deleteAccount(id: string) {
 
   if (!existing) throw new Error("Account not found");
 
+  // Prevent deletion if transfers exist — the linked account's balance would be left incorrect
+  const transferCount = await db.transfer.count({
+    where: { OR: [{ fromAccountId: id }, { toAccountId: id }] },
+  });
+
+  if (transferCount > 0) {
+    throw new Error(
+      `Cannot delete account with existing transfers. Please delete the ${transferCount} transfer${transferCount === 1 ? "" : "s"} first.`
+    );
+  }
+
   // Delete account (cascade will delete history)
   await db.account.delete({
     where: { id },

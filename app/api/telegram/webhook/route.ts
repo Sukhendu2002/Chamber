@@ -82,7 +82,185 @@ const pendingExpenses = new Map<number, {
   expiresAt: number;
 }>();
 
-// Icon mapping for account types in Telegram keyboard
+// Handle summary command - /summary [today|week|month]
+async function handleSummaryCommand(chatId: number, args: string) {
+  const userSettings = await db.userSettings.findFirst({
+    where: { telegramChatId: chatId.toString() },
+  });
+
+  if (!userSettings) {
+    await sendTelegramMessage(
+      chatId,
+      "❌ Your Telegram account is not linked. Please link it from the Chamber dashboard first."
+    );
+    return;
+  }
+
+  const period = args || "today";
+  const now = new Date();
+  let startDate: Date;
+  const endDate: Date = new Date();
+  let periodLabel: string;
+
+  if (period === "today") {
+    startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    periodLabel = "Today";
+  } else if (period === "week") {
+    startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    periodLabel = "Last 7 Days";
+  } else if (period === "month") {
+    startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+    periodLabel = "This Month";
+  } else {
+    await sendTelegramMessage(
+      chatId,
+      "❓ Usage: <code>/summary [today|week|month]</code>\n\nExamples:\n• <code>/summary</code> - Today's summary\n• <code>/summary week</code> - Last 7 days\n• <code>/summary month</code> - This month"
+    );
+    return;
+  }
+
+  const expenses = await db.expense.findMany({
+    where: {
+      userId: userSettings.userId,
+      date: {
+        gte: startDate,
+        lte: endDate,
+      },
+    },
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+    select: {
+      amount: true,
+      category: true,
+      description: true,
+      merchant: true,
+      date: true,
+    },
+  });
+
+  let totalSpent = 0;
+  const categoryBreakdown: Record<string, number> = {};
+  const recentExpenses = expenses.slice(0, 5);
+
+  for (const exp of expenses) {
+    totalSpent += exp.amount;
+    categoryBreakdown[exp.category] = (categoryBreakdown[exp.category] || 0) + exp.amount;
+  }
+
+  const currency = userSettings.currency || "INR";
+  const currencySymbol = currency === "INR" ? "₹" : "$";
+
+  let message = `📊 <b>${periodLabel} Summary</b>\n\n`;
+  message += `💰 <b>Total:</b> ${currencySymbol}${totalSpent.toFixed(2)}\n`;
+  message += `📝 <b>Transactions:</b> ${expenses.length}\n`;
+
+  if (expenses.length > 0) {
+    const sortedCategories = Object.entries(categoryBreakdown)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5);
+
+    message += `\n<b>By Category:</b>\n`;
+    for (const [category, amount] of sortedCategories) {
+      const percentage = ((amount / totalSpent) * 100).toFixed(0);
+      message += `• ${category}: ${currencySymbol}${amount.toFixed(2)} (${percentage}%)\n`;
+    }
+
+    message += `\n<b>Recent Transactions:</b>\n`;
+    for (const exp of recentExpenses) {
+      const label = exp.merchant || exp.description || exp.category;
+      const date = new Date(exp.date).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+      message += `• ${label}: ${currencySymbol}${exp.amount.toFixed(2)} (${date})\n`;
+    }
+  } else {
+    message += `\n<i>No expenses recorded for ${periodLabel.toLowerCase()}.</i>`;
+  }
+
+  await sendTelegramMessage(chatId, message);
+}
+
+// Handle help command - /help
+async function handleHelpCommand(chatId: number) {
+  const helpMessage = `🤖 <b>Chamber Bot Commands</b>
+
+<b>Account Setup</b>
+• <code>/start &lt;code&gt;</code> - Link your Chamber account
+
+<b>Expense Management</b>
+• <code>/summary [today|week|month]</code> - View spending summary
+• <code>/accounts</code> - Check account balances
+• Send any text message - Add an expense via AI
+• Send a photo - Extract expense from receipt
+• Send a PDF - Extract expense from invoice
+
+<b>Need Help?</b>
+• Visit: <a href="https://chamber.vercel.app">chamber.vercel.app</a>
+
+💡 <i>Tip: You can also send voice messages to add expenses!</i>`;
+
+  await sendTelegramMessage(chatId, helpMessage);
+}
+
+// Handle accounts command - /accounts
+async function handleAccountsCommand(chatId: number) {
+  const userSettings = await db.userSettings.findFirst({
+    where: { telegramChatId: chatId.toString() },
+  });
+
+  if (!userSettings) {
+    await sendTelegramMessage(
+      chatId,
+      "❌ Your Telegram account is not linked. Please link it from the Chamber dashboard first.\n\nUse: <code>/start YOUR_CODE</code>"
+    );
+    return;
+  }
+
+  const accounts = await db.account.findMany({
+    where: { userId: userSettings.userId, isActive: true },
+    orderBy: [{ type: "asc" }, { name: "asc" }],
+  });
+
+  if (accounts.length === 0) {
+    await sendTelegramMessage(
+      chatId,
+      "📭 You don't have any active accounts yet.\n\nAdd accounts from the Chamber dashboard."
+    );
+    return;
+  }
+
+  const currency = userSettings.currency || "INR";
+  const currencySymbol = currency === "INR" ? "₹" : "$";
+
+  let totalBalance = 0;
+  let message = `📊 <b>Your Accounts</b>\n\n`;
+
+  // Group accounts by type
+  const accountsByType: Record<string, typeof accounts> = {};
+  for (const account of accounts) {
+    if (!accountsByType[account.type]) {
+      accountsByType[account.type] = [];
+    }
+    accountsByType[account.type].push(account);
+  }
+
+  // Display accounts grouped by type
+  const typeOrder = ["BANK", "INVESTMENT", "WALLET", "CASH", "CREDIT_CARD", "DEBIT_CARD", "OTHER"];
+  
+  for (const type of typeOrder) {
+    const typeAccounts = accountsByType[type];
+    if (!typeAccounts || typeAccounts.length === 0) continue;
+
+    const icon = ACCOUNT_TYPE_ICONS[type] || "💰";
+    
+    for (const account of typeAccounts) {
+      const balance = Number(account.currentBalance);
+      totalBalance += balance;
+      message += `${icon} <b>${account.name}</b>: ${currencySymbol}${balance.toFixed(2)}\n`;
+    }
+  }
+
+  message += `\n💵 <b>Total Balance:</b> ${currencySymbol}${totalBalance.toFixed(2)}`;
+
+  await sendTelegramMessage(chatId, message);
+}
 const ACCOUNT_TYPE_ICONS: Record<string, string> = {
   BANK: "\u{1F3E6}",
   INVESTMENT: "\u{1F4C8}",
@@ -733,6 +911,13 @@ export async function POST(request: NextRequest) {
         chatId,
         "👋 Welcome to Chamber!\n\nTo link your account, please generate a linking code from the Chamber dashboard and send:\n<code>/start YOUR_CODE</code>"
       );
+    } else if (text.startsWith("/summary")) {
+      const args = text.replace("/summary", "").trim().toLowerCase();
+      await handleSummaryCommand(chatId, args);
+    } else if (text.startsWith("/accounts")) {
+      await handleAccountsCommand(chatId);
+    } else if (text.startsWith("/help")) {
+      await handleHelpCommand(chatId);
     } else if (text && !text.startsWith("/")) {
       // If there's a pending expense, treat this as a correction
       if (pendingExpenses.has(chatId)) {

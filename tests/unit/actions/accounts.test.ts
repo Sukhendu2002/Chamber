@@ -18,6 +18,9 @@ const mockDb = {
         delete: vi.fn(),
         deleteMany: vi.fn(),
     },
+    transfer: {
+        count: vi.fn(),
+    },
 };
 
 vi.mock("@/lib/db", () => ({
@@ -178,6 +181,7 @@ describe("Account Actions", () => {
                 id: "account-1",
                 userId: "test-user-id",
             });
+            mockDb.transfer.count.mockResolvedValue(0);
             mockDb.account.delete.mockResolvedValue({ id: "account-1" });
 
             vi.resetModules();

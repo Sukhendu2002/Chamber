@@ -1,5 +1,7 @@
 # Chamber - AI-Powered Financial Tracker
 
+![Chamber Landing Page](./public/landing-screenshot.png)
+
 Chamber is a comprehensive financial management application with AI-powered receipt parsing, Telegram bot integration, account tracking, and loan management.
 
 ## Features

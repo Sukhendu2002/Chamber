@@ -24,6 +24,14 @@ Chamber is a comprehensive financial management application with AI-powered rece
 - **Data Export**: Export financial data in various formats
 - **Real-time Updates**: Live dashboard updates via server actions
 
+## Documentation
+
+- **[User Documentation](./docs/README.md)** - Guides for using Chamber
+- **[Getting Started](./docs/getting-started.md)** - First-time user guide
+- **[FAQ](./docs/faq.md)** - Frequently asked questions
+- **[DEVELOPMENT.md](./DEVELOPMENT.md)** - Developer guide
+- **[DEPLOYMENT.md](./DEPLOYMENT.md)** - Deployment instructions
+
 ## Tech Stack
 
 - **Framework**: Next.js 16 (App Router) with TypeScript

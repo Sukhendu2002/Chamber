@@ -61,7 +61,7 @@ export default async function DocPage({ params }: DocPageProps) {
     <div className="min-h-screen bg-background">
       {/* Header */}
       <header className="sticky top-0 z-50 border-b bg-background/80 backdrop-blur-md">
-        <div className="container mx-auto max-w-3xl flex h-14 items-center justify-between px-4 sm:h-16">
+        <div className="container mx-auto max-w-4xl flex h-14 items-center justify-between px-4 sm:h-16">
           <Link href="/" className="flex items-center gap-2">
             <div className="flex h-8 w-8 items-center justify-center rounded-md bg-primary text-primary-foreground font-bold">
               C
@@ -76,7 +76,7 @@ export default async function DocPage({ params }: DocPageProps) {
         </div>
       </header>
 
-      <main className="container mx-auto max-w-3xl px-4 py-8">
+      <main className="container mx-auto max-w-4xl px-4 py-8">
         {/* Back Link */}
         <Link 
           href="/docs" 
@@ -86,24 +86,42 @@ export default async function DocPage({ params }: DocPageProps) {
           Back to docs
         </Link>
 
-        <article className="prose prose-slate dark:prose-invert max-w-none">
-          <div className="flex items-center gap-3 mb-6 not-prose">
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 text-primary">
-              <IconFileText className="h-5 w-5" />
+        <article className="max-w-none">
+          {/* Title Header */}
+          <div className="flex items-center gap-3 mb-8 pb-6 border-b">
+            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary/10 text-primary">
+              <IconFileText className="h-6 w-6" />
             </div>
-            <h1 className="text-3xl font-bold tracking-tight">{doc.title}</h1>
+            <h1 className="text-3xl sm:text-4xl font-bold tracking-tight">{doc.title}</h1>
           </div>
           
+          {/* Markdown Content with Prose */}
           <div 
-            className="prose-headings:scroll-mt-20 prose-a:text-primary prose-a:no-underline hover:prose-a:underline prose-img:rounded-lg prose-img:border"
+            className="prose prose-slate dark:prose-invert prose-lg max-w-none
+              prose-headings:font-semibold prose-headings:tracking-tight prose-headings:mt-8 prose-headings:mb-4
+              prose-h1:text-3xl prose-h1:font-bold
+              prose-h2:text-2xl prose-h2:font-semibold prose-h2:border-b prose-h2:pb-2
+              prose-h3:text-xl prose-h3:font-medium
+              prose-p:leading-7 prose-p:my-4
+              prose-ul:my-4 prose-ul:list-disc prose-ul:pl-6
+              prose-ol:my-4 prose-ol:list-decimal prose-ol:pl-6
+              prose-li:my-1 prose-li:marker:text-muted-foreground
+              prose-a:text-primary prose-a:no-underline hover:prose-a:underline prose-a:font-medium
+              prose-strong:font-semibold prose-strong:text-foreground
+              prose-code:text-sm prose-code:bg-muted prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded prose-code:font-mono
+              prose-pre:bg-muted prose-pre:p-4 prose-pre:rounded-lg
+              prose-blockquote:border-l-4 prose-blockquote:border-primary prose-blockquote:pl-4 prose-blockquote:italic prose-blockquote:my-4
+              prose-table:w-full prose-table:my-4 prose-th:border prose-th:border-border prose-th:p-2 prose-th:bg-muted prose-td:border prose-td:border-border prose-td:p-2
+              prose-img:rounded-lg prose-img:my-4 prose-img:border
+              prose-hr:my-8"
             dangerouslySetInnerHTML={{ __html: doc.content }}
           />
         </article>
       </main>
 
       {/* Footer */}
-      <footer className="border-t mt-12">
-        <div className="container mx-auto max-w-3xl flex flex-col items-center gap-2 px-4 py-6 sm:flex-row sm:justify-between">
+      <footer className="border-t mt-16">
+        <div className="container mx-auto max-w-4xl flex flex-col items-center gap-2 px-4 py-8 sm:flex-row sm:justify-between">
           <div className="flex items-center gap-2">
             <div className="flex h-6 w-6 items-center justify-center rounded bg-primary text-primary-foreground text-xs font-bold">
               C

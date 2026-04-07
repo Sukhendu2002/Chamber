@@ -302,12 +302,31 @@ export async function toggleAccountActive(id: string) {
   revalidatePath("/dashboard");
 }
 
+export async function toggleIncludeInNetWorth(id: string) {
+  const { userId } = await auth();
+  if (!userId) throw new Error("Unauthorized");
+
+  const account = await db.account.findFirst({
+    where: { id, userId },
+  });
+
+  if (!account) throw new Error("Account not found");
+
+  await db.account.update({
+    where: { id },
+    data: { includeInNetWorth: !account.includeInNetWorth },
+  });
+
+  revalidatePath("/accounts");
+  revalidatePath("/dashboard");
+}
+
 export async function getAccountStats() {
   const { userId } = await auth();
   if (!userId) throw new Error("Unauthorized");
 
   const accounts = await db.account.findMany({
-    where: { userId, isActive: true },
+    where: { userId, isActive: true, includeInNetWorth: true },
   });
 
   let totalBankBalance = 0;

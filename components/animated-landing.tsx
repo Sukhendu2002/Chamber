@@ -883,6 +883,13 @@ export function AnimatedLanding() {
                         <p className="text-xs text-muted-foreground sm:text-sm">
                             Built by Sukhendu &middot;{" "}
                             <Link
+                                href="/docs"
+                                className="hover:text-primary transition-colors"
+                            >
+                                Documentation
+                            </Link>
+                            &middot;{" "}
+                            <Link
                                 href="https://github.com/Sukhendu2002/Chamber"
                                 target="_blank"
                                 className="hover:text-primary transition-colors"

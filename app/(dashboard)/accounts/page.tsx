@@ -11,6 +11,7 @@ import {
 import { AccountList } from "@/components/account-list";
 import { AddAccountDialog } from "@/components/add-account-dialog";
 import { BankTransferDialog } from "@/components/bank-transfer-dialog";
+import { HiddenAmount } from "@/components/hidden-amount";
 
 export default async function AccountsPage() {
   const [accounts, stats, settings] = await Promise.all([
@@ -59,7 +60,7 @@ export default async function AccountsPage() {
             <IconCoin className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{formatCurrency(stats.totalNetWorth)}</div>
+            <HiddenAmount amount={formatCurrency(stats.totalNetWorth)} className="text-2xl font-bold" />
             <p className="text-xs text-muted-foreground">
               {stats.accountCount} accounts
             </p>
@@ -72,7 +73,7 @@ export default async function AccountsPage() {
             <IconBuildingBank className="h-4 w-4 text-blue-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-blue-600">{formatCurrency(stats.totalBankBalance)}</div>
+            <HiddenAmount amount={formatCurrency(stats.totalBankBalance)} className="text-2xl font-bold text-blue-600" />
           </CardContent>
         </Card>
 
@@ -82,7 +83,7 @@ export default async function AccountsPage() {
             <IconChartLine className="h-4 w-4 text-green-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-green-600">{formatCurrency(stats.totalInvestments)}</div>
+            <HiddenAmount amount={formatCurrency(stats.totalInvestments)} className="text-2xl font-bold text-green-600" />
           </CardContent>
         </Card>
 
@@ -92,7 +93,7 @@ export default async function AccountsPage() {
             <IconWallet className="h-4 w-4 text-purple-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-purple-600">{formatCurrency(stats.totalWallet)}</div>
+            <HiddenAmount amount={formatCurrency(stats.totalWallet)} className="text-2xl font-bold text-purple-600" />
           </CardContent>
         </Card>
 
@@ -102,7 +103,7 @@ export default async function AccountsPage() {
             <IconCash className="h-4 w-4 text-yellow-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-yellow-600">{formatCurrency(stats.totalCash)}</div>
+            <HiddenAmount amount={formatCurrency(stats.totalCash)} className="text-2xl font-bold text-yellow-600" />
           </CardContent>
         </Card>
       </div>

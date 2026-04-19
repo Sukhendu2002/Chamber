@@ -818,9 +818,23 @@ export async function POST(request: NextRequest) {
           const accountId = data.replace("pay_", "");
           const pending = pendingExpenses.get(chatId);
           if (pending && pending.expiresAt > Date.now()) {
-            // Look up the account to get name and type for balance adjustment
-            const account = await db.account.findUnique({ where: { id: accountId } });
-            const accountName = account?.name || accountId;
+            // Verify the account exists AND belongs to the pending expense's user
+            // This prevents callback_data manipulation attacks where a user could
+            // supply a foreign accountId to access or modify another user's account.
+            const account = await db.account.findFirst({
+              where: { id: accountId, userId: pending.userId },
+            });
+
+            if (!account) {
+              await editMessageText(
+                chatId,
+                messageId,
+                "❌ Account not found or access denied. Please try again."
+              );
+              await answerCallbackQuery(callbackQuery.id, "Account not found");
+              return NextResponse.json({ ok: true });
+            }
+            const accountName = account.name;
 
             // Save expense and adjust balance in a transaction
             await db.$transaction(async (tx) => {
@@ -840,22 +854,20 @@ export async function POST(request: NextRequest) {
               });
 
               // Adjust account balance and record history
-              if (account) {
-                const adjustment = getTelegramBalanceAdjustment(account.type, pending.amount);
-                const updatedAccount = await tx.account.update({
-                  where: { id: accountId },
-                  data: { currentBalance: { increment: adjustment } },
-                });
-                const label = pending.description || pending.category || "Expense";
-                await tx.balanceHistory.create({
-                  data: {
-                    accountId,
-                    balance: updatedAccount.currentBalance,
-                    note: `Expense: ${label} (₹${pending.amount})`,
-                    date: new Date(),
-                  },
-                });
-              }
+              const adjustment = getTelegramBalanceAdjustment(account.type, pending.amount);
+              const updatedAccount = await tx.account.update({
+                where: { id: accountId },
+                data: { currentBalance: { increment: adjustment } },
+              });
+              const label = pending.description || pending.category || "Expense";
+              await tx.balanceHistory.create({
+                data: {
+                  accountId,
+                  balance: updatedAccount.currentBalance,
+                  note: `Expense: ${label} (₹${pending.amount})`,
+                  date: new Date(),
+                },
+              });
             });
 
             // Notify web UI to refresh

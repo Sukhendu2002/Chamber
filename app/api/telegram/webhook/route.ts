@@ -243,13 +243,13 @@ async function handleAccountsCommand(chatId: number) {
 
   // Display accounts grouped by type
   const typeOrder = ["BANK", "INVESTMENT", "WALLET", "CASH", "CREDIT_CARD", "DEBIT_CARD", "OTHER"];
-  
+
   for (const type of typeOrder) {
     const typeAccounts = accountsByType[type];
     if (!typeAccounts || typeAccounts.length === 0) continue;
 
     const icon = ACCOUNT_TYPE_ICONS[type] || "💰";
-    
+
     for (const account of typeAccounts) {
       const balance = Number(account.currentBalance);
       totalBalance += balance;
@@ -818,9 +818,6 @@ export async function POST(request: NextRequest) {
           const accountId = data.replace("pay_", "");
           const pending = pendingExpenses.get(chatId);
           if (pending && pending.expiresAt > Date.now()) {
-            // Verify the account exists AND belongs to the pending expense's user
-            // This prevents callback_data manipulation attacks where a user could
-            // supply a foreign accountId to access or modify another user's account.
             const account = await db.account.findFirst({
               where: { id: accountId, userId: pending.userId },
             });

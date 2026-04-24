@@ -67,7 +67,9 @@ const categories = [
   "Investments",
   "Subscription",
   "General",
-];
+] as const;
+
+type ExpenseCategory = (typeof categories)[number];
 
 const sourceColors: Record<string, string> = {
   TELEGRAM: "bg-blue-100 text-blue-800",
@@ -113,7 +115,7 @@ export function ExpenseTable({ expenses: initialExpenses, currency, accounts = [
   // Edit state
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
   const [editAmount, setEditAmount] = useState("");
-  const [editCategory, setEditCategory] = useState("");
+  const [editCategory, setEditCategory] = useState<ExpenseCategory>("General");
   const [editDescription, setEditDescription] = useState("");
   const [editMerchant, setEditMerchant] = useState("");
   const [editDate, setEditDate] = useState("");
@@ -215,7 +217,7 @@ export function ExpenseTable({ expenses: initialExpenses, currency, accounts = [
     setViewingReceipt(null); // Close receipt viewer if open
     setEditingExpense(expense);
     setEditAmount(expense.amount.toString());
-    setEditCategory(expense.category);
+    setEditCategory(expense.category as ExpenseCategory || "General");
     setEditDescription(expense.description || "");
     setEditMerchant(expense.merchant || "");
     setEditDate(toLocalDateString(new Date(expense.date)));
@@ -517,7 +519,7 @@ export function ExpenseTable({ expenses: initialExpenses, currency, accounts = [
               </div>
               <div className="space-y-2">
                 <Label htmlFor="edit-category">Category</Label>
-                <Select value={editCategory} onValueChange={setEditCategory}>
+                <Select value={editCategory} onValueChange={(v) => setEditCategory(v as ExpenseCategory)}>
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>

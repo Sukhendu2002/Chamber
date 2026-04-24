@@ -17,16 +17,20 @@ import { getUserSettings } from "@/lib/actions/settings";
 import { ExpenseCalendarWidget } from "@/components/expense-calendar-widget";
 import { getAccounts, getAccountStats, getAllBalanceHistory } from "@/lib/actions/accounts";
 import { BalanceHistoryChart } from "@/components/balance-history-chart";
+import { ForecastWidget } from "@/components/forecast-widget";
+import { getForecastData, getUpcomingRecurringAlerts } from "@/lib/actions/forecasting";
 import Link from "next/link";
 import { DashboardWidgets, DEFAULT_DASHBOARD_WIDGETS } from "@/types/dashboard";
 
 export default async function DashboardPage() {
-  const [stats, settings, accountStats, balanceHistory, accounts] = await Promise.all([
+  const [stats, settings, accountStats, balanceHistory, accounts, forecast, alerts] = await Promise.all([
     getMonthlyStats(),
     getUserSettings(),
     getAccountStats(),
     getAllBalanceHistory(6),
     getAccounts(),
+    getForecastData(),
+    getUpcomingRecurringAlerts(),
   ]);
 
   const currentDate = new Date();
@@ -120,7 +124,7 @@ export default async function DashboardPage() {
 
   // Check if any widget is enabled
   const hasAnyWidget = widgets.showStats || widgets.showNetWorth || widgets.showBalanceTrend ||
-    widgets.showCalendar || widgets.showCategories || widgets.showRecent;
+    widgets.showForecast || widgets.showCalendar || widgets.showCategories || widgets.showRecent;
 
   return (
     <div className="p-4 md:p-6">
@@ -221,6 +225,15 @@ export default async function DashboardPage() {
                 />
               </CardContent>
             </Card>
+          )}
+
+          {/* Forecast Widget */}
+          {widgets.showForecast && (
+            <ForecastWidget
+              forecast={forecast}
+              currency={settings.currency}
+              alerts={alerts}
+            />
           )}
 
           {/* Expense Calendar Widget */}

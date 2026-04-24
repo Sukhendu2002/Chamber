@@ -10,14 +10,18 @@ datasource db {
 }
 
 model UserSettings {
-  id               String   @id @default(uuid())
-  userId           String   @unique // Clerk User ID
-  telegramChatId   String?  @unique // Linked Telegram Chat ID
-  monthlyBudget    Float    @default(0)
-  currency         String   @default("INR")
-  dashboardWidgets Json?    // Stores which dashboard widgets to show/hide
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  id                    String   @id @default(uuid())
+  userId                String   @unique // Clerk User ID
+  telegramChatId        String?  @unique // Linked Telegram Chat ID
+  monthlyBudget         Float    @default(0)
+  currency              String   @default("INR")
+  dashboardWidgets      Json?    // Stores which dashboard widgets to show/hide
+  forecastHorizonMonths Int      @default(6) // Months to project forward
+  savingsTargetPercent  Float    @default(20) // Target % of income to save
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  goals Goal[]
 }
 
 model Expense {
@@ -190,4 +194,58 @@ model BalanceHistory {
 
   @@index([accountId])
   @@index([date])
+}
+
+enum GoalType {
+  SAVINGS
+  DEBT_PAYOFF
+  EMERGENCY_FUND
+  PURCHASE
+  INVESTMENT
+  OTHER
+}
+
+enum GoalStatus {
+  ACTIVE
+  COMPLETED
+  PAUSED
+}
+
+model Goal {
+  id            String     @id @default(uuid())
+  userId        String
+  userSettings  UserSettings @relation(fields: [userId], references: [userId], onDelete: Cascade)
+  name          String
+  description   String?
+  type          GoalType   @default(SAVINGS)
+  targetAmount  Float
+  currentAmount Float      @default(0)
+  deadline      DateTime?
+  status        GoalStatus @default(ACTIVE)
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+
+  @@unique([userId, name])
+  @@index([userId])
+  @@index([status])
+}
+
+model RecurringPattern {
+  id              String   @id @default(uuid())
+  userId          String
+  name            String   // e.g., "Netflix", "Rent"
+  category        String
+  amount          Float
+  frequency       String   // WEEKLY, MONTHLY, QUARTERLY, YEARLY
+  confidence      Float    @default(0) // 0-1 detection confidence
+  lastOccurrence  DateTime
+  nextPredicted   DateTime
+  isConfirmed     Boolean  @default(false) // User confirmed this is recurring
+  isIgnored       Boolean  @default(false) // User marked as not recurring
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([userId, name])
+  @@index([userId])
+  @@index([nextPredicted])
 }

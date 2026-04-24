@@ -4,17 +4,60 @@ import { auth } from "@clerk/nextjs/server";
 import { db } from "@/lib/db";
 import { revalidatePath } from "next/cache";
 import { checkAndSendSubscriptionAlerts } from "@/lib/subscription-alerts";
+import { z } from "zod";
 
-export type CreateExpenseInput = {
-  amount: number;
-  category: string;
-  merchant?: string;
-  description?: string;
-  date?: Date;
-  paymentMethod?: string;
-  accountId?: string;
-  receiptUrl?: string;
-};
+const EXPENSE_CATEGORIES = [
+  "Food",
+  "Travel",
+  "Entertainment",
+  "Bills",
+  "Shopping",
+  "Health",
+  "Education",
+  "Investments",
+  "Subscription",
+  "General",
+] as const;
+
+const CreateExpenseSchema = z.object({
+  amount: z.number().positive("Amount must be greater than 0"),
+  category: z.enum(EXPENSE_CATEGORIES),
+  merchant: z.string().max(200).optional(),
+  description: z.string().max(500).optional(),
+  date: z.date().optional(),
+  paymentMethod: z.string().max(100).optional(),
+  accountId: z.string().uuid().optional(),
+  receiptUrl: z.string().max(500).optional(),
+});
+
+const UpdateExpenseSchema = CreateExpenseSchema.partial();
+
+export type CreateExpenseInput = z.infer<typeof CreateExpenseSchema>;
+
+const GetExpensesOptionsSchema = z.object({
+  limit: z.number().int().positive().optional(),
+  offset: z.number().int().nonnegative().optional(),
+  startDate: z.date().optional(),
+  endDate: z.date().optional(),
+  category: z.string().optional(),
+  excludeCategory: z.string().optional(),
+  search: z.string().max(200).optional(),
+}).optional();
+
+const GetExpensesCountOptionsSchema = z.object({
+  startDate: z.date().optional(),
+  endDate: z.date().optional(),
+  category: z.string().optional(),
+  excludeCategory: z.string().optional(),
+  search: z.string().max(200).optional(),
+}).optional();
+
+const IdSchema = z.string().uuid();
+
+const DeleteExpenseSchema = z.object({
+  id: z.string().uuid(),
+  reverseBalance: z.boolean().default(true),
+});
 
 // For credit cards, spending increases the outstanding balance.
 // For all other account types, spending decreases the balance.
@@ -47,34 +90,36 @@ export async function createExpense(input: CreateExpenseInput) {
   const { userId } = await auth();
   if (!userId) throw new Error("Unauthorized");
 
+  const validated = CreateExpenseSchema.parse(input);
+
   const expense = await db.$transaction(async (tx) => {
     const created = await tx.expense.create({
       data: {
         userId,
-        amount: input.amount,
-        category: input.category,
-        merchant: input.merchant,
-        description: input.description,
-        date: input.date || new Date(),
+        amount: validated.amount,
+        category: validated.category,
+        merchant: validated.merchant,
+        description: validated.description,
+        date: validated.date || new Date(),
         source: "WEB",
-        paymentMethod: input.paymentMethod,
-        accountId: input.accountId,
-        receiptUrl: input.receiptUrl,
+        paymentMethod: validated.paymentMethod,
+        accountId: validated.accountId,
+        receiptUrl: validated.receiptUrl,
       },
     });
 
     // Adjust account balance if linked
-    if (input.accountId) {
-      const account = await tx.account.findUnique({ where: { id: input.accountId } });
+    if (validated.accountId) {
+      const account = await tx.account.findUnique({ where: { id: validated.accountId } });
       if (account) {
-        const adjustment = getBalanceAdjustment(account.type, input.amount);
+        const adjustment = getBalanceAdjustment(account.type, validated.amount);
         const updatedAccount = await tx.account.update({
-          where: { id: input.accountId },
+          where: { id: validated.accountId },
           data: { currentBalance: { increment: adjustment } },
         });
-        const label = input.description || input.category || "Expense";
-        const expenseDate = input.date || new Date();
-        await recordBalanceHistory(tx, input.accountId, updatedAccount.currentBalance, `Expense: ${label} (₹${input.amount})`, expenseDate);
+        const label = validated.description || validated.category || "Expense";
+        const expenseDate = validated.date || new Date();
+        await recordBalanceHistory(tx, validated.accountId, updatedAccount.currentBalance, `Expense: ${label} (₹${validated.amount})`, expenseDate);
       }
     }
 
@@ -91,37 +136,31 @@ export async function createExpense(input: CreateExpenseInput) {
   return expense;
 }
 
-export async function getExpenses(options?: {
-  limit?: number;
-  offset?: number;
-  startDate?: Date;
-  endDate?: Date;
-  category?: string;
-  excludeCategory?: string;
-  search?: string;
-}) {
+export async function getExpenses(options?: z.infer<typeof GetExpensesOptionsSchema>) {
   const { userId } = await auth();
   if (!userId) throw new Error("Unauthorized");
 
+  const validated = GetExpensesOptionsSchema.parse(options);
+
   const where: Record<string, unknown> = { userId };
 
-  if (options?.startDate || options?.endDate) {
+  if (validated?.startDate || validated?.endDate) {
     where.date = {};
-    if (options.startDate) (where.date as Record<string, Date>).gte = options.startDate;
-    if (options.endDate) (where.date as Record<string, Date>).lte = options.endDate;
+    if (validated.startDate) (where.date as Record<string, Date>).gte = validated.startDate;
+    if (validated.endDate) (where.date as Record<string, Date>).lte = validated.endDate;
   }
 
-  if (options?.category) {
-    where.category = options.category;
-  } else if (options?.excludeCategory) {
-    where.category = { not: options.excludeCategory };
+  if (validated?.category) {
+    where.category = validated.category;
+  } else if (validated?.excludeCategory) {
+    where.category = { not: validated.excludeCategory };
   }
 
-  if (options?.search) {
+  if (validated?.search) {
     where.OR = [
-      { description: { contains: options.search, mode: "insensitive" } },
-      { merchant: { contains: options.search, mode: "insensitive" } },
-      { category: { contains: options.search, mode: "insensitive" } },
+      { description: { contains: validated.search, mode: "insensitive" } },
+      { merchant: { contains: validated.search, mode: "insensitive" } },
+      { category: { contains: validated.search, mode: "insensitive" } },
     ];
   }
 
@@ -131,42 +170,38 @@ export async function getExpenses(options?: {
       { createdAt: "desc" },
       { id: "desc" },
     ],
-    take: options?.limit,
-    skip: options?.offset,
+    take: validated?.limit,
+    skip: validated?.offset,
   });
 
   return expenses;
 }
 
-export async function getExpensesCount(options?: {
-  startDate?: Date;
-  endDate?: Date;
-  category?: string;
-  excludeCategory?: string;
-  search?: string;
-}) {
+export async function getExpensesCount(options?: z.infer<typeof GetExpensesCountOptionsSchema>) {
   const { userId } = await auth();
   if (!userId) throw new Error("Unauthorized");
 
+  const validated = GetExpensesCountOptionsSchema.parse(options);
+
   const where: Record<string, unknown> = { userId };
 
-  if (options?.startDate || options?.endDate) {
+  if (validated?.startDate || validated?.endDate) {
     where.date = {};
-    if (options.startDate) (where.date as Record<string, Date>).gte = options.startDate;
-    if (options.endDate) (where.date as Record<string, Date>).lte = options.endDate;
+    if (validated.startDate) (where.date as Record<string, Date>).gte = validated.startDate;
+    if (validated.endDate) (where.date as Record<string, Date>).lte = validated.endDate;
   }
 
-  if (options?.category) {
-    where.category = options.category;
-  } else if (options?.excludeCategory) {
-    where.category = { not: options.excludeCategory };
+  if (validated?.category) {
+    where.category = validated.category;
+  } else if (validated?.excludeCategory) {
+    where.category = { not: validated.excludeCategory };
   }
 
-  if (options?.search) {
+  if (validated?.search) {
     where.OR = [
-      { description: { contains: options.search, mode: "insensitive" } },
-      { merchant: { contains: options.search, mode: "insensitive" } },
-      { category: { contains: options.search, mode: "insensitive" } },
+      { description: { contains: validated.search, mode: "insensitive" } },
+      { merchant: { contains: validated.search, mode: "insensitive" } },
+      { category: { contains: validated.search, mode: "insensitive" } },
     ];
   }
 
@@ -186,8 +221,10 @@ export async function getExpenseById(id: string) {
   const { userId } = await auth();
   if (!userId) throw new Error("Unauthorized");
 
+  const validatedId = IdSchema.parse(id);
+
   const expense = await db.expense.findFirst({
-    where: { id, userId },
+    where: { id: validatedId, userId },
   });
 
   return expense;
@@ -200,9 +237,12 @@ export async function updateExpense(
   const { userId } = await auth();
   if (!userId) throw new Error("Unauthorized");
 
+  const validatedId = IdSchema.parse(id);
+  const validated = UpdateExpenseSchema.parse(input);
+
   const result = await db.$transaction(async (tx) => {
     // Get existing expense to reverse old balance effect
-    const existing = await tx.expense.findFirst({ where: { id, userId } });
+    const existing = await tx.expense.findFirst({ where: { id: validatedId, userId } });
     if (!existing) throw new Error("Expense not found");
 
     // Reverse old balance effect if expense was linked to an account
@@ -219,8 +259,8 @@ export async function updateExpense(
     }
 
     // Determine new accountId (use input if provided, keep existing if not specified)
-    const newAccountId = input.accountId !== undefined ? input.accountId : existing.accountId;
-    const newAmount = input.amount !== undefined ? input.amount : existing.amount;
+    const newAccountId = validated.accountId !== undefined ? validated.accountId : existing.accountId;
+    const newAmount = validated.amount !== undefined ? validated.amount : existing.amount;
 
     // Apply new balance effect
     if (newAccountId) {
@@ -231,24 +271,24 @@ export async function updateExpense(
           where: { id: newAccountId },
           data: { currentBalance: { increment: adjustment } },
         });
-        const label = input.description || input.category || "Expense";
-        const expenseDate = input.date || existing.date;
+        const label = validated.description || validated.category || "Expense";
+        const expenseDate = validated.date || existing.date;
         await recordBalanceHistory(tx, newAccountId, updatedNew.currentBalance, `Expense: ${label} (₹${newAmount})`, expenseDate);
       }
     }
 
     // Update the expense
     const updated = await tx.expense.update({
-      where: { id },
+      where: { id: validatedId },
       data: {
-        amount: input.amount,
-        category: input.category,
-        merchant: input.merchant,
-        description: input.description,
-        date: input.date,
-        paymentMethod: input.paymentMethod,
+        amount: validated.amount,
+        category: validated.category,
+        merchant: validated.merchant,
+        description: validated.description,
+        date: validated.date,
+        paymentMethod: validated.paymentMethod,
         accountId: newAccountId,
-        receiptUrl: input.receiptUrl,
+        receiptUrl: validated.receiptUrl,
       },
     });
 
@@ -269,13 +309,15 @@ export async function deleteExpense(id: string, reverseBalance: boolean = true) 
   const { userId } = await auth();
   if (!userId) throw new Error("Unauthorized");
 
+  const validated = DeleteExpenseSchema.parse({ id, reverseBalance });
+
   await db.$transaction(async (tx) => {
     // Get expense to reverse balance effect
-    const existing = await tx.expense.findFirst({ where: { id, userId } });
+    const existing = await tx.expense.findFirst({ where: { id: validated.id, userId } });
     if (!existing) throw new Error("Expense not found");
 
     // Reverse balance effect if linked to an account (only if requested)
-    if (reverseBalance && existing.accountId) {
+    if (validated.reverseBalance && existing.accountId) {
       const account = await tx.account.findUnique({ where: { id: existing.accountId } });
       if (account) {
         const reversal = -getBalanceAdjustment(account.type, existing.amount);
@@ -288,7 +330,7 @@ export async function deleteExpense(id: string, reverseBalance: boolean = true) 
       }
     }
 
-    await tx.expense.delete({ where: { id } });
+    await tx.expense.delete({ where: { id: validated.id } });
   });
 
   revalidatePath("/dashboard");

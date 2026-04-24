@@ -1,5 +1,15 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
+const UUIDS = {
+    expense1: "d4444444-4444-4444-9444-444444444444",
+    expense2: "e5555555-5555-5555-a555-555555555555",
+    expense3: "f6666666-6666-6666-b666-666666666666",
+    expense4: "a7777777-7777-7777-8777-777777777777",
+    expense5: "b8888888-8888-8888-9888-888888888888",
+    account1: "a1111111-1111-1111-a111-111111111111",
+    cc1: "c3333333-3333-3333-8333-333333333333",
+};
+
 // Mock the database client with $transaction support
 const mockDb = {
     expense: {
@@ -53,7 +63,7 @@ describe("Expense Actions", () => {
     describe("createExpense", () => {
         it("should create an expense with required fields", async () => {
             const mockExpense = {
-                id: "expense-1",
+                id: UUIDS.expense1,
                 userId: "test-user-id",
                 amount: 100,
                 category: "Food",
@@ -89,7 +99,7 @@ describe("Expense Actions", () => {
 
         it("should set default category to General if not provided", async () => {
             const mockExpense = {
-                id: "expense-2",
+                id: UUIDS.expense2,
                 userId: "test-user-id",
                 amount: 50,
                 category: "General",
@@ -119,16 +129,16 @@ describe("Expense Actions", () => {
 
         it("should deduct balance from a BANK account when accountId is provided", async () => {
             const mockExpense = {
-                id: "expense-3",
+                id: UUIDS.expense3,
                 userId: "test-user-id",
                 amount: 500,
                 category: "Food",
-                accountId: "account-1",
+                accountId: UUIDS.account1,
                 paymentMethod: "SBI Savings",
             };
 
             const mockAccount = {
-                id: "account-1",
+                id: UUIDS.account1,
                 type: "BANK",
                 currentBalance: 10000,
             };
@@ -144,13 +154,13 @@ describe("Expense Actions", () => {
             await createExpense({
                 amount: 500,
                 category: "Food",
-                accountId: "account-1",
+                accountId: UUIDS.account1,
                 paymentMethod: "SBI Savings",
             });
 
             // Should deduct from bank account (negative adjustment)
             expect(mockDb.account.update).toHaveBeenCalledWith({
-                where: { id: "account-1" },
+                where: { id: UUIDS.account1 },
                 data: { currentBalance: { increment: -500 } },
             });
 
@@ -160,16 +170,16 @@ describe("Expense Actions", () => {
 
         it("should increase balance for CREDIT_CARD account (outstanding increases)", async () => {
             const mockExpense = {
-                id: "expense-4",
+                id: UUIDS.expense4,
                 userId: "test-user-id",
                 amount: 300,
                 category: "Shopping",
-                accountId: "cc-1",
+                accountId: UUIDS.cc1,
                 paymentMethod: "HDFC Credit Card",
             };
 
             const mockAccount = {
-                id: "cc-1",
+                id: UUIDS.cc1,
                 type: "CREDIT_CARD",
                 currentBalance: 1000,
             };
@@ -185,19 +195,19 @@ describe("Expense Actions", () => {
             await createExpense({
                 amount: 300,
                 category: "Shopping",
-                accountId: "cc-1",
+                accountId: UUIDS.cc1,
                 paymentMethod: "HDFC Credit Card",
             });
 
             // Credit card: spending increases outstanding (positive adjustment)
             expect(mockDb.account.update).toHaveBeenCalledWith({
-                where: { id: "cc-1" },
+                where: { id: UUIDS.cc1 },
                 data: { currentBalance: { increment: 300 } },
             });
         });
 
         it("should not adjust balance when no accountId is provided", async () => {
-            mockDb.expense.create.mockResolvedValue({ id: "expense-5" });
+            mockDb.expense.create.mockResolvedValue({ id: UUIDS.expense5 });
 
             vi.resetModules();
             const { createExpense } = await import("@/lib/actions/expenses");
@@ -216,14 +226,14 @@ describe("Expense Actions", () => {
         it("should return paginated expenses", async () => {
             const mockExpenses = [
                 {
-                    id: "expense-1",
+                    id: UUIDS.expense1,
                     userId: "test-user-id",
                     amount: 100,
                     category: "Food",
                     date: new Date(),
                 },
                 {
-                    id: "expense-2",
+                    id: UUIDS.expense2,
                     userId: "test-user-id",
                     amount: 200,
                     category: "Travel",
@@ -314,16 +324,16 @@ describe("Expense Actions", () => {
     describe("deleteExpense", () => {
         it("should delete an expense and reverse balance if linked to account", async () => {
             const existingExpense = {
-                id: "expense-1",
+                id: UUIDS.expense1,
                 userId: "test-user-id",
                 amount: 200,
                 category: "Food",
                 description: "Dinner",
-                accountId: "account-1",
+                accountId: UUIDS.account1,
             };
 
             const mockAccount = {
-                id: "account-1",
+                id: UUIDS.account1,
                 type: "BANK",
                 currentBalance: 9800,
             };
@@ -337,11 +347,11 @@ describe("Expense Actions", () => {
             vi.resetModules();
             const { deleteExpense } = await import("@/lib/actions/expenses");
 
-            await deleteExpense("expense-1");
+            await deleteExpense(UUIDS.expense1);
 
             // Should reverse the deduction (add back 200)
             expect(mockDb.account.update).toHaveBeenCalledWith({
-                where: { id: "account-1" },
+                where: { id: UUIDS.account1 },
                 data: { currentBalance: { increment: 200 } },
             });
 
@@ -350,13 +360,13 @@ describe("Expense Actions", () => {
 
             // Should delete the expense
             expect(mockDb.expense.delete).toHaveBeenCalledWith({
-                where: { id: "expense-1" },
+                where: { id: UUIDS.expense1 },
             });
         });
 
         it("should delete expense without balance change if no accountId", async () => {
             const existingExpense = {
-                id: "expense-2",
+                id: UUIDS.expense2,
                 userId: "test-user-id",
                 amount: 100,
                 category: "Food",
@@ -369,27 +379,27 @@ describe("Expense Actions", () => {
             vi.resetModules();
             const { deleteExpense } = await import("@/lib/actions/expenses");
 
-            await deleteExpense("expense-2");
+            await deleteExpense(UUIDS.expense2);
 
             expect(mockDb.account.findUnique).not.toHaveBeenCalled();
             expect(mockDb.account.update).not.toHaveBeenCalled();
             expect(mockDb.expense.delete).toHaveBeenCalledWith({
-                where: { id: "expense-2" },
+                where: { id: UUIDS.expense2 },
             });
         });
 
         it("should reverse credit card outstanding on delete", async () => {
             const existingExpense = {
-                id: "expense-3",
+                id: UUIDS.expense3,
                 userId: "test-user-id",
                 amount: 500,
                 category: "Shopping",
                 description: "Online purchase",
-                accountId: "cc-1",
+                accountId: UUIDS.cc1,
             };
 
             const mockAccount = {
-                id: "cc-1",
+                id: UUIDS.cc1,
                 type: "CREDIT_CARD",
                 currentBalance: 1500,
             };
@@ -403,11 +413,11 @@ describe("Expense Actions", () => {
             vi.resetModules();
             const { deleteExpense } = await import("@/lib/actions/expenses");
 
-            await deleteExpense("expense-3");
+            await deleteExpense(UUIDS.expense3);
 
             // Credit card: deleting expense should decrease outstanding (negative adjustment)
             expect(mockDb.account.update).toHaveBeenCalledWith({
-                where: { id: "cc-1" },
+                where: { id: UUIDS.cc1 },
                 data: { currentBalance: { increment: -500 } },
             });
         });
@@ -416,16 +426,16 @@ describe("Expense Actions", () => {
     describe("updateExpense", () => {
         it("should reverse old balance and apply new balance when amount changes", async () => {
             const existingExpense = {
-                id: "expense-1",
+                id: UUIDS.expense1,
                 userId: "test-user-id",
                 amount: 200,
                 category: "Food",
                 description: "Lunch",
-                accountId: "account-1",
+                accountId: UUIDS.account1,
             };
 
             const mockAccount = {
-                id: "account-1",
+                id: UUIDS.account1,
                 type: "BANK",
                 currentBalance: 9800,
             };
@@ -442,17 +452,17 @@ describe("Expense Actions", () => {
             vi.resetModules();
             const { updateExpense } = await import("@/lib/actions/expenses");
 
-            await updateExpense("expense-1", { amount: 300 });
+            await updateExpense(UUIDS.expense1, { amount: 300 });
 
             // First: reverse old deduction (add back 200)
             expect(mockDb.account.update).toHaveBeenNthCalledWith(1, {
-                where: { id: "account-1" },
+                where: { id: UUIDS.account1 },
                 data: { currentBalance: { increment: 200 } },
             });
 
             // Second: apply new deduction (deduct 300)
             expect(mockDb.account.update).toHaveBeenNthCalledWith(2, {
-                where: { id: "account-1" },
+                where: { id: UUIDS.account1 },
                 data: { currentBalance: { increment: -300 } },
             });
 

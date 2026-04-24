@@ -4,7 +4,23 @@ import { auth } from "@clerk/nextjs/server";
 import { db } from "@/lib/db";
 import { revalidatePath, revalidateTag } from "next/cache";
 import { unstable_cache } from "next/cache";
+import { z } from "zod";
 import { DashboardWidgets, DEFAULT_DASHBOARD_WIDGETS } from "@/types/dashboard";
+
+const DashboardWidgetsSchema = z.object({
+  showStats: z.boolean().optional(),
+  showNetWorth: z.boolean().optional(),
+  showBalanceTrend: z.boolean().optional(),
+  showCalendar: z.boolean().optional(),
+  showCategories: z.boolean().optional(),
+  showRecent: z.boolean().optional(),
+}).optional();
+
+const UpdateUserSettingsSchema = z.object({
+  monthlyBudget: z.number().nonnegative().optional(),
+  currency: z.string().length(3).optional(),
+  dashboardWidgets: DashboardWidgetsSchema,
+});
 
 // Free exchange rate API (no API key needed for basic usage)
 async function getExchangeRate(from: string, to: string): Promise<number> {
@@ -66,12 +82,14 @@ export async function updateUserSettings(input: {
   const { userId } = await auth();
   if (!userId) throw new Error("Unauthorized");
 
+  const validated = UpdateUserSettingsSchema.parse(input);
+
   const currentSettings = await db.userSettings.findUnique({
     where: { userId },
   });
 
   const oldCurrency = currentSettings?.currency || "INR";
-  const newCurrency = input.currency;
+  const newCurrency = validated.currency;
 
   // If currency is changing, convert all expenses
   if (newCurrency && newCurrency !== oldCurrency) {
@@ -103,11 +121,11 @@ export async function updateUserSettings(input: {
 
   const settings = await db.userSettings.upsert({
     where: { userId },
-    update: input,
+    update: validated,
     create: {
       userId,
-      monthlyBudget: input.monthlyBudget || 0,
-      currency: input.currency || "INR",
+      monthlyBudget: validated.monthlyBudget || 0,
+      currency: validated.currency || "INR",
     },
   });
 

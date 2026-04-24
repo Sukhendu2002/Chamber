@@ -3,14 +3,24 @@
 import { auth } from "@clerk/nextjs/server";
 import { db } from "@/lib/db";
 import { revalidatePath } from "next/cache";
+import { z } from "zod";
 
-export type CreateTransferInput = {
-  fromAccountId: string;
-  toAccountId: string;
-  amount: number;
-  note?: string;
-  date?: Date;
-};
+const CreateTransferSchema = z.object({
+  fromAccountId: z.string().uuid(),
+  toAccountId: z.string().uuid(),
+  amount: z.number().positive("Transfer amount must be greater than zero"),
+  note: z.string().max(500).optional(),
+  date: z.date().optional(),
+});
+
+const GetTransfersOptionsSchema = z.object({
+  accountId: z.string().uuid().optional(),
+  limit: z.number().int().positive().optional(),
+}).optional();
+
+const DeleteTransferSchema = z.string().uuid();
+
+export type CreateTransferInput = z.infer<typeof CreateTransferSchema>;
 
 export type TransferWithAccounts = {
   id: string;
@@ -29,66 +39,64 @@ export async function createTransfer(input: CreateTransferInput) {
   const { userId } = await auth();
   if (!userId) throw new Error("Unauthorized");
 
-  if (input.fromAccountId === input.toAccountId) {
+  const validated = CreateTransferSchema.parse(input);
+
+  if (validated.fromAccountId === validated.toAccountId) {
     throw new Error("Source and destination accounts must be different");
   }
 
-  if (input.amount <= 0) {
-    throw new Error("Transfer amount must be greater than zero");
-  }
-
-  const transferDate = input.date ?? new Date();
+  const transferDate = validated.date ?? new Date();
 
   // Accounts are fetched inside the transaction to prevent TOCTOU race conditions.
   // Atomic increments are used for balance updates to avoid stale-read overwrites.
   const transfer = await db.$transaction(async (tx) => {
     const [fromAccount, toAccount] = await Promise.all([
-      tx.account.findFirst({ where: { id: input.fromAccountId, userId, isActive: true } }),
-      tx.account.findFirst({ where: { id: input.toAccountId, userId, isActive: true } }),
+      tx.account.findFirst({ where: { id: validated.fromAccountId, userId, isActive: true } }),
+      tx.account.findFirst({ where: { id: validated.toAccountId, userId, isActive: true } }),
     ]);
 
     if (!fromAccount) throw new Error("Source account not found");
     if (!toAccount) throw new Error("Destination account not found");
 
-    if (fromAccount.currentBalance < input.amount) {
+    if (fromAccount.currentBalance < validated.amount) {
       throw new Error("Insufficient funds");
     }
 
     const created = await tx.transfer.create({
       data: {
         userId,
-        fromAccountId: input.fromAccountId,
-        toAccountId: input.toAccountId,
-        amount: input.amount,
-        note: input.note,
+        fromAccountId: validated.fromAccountId,
+        toAccountId: validated.toAccountId,
+        amount: validated.amount,
+        note: validated.note,
         date: transferDate,
       },
     });
 
     const updatedFrom = await tx.account.update({
-      where: { id: input.fromAccountId },
-      data: { currentBalance: { increment: -input.amount } },
+      where: { id: validated.fromAccountId },
+      data: { currentBalance: { increment: -validated.amount } },
     });
 
     await tx.balanceHistory.create({
       data: {
-        accountId: input.fromAccountId,
+        accountId: validated.fromAccountId,
         balance: updatedFrom.currentBalance,
-        note: `Transfer to ${toAccount.name}${input.note ? ` — ${input.note}` : ""}`,
+        note: `Transfer to ${toAccount.name}${validated.note ? ` — ${validated.note}` : ""}`,
         date: transferDate,
       },
     });
 
     const updatedTo = await tx.account.update({
-      where: { id: input.toAccountId },
-      data: { currentBalance: { increment: input.amount } },
+      where: { id: validated.toAccountId },
+      data: { currentBalance: { increment: validated.amount } },
     });
 
     await tx.balanceHistory.create({
       data: {
-        accountId: input.toAccountId,
+        accountId: validated.toAccountId,
         balance: updatedTo.currentBalance,
-        note: `Transfer from ${fromAccount.name}${input.note ? ` — ${input.note}` : ""}`,
+        note: `Transfer from ${fromAccount.name}${validated.note ? ` — ${validated.note}` : ""}`,
         date: transferDate,
       },
     });
@@ -102,19 +110,18 @@ export async function createTransfer(input: CreateTransferInput) {
   return transfer;
 }
 
-export async function getTransfers(options?: {
-  accountId?: string;
-  limit?: number;
-}) {
+export async function getTransfers(options?: z.infer<typeof GetTransfersOptionsSchema>) {
   const { userId } = await auth();
   if (!userId) throw new Error("Unauthorized");
 
+  const validated = GetTransfersOptionsSchema.parse(options);
+
   const where: Record<string, unknown> = { userId };
 
-  if (options?.accountId) {
+  if (validated?.accountId) {
     where.OR = [
-      { fromAccountId: options.accountId },
-      { toAccountId: options.accountId },
+      { fromAccountId: validated.accountId },
+      { toAccountId: validated.accountId },
     ];
   }
 
@@ -125,7 +132,7 @@ export async function getTransfers(options?: {
       toAccount: { select: { id: true, name: true, type: true } },
     },
     orderBy: [{ date: "desc" }, { createdAt: "desc" }],
-    take: options?.limit ?? 50,
+    take: validated?.limit ?? 50,
   });
 
   return transfers as TransferWithAccounts[];
@@ -135,8 +142,10 @@ export async function deleteTransfer(transferId: string) {
   const { userId } = await auth();
   if (!userId) throw new Error("Unauthorized");
 
+  const validatedId = DeleteTransferSchema.parse(transferId);
+
   const transfer = await db.transfer.findFirst({
-    where: { id: transferId, userId },
+    where: { id: validatedId, userId },
     select: {
       id: true,
       amount: true,
@@ -151,7 +160,7 @@ export async function deleteTransfer(transferId: string) {
 
   // Reverse the balance changes using atomic increments to avoid TOCTOU race conditions
   await db.$transaction(async (tx) => {
-    await tx.transfer.delete({ where: { id: transferId } });
+    await tx.transfer.delete({ where: { id: validatedId } });
 
     const updatedFrom = await tx.account.update({
       where: { id: transfer.fromAccountId },

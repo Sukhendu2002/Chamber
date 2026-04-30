@@ -71,6 +71,8 @@ type SettingsFormProps = {
     currency: string;
     timezone: string;
     dashboardWidgets: DashboardWidgets;
+    forecastHorizonMonths: number;
+    savingsTargetPercent: number;
   };
 };
 
@@ -82,6 +84,12 @@ export function SettingsForm({ initialSettings }: SettingsFormProps) {
   const [timezone, setTimezone] = useState(initialSettings.timezone || "Asia/Kolkata");
   const [dashboardWidgets, setDashboardWidgets] = useState<DashboardWidgets>(
     initialSettings.dashboardWidgets || DEFAULT_DASHBOARD_WIDGETS
+  );
+  const [forecastHorizonMonths, setForecastHorizonMonths] = useState(
+    initialSettings.forecastHorizonMonths?.toString() || "6"
+  );
+  const [savingsTargetPercent, setSavingsTargetPercent] = useState(
+    initialSettings.savingsTargetPercent?.toString() || "20"
   );
   const [loading, setLoading] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -140,11 +148,16 @@ export function SettingsForm({ initialSettings }: SettingsFormProps) {
   const handleSave = async () => {
     setLoading(true);
     try {
+      const horizon = Math.min(24, Math.max(1, parseInt(forecastHorizonMonths) || 6));
+      const savings = Math.min(100, Math.max(0, parseFloat(savingsTargetPercent) || 20));
+
       await updateUserSettings({
         monthlyBudget: parseFloat(monthlyBudget) || 0,
         currency,
         timezone,
         dashboardWidgets,
+        forecastHorizonMonths: horizon,
+        savingsTargetPercent: savings,
       });
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
@@ -280,6 +293,47 @@ export function SettingsForm({ initialSettings }: SettingsFormProps) {
               <div
                 className={`h-4 w-4 mt-0.5 rounded-full bg-white shadow-sm transition-transform ${isDemoMode ? "translate-x-4.5 ml-0.5" : "translate-x-0.5"}`}
               />
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Forecast Settings */}
+      <Card className="mb-6 border">
+        <CardHeader>
+          <CardTitle className="text-sm font-medium">Forecasting Settings</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="space-y-2">
+              <Label htmlFor="forecast-horizon">Forecast Horizon (months)</Label>
+              <Input
+                id="forecast-horizon"
+                type="number"
+                min="1"
+                max="24"
+                value={forecastHorizonMonths}
+                onChange={(e) => setForecastHorizonMonths(e.target.value)}
+                placeholder="6"
+              />
+              <p className="text-xs text-muted-foreground">
+                How many months ahead to project your balance
+              </p>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="savings-target">Savings Target (%)</Label>
+              <Input
+                id="savings-target"
+                type="number"
+                min="0"
+                max="100"
+                value={savingsTargetPercent}
+                onChange={(e) => setSavingsTargetPercent(e.target.value)}
+                placeholder="20"
+              />
+              <p className="text-xs text-muted-foreground">
+                Target percentage of income to save each month
+              </p>
             </div>
           </div>
         </CardContent>

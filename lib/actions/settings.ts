@@ -33,6 +33,8 @@ const getCachedSettings = unstable_cache(
           currency: "INR",
           timezone: "Asia/Kolkata",
           dashboardWidgets: DEFAULT_DASHBOARD_WIDGETS,
+          forecastHorizonMonths: 6,
+          savingsTargetPercent: 20,
         },
       });
     }
@@ -64,6 +66,8 @@ export async function updateUserSettings(input: {
   currency?: string;
   timezone?: string;
   dashboardWidgets?: DashboardWidgets;
+  forecastHorizonMonths?: number;
+  savingsTargetPercent?: number;
 }) {
   const { userId } = await auth();
   if (!userId) throw new Error("Unauthorized");
@@ -111,6 +115,8 @@ export async function updateUserSettings(input: {
       monthlyBudget: input.monthlyBudget || 0,
       currency: input.currency || "INR",
       timezone: input.timezone || "Asia/Kolkata",
+      forecastHorizonMonths: input.forecastHorizonMonths || 6,
+      savingsTargetPercent: input.savingsTargetPercent || 20,
     },
   });
 
@@ -270,6 +276,10 @@ export async function deleteAllUserData() {
   await db.linkingCode.deleteMany({
     where: { userId },
   });
+
+  // Delete all user's goals and recurring patterns
+  await db.goal.deleteMany({ where: { userId } });
+  await db.recurringPattern.deleteMany({ where: { userId } });
 
   // Reset user settings (keep the record but reset values)
   await db.userSettings.update({

@@ -19,6 +19,7 @@ const DashboardWidgetsSchema = z.object({
 const UpdateUserSettingsSchema = z.object({
   monthlyBudget: z.number().nonnegative().optional(),
   currency: z.string().length(3).optional(),
+  timezone: z.string().optional(),
   dashboardWidgets: DashboardWidgetsSchema,
 });
 
@@ -47,6 +48,7 @@ const getCachedSettings = unstable_cache(
           userId,
           monthlyBudget: 0,
           currency: "INR",
+          timezone: "Asia/Kolkata",
           dashboardWidgets: DEFAULT_DASHBOARD_WIDGETS,
         },
       });
@@ -77,6 +79,7 @@ export async function getUserSettings() {
 export async function updateUserSettings(input: {
   monthlyBudget?: number;
   currency?: string;
+  timezone?: string;
   dashboardWidgets?: DashboardWidgets;
 }) {
   const { userId } = await auth();
@@ -126,6 +129,7 @@ export async function updateUserSettings(input: {
       userId,
       monthlyBudget: validated.monthlyBudget || 0,
       currency: validated.currency || "INR",
+      timezone: validated.timezone || "Asia/Kolkata",
     },
   });
 

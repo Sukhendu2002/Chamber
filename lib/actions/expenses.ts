@@ -5,6 +5,8 @@ import { db } from "@/lib/db";
 import { revalidatePath } from "next/cache";
 import { checkAndSendSubscriptionAlerts } from "@/lib/subscription-alerts";
 import { z } from "zod";
+import { getUserSettings } from "@/lib/actions/settings";
+import { getNowInTimezone, getStartOfMonthInTimezone, getEndOfMonthInTimezone } from "@/lib/utils";
 
 const EXPENSE_CATEGORIES = [
   "Food",
@@ -342,9 +344,14 @@ export async function getMonthlyStats() {
   const { userId } = await auth();
   if (!userId) throw new Error("Unauthorized");
 
-  const now = new Date();
-  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-  const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+  // Get user's timezone setting
+  const settings = await getUserSettings();
+  const userTimezone = settings.timezone || "UTC";
+
+  // Use user's timezone for date calculations
+  const now = getNowInTimezone(userTimezone);
+  const startOfMonth = getStartOfMonthInTimezone(userTimezone);
+  const endOfMonth = getEndOfMonthInTimezone(userTimezone);
 
   // Get expenses for current month (for stats)
   const monthlyExpenses = await db.expense.findMany({
@@ -418,7 +425,12 @@ export async function getAnalyticsData() {
   const { userId } = await auth();
   if (!userId) throw new Error("Unauthorized");
 
-  const now = new Date();
+  // Get user's timezone setting
+  const settings = await getUserSettings();
+  const userTimezone = settings.timezone || "UTC";
+
+  // Use user's timezone for date calculations
+  const now = getNowInTimezone(userTimezone);
 
   // Get expenses for the last 6 months
   const sixMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 5, 1);
@@ -434,7 +446,7 @@ export async function getAnalyticsData() {
   });
 
   // Current month stats
-  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+  const startOfMonth = getStartOfMonthInTimezone(userTimezone);
   const currentMonthExpenses: typeof expenses = [];
   for (const exp of expenses) {
     if (new Date(exp.date) >= startOfMonth) {

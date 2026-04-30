@@ -31,6 +31,7 @@ const getCachedSettings = unstable_cache(
           userId,
           monthlyBudget: 0,
           currency: "INR",
+          timezone: "Asia/Kolkata",
           dashboardWidgets: DEFAULT_DASHBOARD_WIDGETS,
           forecastHorizonMonths: 6,
           savingsTargetPercent: 20,
@@ -63,6 +64,7 @@ export async function getUserSettings() {
 export async function updateUserSettings(input: {
   monthlyBudget?: number;
   currency?: string;
+  timezone?: string;
   dashboardWidgets?: DashboardWidgets;
   forecastHorizonMonths?: number;
   savingsTargetPercent?: number;
@@ -112,6 +114,7 @@ export async function updateUserSettings(input: {
       userId,
       monthlyBudget: input.monthlyBudget || 0,
       currency: input.currency || "INR",
+      timezone: input.timezone || "Asia/Kolkata",
       forecastHorizonMonths: input.forecastHorizonMonths || 6,
       savingsTargetPercent: input.savingsTargetPercent || 20,
     },

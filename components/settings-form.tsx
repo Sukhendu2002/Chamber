@@ -36,6 +36,24 @@ const currencies = [
   { value: "GBP", label: "British Pound (£)" },
 ];
 
+const timezones = [
+  { value: "UTC", label: "UTC (Coordinated Universal Time)" },
+  { value: "Asia/Kolkata", label: "India (IST) - Asia/Kolkata" },
+  { value: "America/New_York", label: "Eastern Time (ET) - America/New_York" },
+  { value: "America/Chicago", label: "Central Time (CT) - America/Chicago" },
+  { value: "America/Denver", label: "Mountain Time (MT) - America/Denver" },
+  { value: "America/Los_Angeles", label: "Pacific Time (PT) - America/Los_Angeles" },
+  { value: "Europe/London", label: "London (GMT/BST) - Europe/London" },
+  { value: "Europe/Paris", label: "Paris (CET/CEST) - Europe/Paris" },
+  { value: "Europe/Berlin", label: "Berlin (CET/CEST) - Europe/Berlin" },
+  { value: "Asia/Tokyo", label: "Tokyo (JST) - Asia/Tokyo" },
+  { value: "Asia/Shanghai", label: "Shanghai (CST) - Asia/Shanghai" },
+  { value: "Asia/Singapore", label: "Singapore (SGT) - Asia/Singapore" },
+  { value: "Asia/Dubai", label: "Dubai (GST) - Asia/Dubai" },
+  { value: "Australia/Sydney", label: "Sydney (AEST/AEDT) - Australia/Sydney" },
+  { value: "Pacific/Auckland", label: "Auckland (NZST/NZDT) - Pacific/Auckland" },
+];
+
 const categories = [
   "Food",
   "Travel",
@@ -51,6 +69,7 @@ type SettingsFormProps = {
   initialSettings: {
     monthlyBudget: number;
     currency: string;
+    timezone: string;
     dashboardWidgets: DashboardWidgets;
     forecastHorizonMonths: number;
     savingsTargetPercent: number;
@@ -62,6 +81,7 @@ export function SettingsForm({ initialSettings }: SettingsFormProps) {
     initialSettings.monthlyBudget.toString()
   );
   const [currency, setCurrency] = useState(initialSettings.currency);
+  const [timezone, setTimezone] = useState(initialSettings.timezone || "Asia/Kolkata");
   const [dashboardWidgets, setDashboardWidgets] = useState<DashboardWidgets>(
     initialSettings.dashboardWidgets || DEFAULT_DASHBOARD_WIDGETS
   );
@@ -134,6 +154,7 @@ export function SettingsForm({ initialSettings }: SettingsFormProps) {
       await updateUserSettings({
         monthlyBudget: parseFloat(monthlyBudget) || 0,
         currency,
+        timezone,
         dashboardWidgets,
         forecastHorizonMonths: horizon,
         savingsTargetPercent: savings,
@@ -181,6 +202,24 @@ export function SettingsForm({ initialSettings }: SettingsFormProps) {
                 </SelectContent>
               </Select>
             </div>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="timezone">Timezone</Label>
+            <Select value={timezone} onValueChange={setTimezone}>
+              <SelectTrigger id="timezone">
+                <SelectValue placeholder="Select timezone" />
+              </SelectTrigger>
+              <SelectContent>
+                {timezones.map((tz) => (
+                  <SelectItem key={tz.value} value={tz.value}>
+                    {tz.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              Used for calculating monthly expense periods correctly
+            </p>
           </div>
         </CardContent>
       </Card>

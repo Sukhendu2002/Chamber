@@ -3,44 +3,72 @@
 import { auth } from "@clerk/nextjs/server";
 import { db } from "@/lib/db";
 import { revalidatePath } from "next/cache";
+import { z } from "zod";
 
-export type AccountTypeValue = "BANK" | "INVESTMENT" | "WALLET" | "CASH" | "CREDIT_CARD" | "DEBIT_CARD" | "OTHER";
+const ACCOUNT_TYPES = [
+  "BANK",
+  "INVESTMENT",
+  "WALLET",
+  "CASH",
+  "CREDIT_CARD",
+  "DEBIT_CARD",
+  "OTHER",
+] as const;
 
-export type CreateAccountInput = {
-  name: string;
-  type: AccountTypeValue;
-  initialBalance: number;
-  description?: string;
-  icon?: string;
-  color?: string;
-  creditLimit?: number;
-};
+const CreateAccountSchema = z.object({
+  name: z.string().min(1).max(100),
+  type: z.enum(ACCOUNT_TYPES),
+  initialBalance: z.number(),
+  description: z.string().max(500).optional(),
+  icon: z.string().max(50).optional(),
+  color: z.string().max(7).optional(),
+  creditLimit: z.number().positive().optional(),
+});
 
-export type UpdateBalanceInput = {
-  accountId: string;
-  newBalance: number;
-  note?: string;
-  date?: Date;
-};
+const UpdateAccountSchema = z.object({
+  name: z.string().min(1).max(100).optional(),
+  type: z.enum(ACCOUNT_TYPES).optional(),
+  description: z.string().max(500).optional(),
+  icon: z.string().max(50).optional(),
+  color: z.string().max(7).optional(),
+});
+
+const UpdateBalanceSchema = z.object({
+  accountId: z.string().uuid(),
+  newBalance: z.number(),
+  note: z.string().max(200).optional(),
+  date: z.date().optional(),
+});
+
+const GetAccountsOptionsSchema = z.object({
+  type: z.enum(ACCOUNT_TYPES).optional(),
+  includeInactive: z.boolean().optional(),
+}).optional();
+
+export type AccountTypeValue = z.infer<typeof CreateAccountSchema>["type"];
+export type CreateAccountInput = z.infer<typeof CreateAccountSchema>;
+export type UpdateBalanceInput = z.infer<typeof UpdateBalanceSchema>;
 
 export async function createAccount(input: CreateAccountInput) {
   const { userId } = await auth();
   if (!userId) throw new Error("Unauthorized");
 
+  const validated = CreateAccountSchema.parse(input);
+
   // Investment accounts are hidden from Telegram by default
-  const showOnTelegram = input.type !== "INVESTMENT";
+  const showOnTelegram = validated.type !== "INVESTMENT";
 
   // Create account with initial balance
   const account = await db.account.create({
     data: {
       userId,
-      name: input.name,
-      type: input.type,
-      currentBalance: input.initialBalance,
-      description: input.description,
-      icon: input.icon,
-      color: input.color,
-      creditLimit: input.type === "CREDIT_CARD" ? input.creditLimit : undefined,
+      name: validated.name,
+      type: validated.type,
+      currentBalance: validated.initialBalance,
+      description: validated.description,
+      icon: validated.icon,
+      color: validated.color,
+      creditLimit: validated.type === "CREDIT_CARD" ? validated.creditLimit : undefined,
       showOnTelegram,
     },
   });
@@ -49,7 +77,7 @@ export async function createAccount(input: CreateAccountInput) {
   await db.balanceHistory.create({
     data: {
       accountId: account.id,
-      balance: input.initialBalance,
+      balance: validated.initialBalance,
       note: "Initial balance",
     },
   });
@@ -59,12 +87,11 @@ export async function createAccount(input: CreateAccountInput) {
   return account;
 }
 
-export async function getAccounts(options?: {
-  type?: AccountTypeValue;
-  includeInactive?: boolean;
-}) {
+export async function getAccounts(options?: z.infer<typeof GetAccountsOptionsSchema>) {
   const { userId } = await auth();
   if (!userId) throw new Error("Unauthorized");
+
+  const validated = GetAccountsOptionsSchema.parse(options);
 
   const where: {
     userId: string;
@@ -72,11 +99,11 @@ export async function getAccounts(options?: {
     isActive?: boolean;
   } = { userId };
 
-  if (options?.type) {
-    where.type = options.type;
+  if (validated?.type) {
+    where.type = validated.type;
   }
 
-  if (!options?.includeInactive) {
+  if (!validated?.includeInactive) {
     where.isActive = true;
   }
 
@@ -97,12 +124,16 @@ export async function getAccounts(options?: {
   return accounts;
 }
 
+const IdSchema = z.string().uuid();
+
 export async function getAccount(id: string) {
   const { userId } = await auth();
   if (!userId) throw new Error("Unauthorized");
 
+  const validatedId = IdSchema.parse(id);
+
   const account = await db.account.findFirst({
-    where: { id, userId },
+    where: { id: validatedId, userId },
     include: {
       balanceHistory: {
         orderBy: { date: "desc" },
@@ -113,15 +144,22 @@ export async function getAccount(id: string) {
   return account;
 }
 
+const GetAccountWithHistorySchema = z.object({
+  id: z.string().uuid(),
+  months: z.number().int().positive().default(6),
+});
+
 export async function getAccountWithHistory(id: string, months: number = 6) {
   const { userId } = await auth();
   if (!userId) throw new Error("Unauthorized");
 
+  const validated = GetAccountWithHistorySchema.parse({ id, months });
+
   const startDate = new Date();
-  startDate.setMonth(startDate.getMonth() - months);
+  startDate.setMonth(startDate.getMonth() - validated.months);
 
   const account = await db.account.findFirst({
-    where: { id, userId },
+    where: { id: validated.id, userId },
     include: {
       balanceHistory: {
         where: {
@@ -142,21 +180,24 @@ export async function updateAccount(
   const { userId } = await auth();
   if (!userId) throw new Error("Unauthorized");
 
+  const validatedId = IdSchema.parse(id);
+  const validated = UpdateAccountSchema.parse(input);
+
   // Verify ownership
   const existing = await db.account.findFirst({
-    where: { id, userId },
+    where: { id: validatedId, userId },
   });
 
   if (!existing) throw new Error("Account not found");
 
   const account = await db.account.update({
-    where: { id },
+    where: { id: validatedId },
     data: {
-      name: input.name,
-      type: input.type,
-      description: input.description,
-      icon: input.icon,
-      color: input.color,
+      name: validated.name,
+      type: validated.type,
+      description: validated.description,
+      icon: validated.icon,
+      color: validated.color,
     },
   });
 
@@ -169,9 +210,11 @@ export async function updateBalance(input: UpdateBalanceInput) {
   const { userId } = await auth();
   if (!userId) throw new Error("Unauthorized");
 
+  const validated = UpdateBalanceSchema.parse(input);
+
   // Verify ownership
   const account = await db.account.findFirst({
-    where: { id: input.accountId, userId },
+    where: { id: validated.accountId, userId },
   });
 
   if (!account) throw new Error("Account not found");
@@ -179,18 +222,18 @@ export async function updateBalance(input: UpdateBalanceInput) {
   // Create balance history entry
   const historyEntry = await db.balanceHistory.create({
     data: {
-      accountId: input.accountId,
-      balance: input.newBalance,
-      note: input.note,
-      date: input.date || new Date(),
+      accountId: validated.accountId,
+      balance: validated.newBalance,
+      note: validated.note,
+      date: validated.date || new Date(),
     },
   });
 
   // Update current balance on account
   await db.account.update({
-    where: { id: input.accountId },
+    where: { id: validated.accountId },
     data: {
-      currentBalance: input.newBalance,
+      currentBalance: validated.newBalance,
     },
   });
 
@@ -203,9 +246,11 @@ export async function deleteBalanceHistory(historyId: string) {
   const { userId } = await auth();
   if (!userId) throw new Error("Unauthorized");
 
+  const validatedId = IdSchema.parse(historyId);
+
   // Get history entry with account
   const history = await db.balanceHistory.findUnique({
-    where: { id: historyId },
+    where: { id: validatedId },
     include: { account: true },
   });
 
@@ -214,7 +259,7 @@ export async function deleteBalanceHistory(historyId: string) {
 
   // Delete the history entry
   await db.balanceHistory.delete({
-    where: { id: historyId },
+    where: { id: validatedId },
   });
 
   // Update account's current balance to the most recent remaining entry
@@ -238,9 +283,11 @@ export async function deleteAccount(id: string) {
   const { userId } = await auth();
   if (!userId) throw new Error("Unauthorized");
 
+  const validatedId = IdSchema.parse(id);
+
   // Verify ownership
   const existing = await db.account.findFirst({
-    where: { id, userId },
+    where: { id: validatedId, userId },
   });
 
   if (!existing) throw new Error("Account not found");
@@ -258,7 +305,7 @@ export async function deleteAccount(id: string) {
 
   // Delete account (cascade will delete history)
   await db.account.delete({
-    where: { id },
+    where: { id: validatedId },
   });
 
   revalidatePath("/accounts");
@@ -269,14 +316,16 @@ export async function toggleShowOnTelegram(id: string) {
   const { userId } = await auth();
   if (!userId) throw new Error("Unauthorized");
 
+  const validatedId = IdSchema.parse(id);
+
   const account = await db.account.findFirst({
-    where: { id, userId },
+    where: { id: validatedId, userId },
   });
 
   if (!account) throw new Error("Account not found");
 
   await db.account.update({
-    where: { id },
+    where: { id: validatedId },
     data: { showOnTelegram: !account.showOnTelegram },
   });
 
@@ -287,14 +336,16 @@ export async function toggleAccountActive(id: string) {
   const { userId } = await auth();
   if (!userId) throw new Error("Unauthorized");
 
+  const validatedId = IdSchema.parse(id);
+
   const account = await db.account.findFirst({
-    where: { id, userId },
+    where: { id: validatedId, userId },
   });
 
   if (!account) throw new Error("Account not found");
 
   await db.account.update({
-    where: { id },
+    where: { id: validatedId },
     data: { isActive: !account.isActive },
   });
 
@@ -306,14 +357,16 @@ export async function toggleIncludeInNetWorth(id: string) {
   const { userId } = await auth();
   if (!userId) throw new Error("Unauthorized");
 
+  const validatedId = IdSchema.parse(id);
+
   const account = await db.account.findFirst({
-    where: { id, userId },
+    where: { id: validatedId, userId },
   });
 
   if (!account) throw new Error("Account not found");
 
   await db.account.update({
-    where: { id },
+    where: { id: validatedId },
     data: { includeInNetWorth: !account.includeInNetWorth },
   });
 
@@ -372,12 +425,18 @@ export async function getAccountStats() {
   };
 }
 
+const GetAllBalanceHistorySchema = z.object({
+  months: z.number().int().positive().default(6),
+});
+
 export async function getAllBalanceHistory(months: number = 6) {
   const { userId } = await auth();
   if (!userId) throw new Error("Unauthorized");
 
+  const validated = GetAllBalanceHistorySchema.parse({ months });
+
   const startDate = new Date();
-  startDate.setMonth(startDate.getMonth() - months);
+  startDate.setMonth(startDate.getMonth() - validated.months);
 
   // Get all accounts with their history (exclude cards from balance trend chart)
   const accounts = await db.account.findMany({

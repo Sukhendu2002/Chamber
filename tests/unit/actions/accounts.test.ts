@@ -1,5 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
+const UUIDS = {
+    account1: "a1111111-1111-1111-a111-111111111111",
+    account2: "b2222222-2222-2222-b222-222222222222",
+    history1: "beeeeeee-eeee-eeee-9eee-eeeeeeeeeeee",
+    history2: "cfffffff-ffff-ffff-afff-ffffffffffff",
+};
+
 // Mock the database client
 const mockDb = {
     account: {
@@ -35,7 +42,7 @@ describe("Account Actions", () => {
     describe("createAccount", () => {
         it("should create an account with initial balance history", async () => {
             const mockAccount = {
-                id: "account-1",
+                id: UUIDS.account1,
                 userId: "test-user-id",
                 name: "SBI Savings",
                 type: "BANK",
@@ -50,8 +57,8 @@ describe("Account Actions", () => {
 
             mockDb.account.create.mockResolvedValue(mockAccount);
             mockDb.balanceHistory.create.mockResolvedValue({
-                id: "history-1",
-                accountId: "account-1",
+                id: UUIDS.history1,
+                accountId: UUIDS.account1,
                 balance: 10000,
                 note: "Initial balance",
                 date: new Date(),
@@ -77,14 +84,14 @@ describe("Account Actions", () => {
         it("should return all accounts for the user", async () => {
             const mockAccounts = [
                 {
-                    id: "account-1",
+                    id: UUIDS.account1,
                     name: "SBI Savings",
                     type: "BANK",
                     currentBalance: 10000,
                     isActive: true,
                 },
                 {
-                    id: "account-2",
+                    id: UUIDS.account2,
                     name: "Zerodha",
                     type: "INVESTMENT",
                     currentBalance: 50000,
@@ -121,19 +128,19 @@ describe("Account Actions", () => {
     describe("updateBalance", () => {
         it("should update balance and create history entry", async () => {
             const mockUpdatedAccount = {
-                id: "account-1",
+                id: UUIDS.account1,
                 currentBalance: 15000,
             };
 
             mockDb.account.findFirst.mockResolvedValue({
-                id: "account-1",
+                id: UUIDS.account1,
                 userId: "test-user-id",
                 currentBalance: 10000,
             });
             mockDb.account.update.mockResolvedValue(mockUpdatedAccount);
             mockDb.balanceHistory.create.mockResolvedValue({
-                id: "history-2",
-                accountId: "account-1",
+                id: UUIDS.history2,
+                accountId: UUIDS.account1,
                 balance: 15000,
                 note: "Salary credit",
                 date: new Date(),
@@ -143,7 +150,7 @@ describe("Account Actions", () => {
             vi.resetModules();
             const { updateBalance } = await import("@/lib/actions/accounts");
             const result = await updateBalance({
-                accountId: "account-1",
+                accountId: UUIDS.account1,
                 newBalance: 15000,
                 note: "Salary credit",
             });
@@ -178,18 +185,18 @@ describe("Account Actions", () => {
     describe("deleteAccount", () => {
         it("should delete account", async () => {
             mockDb.account.findFirst.mockResolvedValue({
-                id: "account-1",
+                id: UUIDS.account1,
                 userId: "test-user-id",
             });
             mockDb.transfer.count.mockResolvedValue(0);
-            mockDb.account.delete.mockResolvedValue({ id: "account-1" });
+            mockDb.account.delete.mockResolvedValue({ id: UUIDS.account1 });
 
             vi.resetModules();
             const { deleteAccount } = await import("@/lib/actions/accounts");
-            await deleteAccount("account-1");
+            await deleteAccount(UUIDS.account1);
 
             expect(mockDb.account.delete).toHaveBeenCalledWith({
-                where: { id: "account-1" },
+                where: { id: UUIDS.account1 },
             });
         });
     });

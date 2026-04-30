@@ -41,7 +41,9 @@ const categories = [
   "Investments",
   "Subscription",
   "General",
-];
+] as const;
+
+type ExpenseCategory = (typeof categories)[number];
 
 const billingCycles = [
   { value: "ONCE", label: "One-time (non-recurring)" },
@@ -60,7 +62,7 @@ export function AddExpenseDialog({ accounts = [] }: AddExpenseDialogProps) {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [amount, setAmount] = useState("");
-  const [category, setCategory] = useState("General");
+  const [category, setCategory] = useState<ExpenseCategory>("General");
   const [description, setDescription] = useState("");
   const [merchant, setMerchant] = useState("");
   const [date, setDate] = useState(toLocalDateString());
@@ -179,7 +181,7 @@ export function AddExpenseDialog({ accounts = [] }: AddExpenseDialogProps) {
             </div>
             <div className="space-y-2">
               <Label htmlFor="category">Category</Label>
-              <Select value={category} onValueChange={setCategory}>
+              <Select value={category} onValueChange={(v) => setCategory(v as ExpenseCategory)}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>

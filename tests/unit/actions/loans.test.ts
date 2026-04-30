@@ -1,5 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
+const UUIDS = {
+    loan1: "c1111111-1111-1111-a111-111111111111",
+    loan2: "d2222222-2222-2222-8aaa-aaaaaaaaaaaa",
+    repayment1: "e3333333-3333-3333-9bbb-bbbbbbbbbbbb",
+    repayment2: "f4444444-4444-4444-accc-cccccccccccc",
+};
+
 // Mock the database client
 const mockDb = {
     loan: {
@@ -31,7 +38,7 @@ describe("Loan Actions", () => {
     describe("createLoan", () => {
         it("should create a loan with required fields", async () => {
             const mockLoan = {
-                id: "loan-1",
+                id: UUIDS.loan1,
                 userId: "test-user-id",
                 borrowerName: "John Doe",
                 borrowerPhone: "1234567890",
@@ -67,7 +74,7 @@ describe("Loan Actions", () => {
     describe("addRepayment", () => {
         it("should add repayment and update loan", async () => {
             const mockLoan = {
-                id: "loan-1",
+                id: UUIDS.loan1,
                 userId: "test-user-id",
                 amount: 5000,
                 amountRepaid: 0,
@@ -75,8 +82,8 @@ describe("Loan Actions", () => {
             };
 
             const mockRepayment = {
-                id: "repayment-1",
-                loanId: "loan-1",
+                id: UUIDS.repayment1,
+                loanId: UUIDS.loan1,
                 amount: 2000,
                 date: new Date(),
                 note: "First payment",
@@ -96,13 +103,13 @@ describe("Loan Actions", () => {
             const { addRepayment } = await import("@/lib/actions/loans");
 
             const result = await addRepayment({
-                loanId: "loan-1",
+                loanId: UUIDS.loan1,
                 amount: 2000,
                 date: new Date(),
                 note: "First payment",
             });
 
-            expect(result.id).toBe("repayment-1");
+            expect(result.id).toBe(UUIDS.repayment1);
             expect(result.amount).toBe(2000);
             expect(mockDb.loan.update).toHaveBeenCalledWith(
                 expect.objectContaining({
@@ -115,7 +122,7 @@ describe("Loan Actions", () => {
 
         it("should mark loan as COMPLETED when fully repaid", async () => {
             const mockLoan = {
-                id: "loan-1",
+                id: UUIDS.loan1,
                 userId: "test-user-id",
                 amount: 5000,
                 amountRepaid: 3000,
@@ -124,8 +131,8 @@ describe("Loan Actions", () => {
 
             mockDb.loan.findFirst.mockResolvedValue(mockLoan);
             mockDb.repayment.create.mockResolvedValue({
-                id: "repayment-2",
-                loanId: "loan-1",
+                id: UUIDS.repayment2,
+                loanId: UUIDS.loan1,
                 amount: 2000,
                 date: new Date(),
                 note: "Final payment",
@@ -142,7 +149,7 @@ describe("Loan Actions", () => {
             const { addRepayment } = await import("@/lib/actions/loans");
 
             await addRepayment({
-                loanId: "loan-1",
+                loanId: UUIDS.loan1,
                 amount: 2000,
                 date: new Date(),
                 note: "Final payment",
@@ -162,15 +169,15 @@ describe("Loan Actions", () => {
         it("should return all loans with repayments", async () => {
             const mockLoans = [
                 {
-                    id: "loan-1",
+                    id: UUIDS.loan1,
                     borrowerName: "John Doe",
                     amount: 5000,
                     amountRepaid: 2000,
                     status: "PARTIAL",
-                    repayments: [{ id: "repayment-1", amount: 2000 }],
+                    repayments: [{ id: UUIDS.repayment1, amount: 2000 }],
                 },
                 {
-                    id: "loan-2",
+                    id: UUIDS.loan2,
                     borrowerName: "Jane Smith",
                     amount: 3000,
                     amountRepaid: 0,
@@ -229,17 +236,17 @@ describe("Loan Actions", () => {
     describe("deleteLoan", () => {
         it("should delete a loan", async () => {
             mockDb.loan.findFirst.mockResolvedValue({
-                id: "loan-1",
+                id: UUIDS.loan1,
                 userId: "test-user-id",
             });
-            mockDb.loan.delete.mockResolvedValue({ id: "loan-1" });
+            mockDb.loan.delete.mockResolvedValue({ id: UUIDS.loan1 });
 
             vi.resetModules();
             const { deleteLoan } = await import("@/lib/actions/loans");
-            await deleteLoan("loan-1");
+            await deleteLoan(UUIDS.loan1);
 
             expect(mockDb.loan.delete).toHaveBeenCalledWith({
-                where: { id: "loan-1" },
+                where: { id: UUIDS.loan1 },
             });
         });
     });

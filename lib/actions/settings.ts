@@ -31,6 +31,7 @@ const getCachedSettings = unstable_cache(
           userId,
           monthlyBudget: 0,
           currency: "INR",
+          timezone: "Asia/Kolkata",
           dashboardWidgets: DEFAULT_DASHBOARD_WIDGETS,
         },
       });
@@ -61,6 +62,7 @@ export async function getUserSettings() {
 export async function updateUserSettings(input: {
   monthlyBudget?: number;
   currency?: string;
+  timezone?: string;
   dashboardWidgets?: DashboardWidgets;
 }) {
   const { userId } = await auth();
@@ -108,6 +110,7 @@ export async function updateUserSettings(input: {
       userId,
       monthlyBudget: input.monthlyBudget || 0,
       currency: input.currency || "INR",
+      timezone: input.timezone || "Asia/Kolkata",
     },
   });
 

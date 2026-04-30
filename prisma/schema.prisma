@@ -155,10 +155,12 @@ model Account {
   isActive      Boolean         @default(true)
   showOnTelegram Boolean        @default(true) // Whether to show in Telegram bot payment options
   includeInNetWorth Boolean     @default(true) // Whether to include in net worth calculation
+  investmentProducts String[]   @default([]) // Investment product IDs linked to this account
   createdAt     DateTime        @default(now())
   updatedAt     DateTime        @updatedAt
   balanceHistory BalanceHistory[]
   expenses      Expense[]
+  investmentProductsList InvestmentProduct[] // Investment products linked to this account
   transfersFrom Transfer[]      @relation("TransferFrom")
   transfersTo   Transfer[]      @relation("TransferTo")
 
@@ -249,4 +251,169 @@ model RecurringPattern {
   @@unique([userId, name])
   @@index([userId])
   @@index([nextPredicted])
+}
+
+enum GoalCategory {
+  RETIREMENT
+  CHILDREN
+  HOME
+  EMERGENCY_FUND
+  VEHICLE
+  TRAVEL
+  FIRE
+  CUSTOM
+}
+
+enum GoalPriority {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+model FinancialGoal {
+  id             String       @id @default(uuid())
+  userId         String
+  name           String
+  category       GoalCategory @default(CUSTOM)
+  targetAmount   Float
+  targetDate     DateTime
+  currentSavings Float        @default(0)
+  expectedReturn Float        @default(12)
+  inflationRate  Float        @default(6)
+  priority       GoalPriority @default(MEDIUM)
+  aiStatusNote   String?
+  isAchieved     Boolean      @default(false)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  @@index([targetDate])
+  @@index([userId])
+}
+
+enum InvestmentType {
+  STOCK
+  MUTUAL_FUND
+  ETF
+  PPF
+  FIXED_DEPOSIT
+  RD
+  BOND
+  NPS
+  GOLD
+  OTHER
+}
+
+model Investment {
+  id               String         @id @default(uuid())
+  userId           String
+  name             String
+  type             InvestmentType
+  ticker           String?
+  units            Float          @default(0)
+  avgBuyPrice      Float          @default(0)
+  totalInvested    Float          @default(0)
+  currentPrice     Float?
+  lastPriceAt      DateTime?
+  aiPriceNote      String?
+  interestRate     Float?
+  maturityDate     DateTime?
+  maturityAmount   Float?
+  targetAllocation Float?
+  startDate        DateTime       @default(now())
+  notes            String?
+  isActive         Boolean        @default(true)
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+
+  @@index([ticker])
+  @@index([type])
+  @@index([userId])
+}
+
+model InvestmentProduct {
+  id                String                  @id @default(uuid())
+  userId            String
+  accountId         String
+  type              InvestmentType
+  name              String
+  initialInvestment Float                   @default(0)
+  currentValue      Float                   @default(0)
+  purchaseDate      DateTime                @default(now())
+  description       String?
+  details           Json?
+  isActive          Boolean                 @default(true)
+  createdAt         DateTime                @default(now())
+  updatedAt         DateTime                @updatedAt
+  account           Account                 @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  transactions      InvestmentTransaction[]
+  livePrice         LivePrice?
+
+  @@index([accountId])
+  @@index([type])
+  @@index([userId])
+}
+
+enum TransactionType {
+  BUY
+  SELL
+  CONTRIBUTION
+  WITHDRAWAL
+  DIVIDEND
+  INTEREST
+}
+
+model InvestmentTransaction {
+  id             String            @id @default(uuid())
+  investmentId   String
+  type           TransactionType
+  amount         Float
+  units          Float?
+  pricePerUnit   Float?
+  date           DateTime          @default(now())
+  note           String?
+  receiptUrls    String[]          @default([])
+  createdAt      DateTime          @default(now())
+  investment     InvestmentProduct @relation(fields: [investmentId], references: [id], onDelete: Cascade)
+
+  @@index([date])
+  @@index([investmentId])
+  @@index([type])
+}
+
+enum PriceSource {
+  AMFI
+  NSE
+  BSE
+  MONEYCONTROL
+  YFINANCE
+  MANUAL
+}
+
+model LivePrice {
+  id           String            @id @default(uuid())
+  investmentId String            @unique
+  source       PriceSource
+  price        Float
+  currency     String            @default("INR")
+  cachedAt     DateTime          @default(now())
+  expiresAt    DateTime
+  investment   InvestmentProduct @relation(fields: [investmentId], references: [id], onDelete: Cascade)
+
+  @@index([expiresAt])
+  @@index([investmentId])
+}
+
+model MonthlyPlan {
+  id              String   @id @default(uuid())
+  userId          String
+  month           Int
+  year            Int
+  planJson        Json
+  summary         String
+  isStale         Boolean  @default(false)
+  stalenessReason String?
+  createdAt       DateTime @default(now())
+
+  @@unique([userId, month, year])
+  @@index([userId])
 }

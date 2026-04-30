@@ -21,6 +21,8 @@ const UpdateUserSettingsSchema = z.object({
   currency: z.string().length(3).optional(),
   timezone: z.string().optional(),
   dashboardWidgets: DashboardWidgetsSchema,
+  forecastHorizonMonths: z.number().int().positive().optional(),
+  savingsTargetPercent: z.number().nonnegative().max(100).optional(),
 });
 
 // Free exchange rate API (no API key needed for basic usage)
@@ -50,6 +52,8 @@ const getCachedSettings = unstable_cache(
           currency: "INR",
           timezone: "Asia/Kolkata",
           dashboardWidgets: DEFAULT_DASHBOARD_WIDGETS,
+          forecastHorizonMonths: 6,
+          savingsTargetPercent: 20,
         },
       });
     }
@@ -81,6 +85,8 @@ export async function updateUserSettings(input: {
   currency?: string;
   timezone?: string;
   dashboardWidgets?: DashboardWidgets;
+  forecastHorizonMonths?: number;
+  savingsTargetPercent?: number;
 }) {
   const { userId } = await auth();
   if (!userId) throw new Error("Unauthorized");
@@ -130,6 +136,8 @@ export async function updateUserSettings(input: {
       monthlyBudget: validated.monthlyBudget || 0,
       currency: validated.currency || "INR",
       timezone: validated.timezone || "Asia/Kolkata",
+      forecastHorizonMonths: validated.forecastHorizonMonths || 6,
+      savingsTargetPercent: validated.savingsTargetPercent || 20,
     },
   });
 
@@ -289,6 +297,10 @@ export async function deleteAllUserData() {
   await db.linkingCode.deleteMany({
     where: { userId },
   });
+
+  // Delete all user's goals and recurring patterns
+  await db.goal.deleteMany({ where: { userId } });
+  await db.recurringPattern.deleteMany({ where: { userId } });
 
   // Reset user settings (keep the record but reset values)
   await db.userSettings.update({

@@ -30,6 +30,8 @@ vi.mock("next/navigation", () => ({
 // Mock next/cache
 vi.mock("next/cache", () => ({
     revalidatePath: vi.fn(),
+    revalidateTag: vi.fn(),
+    unstable_cache: vi.fn((fn: () => unknown) => fn),
 }));
 
 // Mock Clerk - always return authenticated user

@@ -15,6 +15,7 @@ model UserSettings {
   telegramChatId   String?  @unique // Linked Telegram Chat ID
   monthlyBudget    Float    @default(0)
   currency         String   @default("INR")
+  timezone         String   @default("Asia/Kolkata") // User's timezone for date calculations (default: IST for INR)
   dashboardWidgets Json?    // Stores which dashboard widgets to show/hide
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt

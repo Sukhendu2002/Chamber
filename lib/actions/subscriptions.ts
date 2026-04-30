@@ -3,31 +3,59 @@
 import { auth } from "@clerk/nextjs/server";
 import { db } from "@/lib/db";
 import { revalidatePath } from "next/cache";
+import { z } from "zod";
 
-export type CreateSubscriptionInput = {
-  name: string;
-  amount: number;
-  billingCycle: "ONCE" | "WEEKLY" | "MONTHLY" | "QUARTERLY" | "YEARLY";
-  nextBillingDate: Date;
-  paymentMethod?: string;
-  description?: string;
-  alertDaysBefore?: number;
-};
+const BILLING_CYCLES = [
+  "ONCE",
+  "WEEKLY",
+  "MONTHLY",
+  "QUARTERLY",
+  "YEARLY",
+] as const;
+
+const CreateSubscriptionSchema = z.object({
+  name: z.string().min(1).max(200),
+  amount: z.number().positive("Amount must be greater than 0"),
+  billingCycle: z.enum(BILLING_CYCLES),
+  nextBillingDate: z.date(),
+  paymentMethod: z.string().max(100).optional(),
+  description: z.string().max(500).optional(),
+  alertDaysBefore: z.number().int().min(1).max(30).optional(),
+});
+
+const UpdateSubscriptionSchema = CreateSubscriptionSchema.partial().extend({
+  isActive: z.boolean().optional(),
+});
+
+const IdSchema = z.string().uuid();
+
+const GetUpcomingSubscriptionsSchema = z.object({
+  daysAhead: z.number().int().positive().default(7),
+});
+
+const GetSubscriptionsForMonthSchema = z.object({
+  year: z.number().int(),
+  month: z.number().int().min(0).max(11),
+});
+
+export type CreateSubscriptionInput = z.infer<typeof CreateSubscriptionSchema>;
 
 export async function createSubscription(input: CreateSubscriptionInput) {
   const { userId } = await auth();
   if (!userId) throw new Error("Unauthorized");
 
+  const validated = CreateSubscriptionSchema.parse(input);
+
   const subscription = await db.subscription.create({
     data: {
       userId,
-      name: input.name,
-      amount: input.amount,
-      billingCycle: input.billingCycle,
-      nextBillingDate: input.nextBillingDate,
-      paymentMethod: input.paymentMethod,
-      description: input.description,
-      alertDaysBefore: input.alertDaysBefore || 3,
+      name: validated.name,
+      amount: validated.amount,
+      billingCycle: validated.billingCycle,
+      nextBillingDate: validated.nextBillingDate,
+      paymentMethod: validated.paymentMethod,
+      description: validated.description,
+      alertDaysBefore: validated.alertDaysBefore || 3,
     },
   });
 
@@ -66,11 +94,14 @@ export async function updateSubscription(
   const { userId } = await auth();
   if (!userId) throw new Error("Unauthorized");
 
+  const validatedId = IdSchema.parse(id);
+  const validated = UpdateSubscriptionSchema.parse(input);
+
   const subscription = await db.subscription.updateMany({
-    where: { id, userId },
+    where: { id: validatedId, userId },
     data: {
-      ...input,
-      paymentMethod: input.paymentMethod,
+      ...validated,
+      paymentMethod: validated.paymentMethod,
     },
   });
 
@@ -82,8 +113,10 @@ export async function deleteSubscription(id: string) {
   const { userId } = await auth();
   if (!userId) throw new Error("Unauthorized");
 
+  const validatedId = IdSchema.parse(id);
+
   await db.subscription.deleteMany({
-    where: { id, userId },
+    where: { id: validatedId, userId },
   });
 
   revalidatePath("/subscriptions");
@@ -93,8 +126,10 @@ export async function getUpcomingSubscriptions(daysAhead: number = 7) {
   const { userId } = await auth();
   if (!userId) throw new Error("Unauthorized");
 
+  const validated = GetUpcomingSubscriptionsSchema.parse({ daysAhead });
+
   const futureDate = new Date();
-  futureDate.setDate(futureDate.getDate() + daysAhead);
+  futureDate.setDate(futureDate.getDate() + validated.daysAhead);
 
   const subscriptions = await db.subscription.findMany({
     where: {
@@ -145,8 +180,10 @@ export async function renewSubscription(id: string) {
   const { userId } = await auth();
   if (!userId) throw new Error("Unauthorized");
 
+  const validatedId = IdSchema.parse(id);
+
   const subscription = await db.subscription.findFirst({
-    where: { id, userId },
+    where: { id: validatedId, userId },
   });
 
   if (!subscription) throw new Error("Subscription not found");
@@ -173,13 +210,13 @@ export async function renewSubscription(id: string) {
 
   if (nextBillingDate) {
     await db.subscription.update({
-      where: { id },
+      where: { id: validatedId },
       data: { nextBillingDate },
     });
   } else {
     // One-time subscription - mark as inactive
     await db.subscription.update({
-      where: { id },
+      where: { id: validatedId },
       data: { isActive: false },
     });
   }
@@ -194,8 +231,10 @@ export async function getSubscriptionsForMonth(year: number, month: number) {
   const { userId } = await auth();
   if (!userId) throw new Error("Unauthorized");
 
-  const startOfMonth = new Date(year, month, 1);
-  const endOfMonth = new Date(year, month + 1, 0, 23, 59, 59);
+  const validated = GetSubscriptionsForMonthSchema.parse({ year, month });
+
+  const startOfMonth = new Date(validated.year, validated.month, 1);
+  const endOfMonth = new Date(validated.year, validated.month + 1, 0, 23, 59, 59);
 
   const subscriptions = await db.subscription.findMany({
     where: {

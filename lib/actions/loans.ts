@@ -3,36 +3,53 @@
 import { auth } from "@clerk/nextjs/server";
 import { db } from "@/lib/db";
 import { revalidatePath } from "next/cache";
+import { z } from "zod";
 
-export type CreateLoanInput = {
-  borrowerName: string;
-  borrowerPhone?: string;
-  amount: number;
-  lendDate: Date;
-  dueDate?: Date;
-  description?: string;
-};
+const LOAN_STATUSES = ["PENDING", "PARTIAL", "COMPLETED"] as const;
 
-export type AddRepaymentInput = {
-  loanId: string;
-  amount: number;
-  date: Date;
-  note?: string;
-};
+const CreateLoanSchema = z.object({
+  borrowerName: z.string().min(1).max(200),
+  borrowerPhone: z.string().max(20).optional(),
+  amount: z.number().positive("Amount must be greater than 0"),
+  lendDate: z.date(),
+  dueDate: z.date().optional(),
+  description: z.string().max(500).optional(),
+});
+
+const UpdateLoanSchema = CreateLoanSchema.partial();
+
+const AddRepaymentSchema = z.object({
+  loanId: z.string().uuid(),
+  amount: z.number().positive("Amount must be greater than 0"),
+  date: z.date(),
+  note: z.string().max(500).optional(),
+});
+
+const GetLoansOptionsSchema = z.object({
+  status: z.enum(LOAN_STATUSES).optional(),
+  borrowerName: z.string().max(200).optional(),
+}).optional();
+
+const IdSchema = z.string().uuid();
+
+export type CreateLoanInput = z.infer<typeof CreateLoanSchema>;
+export type AddRepaymentInput = z.infer<typeof AddRepaymentSchema>;
 
 export async function createLoan(input: CreateLoanInput) {
   const { userId } = await auth();
   if (!userId) throw new Error("Unauthorized");
 
+  const validated = CreateLoanSchema.parse(input);
+
   const loan = await db.loan.create({
     data: {
       userId,
-      borrowerName: input.borrowerName,
-      borrowerPhone: input.borrowerPhone,
-      amount: input.amount,
-      lendDate: input.lendDate,
-      dueDate: input.dueDate,
-      description: input.description,
+      borrowerName: validated.borrowerName,
+      borrowerPhone: validated.borrowerPhone,
+      amount: validated.amount,
+      lendDate: validated.lendDate,
+      dueDate: validated.dueDate,
+      description: validated.description,
     },
   });
 
@@ -40,12 +57,11 @@ export async function createLoan(input: CreateLoanInput) {
   return loan;
 }
 
-export async function getLoans(options?: {
-  status?: "PENDING" | "PARTIAL" | "COMPLETED";
-  borrowerName?: string;
-}) {
+export async function getLoans(options?: z.infer<typeof GetLoansOptionsSchema>) {
   const { userId } = await auth();
   if (!userId) throw new Error("Unauthorized");
+
+  const validated = GetLoansOptionsSchema.parse(options);
 
   const where: {
     userId: string;
@@ -53,13 +69,13 @@ export async function getLoans(options?: {
     borrowerName?: { contains: string; mode: "insensitive" };
   } = { userId };
 
-  if (options?.status) {
-    where.status = options.status;
+  if (validated?.status) {
+    where.status = validated.status;
   }
 
-  if (options?.borrowerName) {
+  if (validated?.borrowerName) {
     where.borrowerName = {
-      contains: options.borrowerName,
+      contains: validated.borrowerName,
       mode: "insensitive",
     };
   }
@@ -84,8 +100,10 @@ export async function getLoan(id: string) {
   const { userId } = await auth();
   if (!userId) throw new Error("Unauthorized");
 
+  const validatedId = IdSchema.parse(id);
+
   const loan = await db.loan.findFirst({
-    where: { id, userId },
+    where: { id: validatedId, userId },
     include: {
       repayments: {
         orderBy: { date: "desc" },
@@ -103,22 +121,25 @@ export async function updateLoan(
   const { userId } = await auth();
   if (!userId) throw new Error("Unauthorized");
 
+  const validatedId = IdSchema.parse(id);
+  const validated = UpdateLoanSchema.parse(input);
+
   // Verify ownership
   const existing = await db.loan.findFirst({
-    where: { id, userId },
+    where: { id: validatedId, userId },
   });
 
   if (!existing) throw new Error("Loan not found");
 
   const loan = await db.loan.update({
-    where: { id },
+    where: { id: validatedId },
     data: {
-      borrowerName: input.borrowerName,
-      borrowerPhone: input.borrowerPhone,
-      amount: input.amount,
-      lendDate: input.lendDate,
-      dueDate: input.dueDate,
-      description: input.description,
+      borrowerName: validated.borrowerName,
+      borrowerPhone: validated.borrowerPhone,
+      amount: validated.amount,
+      lendDate: validated.lendDate,
+      dueDate: validated.dueDate,
+      description: validated.description,
     },
   });
 
@@ -130,15 +151,17 @@ export async function deleteLoan(id: string) {
   const { userId } = await auth();
   if (!userId) throw new Error("Unauthorized");
 
+  const validatedId = IdSchema.parse(id);
+
   // Verify ownership
   const existing = await db.loan.findFirst({
-    where: { id, userId },
+    where: { id: validatedId, userId },
   });
 
   if (!existing) throw new Error("Loan not found");
 
   await db.loan.delete({
-    where: { id },
+    where: { id: validatedId },
   });
 
   revalidatePath("/loans");
@@ -148,9 +171,11 @@ export async function addRepayment(input: AddRepaymentInput) {
   const { userId } = await auth();
   if (!userId) throw new Error("Unauthorized");
 
+  const validated = AddRepaymentSchema.parse(input);
+
   // Verify loan ownership
   const loan = await db.loan.findFirst({
-    where: { id: input.loanId, userId },
+    where: { id: validated.loanId, userId },
   });
 
   if (!loan) throw new Error("Loan not found");
@@ -158,15 +183,15 @@ export async function addRepayment(input: AddRepaymentInput) {
   // Create repayment
   const repayment = await db.repayment.create({
     data: {
-      loanId: input.loanId,
-      amount: input.amount,
-      date: input.date,
-      note: input.note,
+      loanId: validated.loanId,
+      amount: validated.amount,
+      date: validated.date,
+      note: validated.note,
     },
   });
 
   // Update loan's amountRepaid and status
-  const newAmountRepaid = loan.amountRepaid + input.amount;
+  const newAmountRepaid = loan.amountRepaid + validated.amount;
   let newStatus: "PENDING" | "PARTIAL" | "COMPLETED" = "PENDING";
 
   if (newAmountRepaid >= loan.amount) {
@@ -176,7 +201,7 @@ export async function addRepayment(input: AddRepaymentInput) {
   }
 
   await db.loan.update({
-    where: { id: input.loanId },
+    where: { id: validated.loanId },
     data: {
       amountRepaid: newAmountRepaid,
       status: newStatus,
@@ -191,9 +216,11 @@ export async function deleteRepayment(repaymentId: string) {
   const { userId } = await auth();
   if (!userId) throw new Error("Unauthorized");
 
+  const validatedId = IdSchema.parse(repaymentId);
+
   // Get repayment with loan
   const repayment = await db.repayment.findUnique({
-    where: { id: repaymentId },
+    where: { id: validatedId },
     include: { loan: true },
   });
 
@@ -206,7 +233,7 @@ export async function deleteRepayment(repaymentId: string) {
 
   // Delete repayment
   await db.repayment.delete({
-    where: { id: repaymentId },
+    where: { id: validatedId },
   });
 
   // Update loan's amountRepaid and status
@@ -230,20 +257,27 @@ export async function deleteRepayment(repaymentId: string) {
   revalidatePath("/loans");
 }
 
+const AddReceiptSchema = z.object({
+  id: z.string().uuid(),
+  receiptUrl: z.string().max(500),
+});
+
 export async function addLoanReceipt(loanId: string, receiptUrl: string) {
   const { userId } = await auth();
   if (!userId) throw new Error("Unauthorized");
 
+  const validated = AddReceiptSchema.parse({ id: loanId, receiptUrl });
+
   const loan = await db.loan.findFirst({
-    where: { id: loanId, userId },
+    where: { id: validated.id, userId },
   });
 
   if (!loan) throw new Error("Loan not found");
 
   await db.loan.update({
-    where: { id: loanId },
+    where: { id: validated.id },
     data: {
-      receiptUrls: [...loan.receiptUrls, receiptUrl],
+      receiptUrls: [...loan.receiptUrls, validated.receiptUrl],
     },
   });
 
@@ -254,8 +288,10 @@ export async function addRepaymentReceipt(repaymentId: string, receiptUrl: strin
   const { userId } = await auth();
   if (!userId) throw new Error("Unauthorized");
 
+  const validated = AddReceiptSchema.parse({ id: repaymentId, receiptUrl });
+
   const repayment = await db.repayment.findUnique({
-    where: { id: repaymentId },
+    where: { id: validated.id },
     include: { loan: true },
   });
 
@@ -263,9 +299,9 @@ export async function addRepaymentReceipt(repaymentId: string, receiptUrl: strin
   if (repayment.loan.userId !== userId) throw new Error("Unauthorized");
 
   await db.repayment.update({
-    where: { id: repaymentId },
+    where: { id: validated.id },
     data: {
-      receiptUrls: [...repayment.receiptUrls, receiptUrl],
+      receiptUrls: [...repayment.receiptUrls, validated.receiptUrl],
     },
   });
 

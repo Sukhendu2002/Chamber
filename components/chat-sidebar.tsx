@@ -31,7 +31,7 @@ type ChatMessage = {
     };
     parsedExpense?: {
         amount: number;
-        category: string;
+        category: "General" | "Subscription" | "Food" | "Travel" | "Entertainment" | "Bills" | "Shopping" | "Health" | "Education" | "Investments";
         description: string;
         merchant?: string;
         confidence: number;

@@ -6,6 +6,7 @@ export type DashboardWidgets = {
     showCalendar: boolean;     // Expense Calendar
     showCategories: boolean;   // Spending by Category
     showRecent: boolean;       // Recent Expenses
+    showForecast: boolean;     // Financial Forecast widget
 };
 
 // Default widget settings - all enabled
@@ -16,6 +17,7 @@ export const DEFAULT_DASHBOARD_WIDGETS: DashboardWidgets = {
     showCalendar: true,
     showCategories: true,
     showRecent: true,
+    showForecast: true,
 };
 
 // Widget metadata for settings UI
@@ -34,6 +36,11 @@ export const DASHBOARD_WIDGET_OPTIONS = [
         key: "showBalanceTrend" as const,
         label: "Balance Trend",
         description: "Historical balance chart across accounts",
+    },
+    {
+        key: "showForecast" as const,
+        label: "Financial Forecast",
+        description: "Projected balances and upcoming expenses",
     },
     {
         key: "showCalendar" as const,

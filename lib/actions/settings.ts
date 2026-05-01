@@ -23,6 +23,8 @@ const UpdateUserSettingsSchema = z.object({
   dashboardWidgets: DashboardWidgetsSchema,
   forecastHorizonMonths: z.number().int().positive().optional(),
   savingsTargetPercent: z.number().nonnegative().max(100).optional(),
+  monthlyIncome: z.number().nonnegative().optional(),
+  salaryDay: z.number().int().min(1).max(28).optional(),
 });
 
 // Free exchange rate API (no API key needed for basic usage)
@@ -54,6 +56,8 @@ const getCachedSettings = unstable_cache(
           dashboardWidgets: DEFAULT_DASHBOARD_WIDGETS,
           forecastHorizonMonths: 6,
           savingsTargetPercent: 20,
+          monthlyIncome: 0,
+          salaryDay: 1,
         },
       });
     }
@@ -87,6 +91,8 @@ export async function updateUserSettings(input: {
   dashboardWidgets?: DashboardWidgets;
   forecastHorizonMonths?: number;
   savingsTargetPercent?: number;
+  monthlyIncome?: number;
+  salaryDay?: number;
 }) {
   const { userId } = await auth();
   if (!userId) throw new Error("Unauthorized");
@@ -138,6 +144,8 @@ export async function updateUserSettings(input: {
       timezone: validated.timezone || "Asia/Kolkata",
       forecastHorizonMonths: validated.forecastHorizonMonths || 6,
       savingsTargetPercent: validated.savingsTargetPercent || 20,
+      monthlyIncome: validated.monthlyIncome || 0,
+      salaryDay: validated.salaryDay || 1,
     },
   });
 
@@ -307,6 +315,8 @@ export async function deleteAllUserData() {
     where: { userId },
     data: {
       monthlyBudget: 0,
+      monthlyIncome: 0,
+      salaryDay: 1,
       telegramChatId: null,
     },
   });

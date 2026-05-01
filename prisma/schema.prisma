@@ -19,6 +19,8 @@ model UserSettings {
   dashboardWidgets      Json?    // Stores which dashboard widgets to show/hide
   forecastHorizonMonths Int      @default(6) // Months to project forward
   savingsTargetPercent  Float    @default(20) // Target % of income to save
+  monthlyIncome         Float    @default(0) // User's monthly cash inflow (salary, etc.)
+  salaryDay             Int      @default(1) // Day of month salary arrives (1-28)
   createdAt             DateTime @default(now())
   updatedAt             DateTime @updatedAt
 

@@ -73,6 +73,8 @@ type SettingsFormProps = {
     dashboardWidgets: DashboardWidgets;
     forecastHorizonMonths: number;
     savingsTargetPercent: number;
+    monthlyIncome: number;
+    salaryDay: number;
   };
 };
 
@@ -90,6 +92,12 @@ export function SettingsForm({ initialSettings }: SettingsFormProps) {
   );
   const [savingsTargetPercent, setSavingsTargetPercent] = useState(
     initialSettings.savingsTargetPercent?.toString() || "20"
+  );
+  const [monthlyIncome, setMonthlyIncome] = useState(
+    initialSettings.monthlyIncome?.toString() || "0"
+  );
+  const [salaryDay, setSalaryDay] = useState(
+    initialSettings.salaryDay?.toString() || "1"
   );
   const [loading, setLoading] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -158,6 +166,8 @@ export function SettingsForm({ initialSettings }: SettingsFormProps) {
         dashboardWidgets,
         forecastHorizonMonths: horizon,
         savingsTargetPercent: savings,
+        monthlyIncome: parseFloat(monthlyIncome) || 0,
+        salaryDay: parseInt(salaryDay) || 1,
       });
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
@@ -188,6 +198,21 @@ export function SettingsForm({ initialSettings }: SettingsFormProps) {
               />
             </div>
             <div className="space-y-2">
+              <Label htmlFor="monthly-income">Monthly Income</Label>
+              <Input
+                id="monthly-income"
+                type="number"
+                value={monthlyIncome}
+                onChange={(e) => setMonthlyIncome(e.target.value)}
+                placeholder="Enter your monthly income (salary)"
+              />
+              <p className="text-xs text-muted-foreground">
+                Used for forecasting and calendar salary markers
+              </p>
+            </div>
+          </div>
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="space-y-2">
               <Label htmlFor="currency">Currency</Label>
               <Select value={currency} onValueChange={setCurrency}>
                 <SelectTrigger>
@@ -201,6 +226,21 @@ export function SettingsForm({ initialSettings }: SettingsFormProps) {
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="salary-day">Salary Day</Label>
+              <Input
+                id="salary-day"
+                type="number"
+                min="1"
+                max="28"
+                value={salaryDay}
+                onChange={(e) => setSalaryDay(e.target.value)}
+                placeholder="1"
+              />
+              <p className="text-xs text-muted-foreground">
+                Day of month you receive salary (1-28)
+              </p>
             </div>
           </div>
           <div className="space-y-2">

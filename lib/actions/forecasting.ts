@@ -39,6 +39,7 @@ interface ForecastInputs {
   trendSlope: number;
   monthlyRecurringTotal: number;
   monthlyGoalContribution: number;
+  monthlyIncome: number;
   horizonMonths: number;
 }
 
@@ -134,12 +135,15 @@ async function getForecastInputs(userId: string): Promise<ForecastInputs> {
     return sum + remaining / monthsRemaining;
   }, 0);
 
+  const monthlyIncome = settings.monthlyIncome || 0;
+
   return {
     currentTotalBalance,
     estimatedMonthlyExpense,
     trendSlope: trend.slope,
     monthlyRecurringTotal,
     monthlyGoalContribution,
+    monthlyIncome,
     horizonMonths,
   };
 }
@@ -154,6 +158,7 @@ function projectBalances(
     estimatedMonthlyExpense,
     trendSlope,
     monthlyGoalContribution,
+    monthlyIncome,
     horizonMonths,
   } = inputs;
 
@@ -163,6 +168,7 @@ function projectBalances(
   for (let i = 1; i <= horizonMonths; i++) {
     const trendAdjustment = trendSlope * i;
     const projectedExpense = (estimatedMonthlyExpense + trendAdjustment * 0.3) * spendingMultiplier;
+    balance += monthlyIncome;
     balance -= projectedExpense;
     balance -= monthlyGoalContribution;
     balances.push(Math.round(balance * 100) / 100);

@@ -90,8 +90,17 @@ export function BankTransferDialog({ accounts, currency }: BankTransferDialogPro
   const toAccount = accounts.find((a) => a.id === toAccountId);
 
   const parsedAmount = parseFloat(amount);
-  const hasInsufficientFunds =
-    fromAccount && !isNaN(parsedAmount) && parsedAmount > fromAccount.currentBalance;
+
+  const hasInsufficientFunds = (() => {
+    if (!fromAccount || isNaN(parsedAmount)) return false;
+    if (fromAccount.type === "CREDIT_CARD") {
+      // For credit cards, check against available credit (limit - current debt)
+      const creditLimit = (fromAccount as Account & { creditLimit?: number }).creditLimit ?? 0;
+      const availableCredit = creditLimit - fromAccount.currentBalance;
+      return parsedAmount > availableCredit;
+    }
+    return parsedAmount > fromAccount.currentBalance;
+  })();
 
   const isValid =
     fromAccountId &&
@@ -233,7 +242,12 @@ export function BankTransferDialog({ accounts, currency }: BankTransferDialogPro
             </div>
             {hasInsufficientFunds && (
               <p className="text-xs text-destructive">
-                Insufficient funds. Available: {formatCurrency(fromAccount!.currentBalance)}
+                {fromAccount?.type === "CREDIT_CARD"
+                  ? `Insufficient credit limit. Available: ${formatCurrency(
+                      ((fromAccount as Account & { creditLimit?: number }).creditLimit ?? 0) -
+                        fromAccount.currentBalance
+                    )}`
+                  : `Insufficient funds. Available: ${formatCurrency(fromAccount!.currentBalance)}`}
               </p>
             )}
           </div>
@@ -244,13 +258,21 @@ export function BankTransferDialog({ accounts, currency }: BankTransferDialogPro
               <div className="flex justify-between">
                 <span className="text-muted-foreground">{fromAccount.name} after</span>
                 <span className="font-medium">
-                  {formatCurrency(fromAccount.currentBalance - parsedAmount)}
+                  {formatCurrency(
+                    fromAccount.type === "CREDIT_CARD"
+                      ? fromAccount.currentBalance + parsedAmount
+                      : fromAccount.currentBalance - parsedAmount
+                  )}
                 </span>
               </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">{toAccount.name} after</span>
                 <span className="font-medium">
-                  {formatCurrency(toAccount.currentBalance + parsedAmount)}
+                  {formatCurrency(
+                    toAccount.type === "CREDIT_CARD"
+                      ? toAccount.currentBalance - parsedAmount
+                      : toAccount.currentBalance + parsedAmount
+                  )}
                 </span>
               </div>
             </div>

@@ -505,7 +505,7 @@ describe("Expense Actions", () => {
             vi.resetModules();
             const { getExpensesCount } = await import("@/lib/actions/expenses");
 
-            await getExpensesCount({ tag: "groceries" });
+            await getExpensesCount({ tags: ["groceries"] });
 
             expect(mockDb.expense.aggregate).toHaveBeenCalledWith(
                 expect.objectContaining({
@@ -514,7 +514,7 @@ describe("Expense Actions", () => {
                             some: expect.objectContaining({
                                 tag: expect.objectContaining({
                                     name: expect.objectContaining({
-                                        contains: "groceries",
+                                        in: ["groceries"],
                                     }),
                                 }),
                             }),
@@ -654,7 +654,7 @@ describe("Expense Actions", () => {
             vi.resetModules();
             const { getExpenses } = await import("@/lib/actions/expenses");
 
-            await getExpenses({ tag: "groceries" });
+            await getExpenses({ tags: ["groceries"] });
 
             expect(mockDb.expense.findMany).toHaveBeenCalledWith(
                 expect.objectContaining({
@@ -663,7 +663,7 @@ describe("Expense Actions", () => {
                             some: expect.objectContaining({
                                 tag: expect.objectContaining({
                                     name: expect.objectContaining({
-                                        contains: "groceries",
+                                        in: ["groceries"],
                                     }),
                                 }),
                             }),

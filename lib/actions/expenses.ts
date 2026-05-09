@@ -37,23 +37,46 @@ const UpdateExpenseSchema = CreateExpenseSchema.partial();
 
 export type CreateExpenseInput = z.infer<typeof CreateExpenseSchema>;
 
+const DATE_RANGE_PRESETS = ["this_month", "last_month", "last_3_months", "last_6_months", "this_year"] as const;
+export type DateRangePreset = (typeof DATE_RANGE_PRESETS)[number];
+
+function getDateRangeFromPreset(preset: DateRangePreset, timezone: string): { startDate: Date; endDate: Date } {
+  const now = getNowInTimezone(timezone);
+  const y = now.getFullYear();
+  const m = now.getMonth();
+  switch (preset) {
+    case "this_month":
+      return { startDate: new Date(y, m, 1), endDate: new Date(y, m + 1, 0, 23, 59, 59) };
+    case "last_month":
+      return { startDate: new Date(y, m - 1, 1), endDate: new Date(y, m, 0, 23, 59, 59) };
+    case "last_3_months":
+      return { startDate: new Date(y, m - 2, 1), endDate: new Date(y, m + 1, 0, 23, 59, 59) };
+    case "last_6_months":
+      return { startDate: new Date(y, m - 5, 1), endDate: new Date(y, m + 1, 0, 23, 59, 59) };
+    case "this_year":
+      return { startDate: new Date(y, 0, 1), endDate: new Date(y, 11, 31, 23, 59, 59) };
+  }
+}
+
 const GetExpensesOptionsSchema = z.object({
   limit: z.number().int().positive().optional(),
   offset: z.number().int().nonnegative().optional(),
   startDate: z.date().optional(),
   endDate: z.date().optional(),
+  dateRange: z.enum(DATE_RANGE_PRESETS).optional(),
   category: z.string().optional(),
   excludeCategory: z.string().optional(),
-  tag: z.string().optional(),
+  tags: z.array(z.string()).optional(),
   search: z.string().max(200).optional(),
 }).optional();
 
 const GetExpensesCountOptionsSchema = z.object({
   startDate: z.date().optional(),
   endDate: z.date().optional(),
+  dateRange: z.enum(DATE_RANGE_PRESETS).optional(),
   category: z.string().optional(),
   excludeCategory: z.string().optional(),
-  tag: z.string().optional(),
+  tags: z.array(z.string()).optional(),
   search: z.string().max(200).optional(),
 }).optional();
 
@@ -178,10 +201,19 @@ export async function getExpenses(options?: z.infer<typeof GetExpensesOptionsSch
 
   const where: Record<string, unknown> = { userId };
 
-  if (validated?.startDate || validated?.endDate) {
+  // Resolve date range
+  let startDate = validated?.startDate;
+  let endDate = validated?.endDate;
+  if (validated?.dateRange) {
+    const settings = await getUserSettings();
+    const range = getDateRangeFromPreset(validated.dateRange, settings.timezone || "UTC");
+    startDate = range.startDate;
+    endDate = range.endDate;
+  }
+  if (startDate || endDate) {
     where.date = {};
-    if (validated.startDate) (where.date as Record<string, Date>).gte = validated.startDate;
-    if (validated.endDate) (where.date as Record<string, Date>).lte = validated.endDate;
+    if (startDate) (where.date as Record<string, Date>).gte = startDate;
+    if (endDate) (where.date as Record<string, Date>).lte = endDate;
   }
 
   if (validated?.category) {
@@ -190,11 +222,11 @@ export async function getExpenses(options?: z.infer<typeof GetExpensesOptionsSch
     where.category = { not: validated.excludeCategory };
   }
 
-  if (validated?.tag) {
+  if (validated?.tags && validated.tags.length > 0) {
     where.tags = {
       some: {
         tag: {
-          name: { contains: validated.tag, mode: "insensitive" },
+          name: { in: validated.tags, mode: "insensitive" },
         },
       },
     };
@@ -234,10 +266,19 @@ export async function getExpensesCount(options?: z.infer<typeof GetExpensesCount
 
   const where: Record<string, unknown> = { userId };
 
-  if (validated?.startDate || validated?.endDate) {
+  // Resolve date range
+  let startDate = validated?.startDate;
+  let endDate = validated?.endDate;
+  if (validated?.dateRange) {
+    const settings = await getUserSettings();
+    const range = getDateRangeFromPreset(validated.dateRange, settings.timezone || "UTC");
+    startDate = range.startDate;
+    endDate = range.endDate;
+  }
+  if (startDate || endDate) {
     where.date = {};
-    if (validated.startDate) (where.date as Record<string, Date>).gte = validated.startDate;
-    if (validated.endDate) (where.date as Record<string, Date>).lte = validated.endDate;
+    if (startDate) (where.date as Record<string, Date>).gte = startDate;
+    if (endDate) (where.date as Record<string, Date>).lte = endDate;
   }
 
   if (validated?.category) {
@@ -246,11 +287,11 @@ export async function getExpensesCount(options?: z.infer<typeof GetExpensesCount
     where.category = { not: validated.excludeCategory };
   }
 
-  if (validated?.tag) {
+  if (validated?.tags && validated.tags.length > 0) {
     where.tags = {
       some: {
         tag: {
-          name: { contains: validated.tag, mode: "insensitive" },
+          name: { in: validated.tags, mode: "insensitive" },
         },
       },
     };

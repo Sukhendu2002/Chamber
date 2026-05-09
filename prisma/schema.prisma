@@ -44,10 +44,32 @@ model Expense {
   receiptUrl    String?        // Legacy single receipt URL (deprecated)
   receiptUrls   String[]       @default([]) // URLs to receipts/invoices stored in Cloudflare R2
   createdAt     DateTime       @default(now())
+  tags          ExpenseTag[]
 
   @@index([userId])
   @@index([date])
   @@index([accountId])
+}
+
+model Tag {
+  id        String       @id @default(uuid())
+  userId    String
+  name      String
+  expenses  ExpenseTag[]
+  createdAt DateTime     @default(now())
+
+  @@unique([userId, name])
+  @@index([userId])
+}
+
+model ExpenseTag {
+  expenseId String
+  tagId     String
+  expense   Expense @relation(fields: [expenseId], references: [id], onDelete: Cascade)
+  tag       Tag     @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([expenseId, tagId])
+  @@index([tagId])
 }
 
 model LinkingCode {

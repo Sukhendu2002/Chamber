@@ -32,6 +32,14 @@ const mockDb = {
     balanceHistory: {
         create: vi.fn(),
     },
+    tag: {
+        findMany: vi.fn(),
+        upsert: vi.fn(),
+    },
+    expenseTag: {
+        create: vi.fn(),
+        deleteMany: vi.fn(),
+    },
     userSettings: {
         findUnique: vi.fn(),
         upsert: vi.fn(),
@@ -231,6 +239,7 @@ describe("Expense Actions", () => {
                     amount: 100,
                     category: "Food",
                     date: new Date(),
+                    tags: [],
                 },
                 {
                     id: UUIDS.expense2,
@@ -238,6 +247,7 @@ describe("Expense Actions", () => {
                     amount: 200,
                     category: "Travel",
                     date: new Date(),
+                    tags: [],
                 },
             ];
 
@@ -484,6 +494,259 @@ describe("Expense Actions", () => {
             const result = await getExpensesCount();
 
             expect(result).toEqual({ count: 42, totalAmount: 15000 });
+        });
+
+        it("should filter by tag", async () => {
+            mockDb.expense.aggregate.mockResolvedValue({
+                _count: { id: 3 },
+                _sum: { amount: 750 },
+            });
+
+            vi.resetModules();
+            const { getExpensesCount } = await import("@/lib/actions/expenses");
+
+            await getExpensesCount({ tag: "groceries" });
+
+            expect(mockDb.expense.aggregate).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    where: expect.objectContaining({
+                        tags: expect.objectContaining({
+                            some: expect.objectContaining({
+                                tag: expect.objectContaining({
+                                    name: expect.objectContaining({
+                                        contains: "groceries",
+                                    }),
+                                }),
+                            }),
+                        }),
+                    }),
+                })
+            );
+        });
+    });
+
+    describe("getUserTags", () => {
+        it("should return all tags for the current user", async () => {
+            mockDb.tag.findMany.mockResolvedValue([
+                { name: "groceries" },
+                { name: "office" },
+                { name: "subscription" },
+            ]);
+
+            vi.resetModules();
+            const { getUserTags } = await import("@/lib/actions/expenses");
+
+            const tags = await getUserTags();
+
+            expect(tags).toEqual(["groceries", "office", "subscription"]);
+            expect(mockDb.tag.findMany).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    where: { userId: "test-user-id" },
+                    select: { name: true },
+                    orderBy: { name: "asc" },
+                })
+            );
+        });
+    });
+
+    describe("Tag CRUD", () => {
+        it("should create expense with tags", async () => {
+            const mockExpense = {
+                id: UUIDS.expense1,
+                userId: "test-user-id",
+                amount: 100,
+                category: "Food",
+                merchant: "Restaurant",
+            };
+
+            mockDb.expense.create.mockResolvedValue(mockExpense);
+            mockDb.tag.upsert
+                .mockResolvedValueOnce({ id: "tag-1", name: "lunch" })
+                .mockResolvedValueOnce({ id: "tag-2", name: "office" });
+            mockDb.expenseTag.create.mockResolvedValue({});
+
+            vi.resetModules();
+            const { createExpense } = await import("@/lib/actions/expenses");
+
+            await createExpense({
+                amount: 100,
+                category: "Food",
+                merchant: "Restaurant",
+                tags: ["lunch", "office"],
+            });
+
+            expect(mockDb.tag.upsert).toHaveBeenCalledTimes(2);
+            expect(mockDb.tag.upsert).toHaveBeenNthCalledWith(1, {
+                where: { userId_name: { userId: "test-user-id", name: "lunch" } },
+                update: {},
+                create: { userId: "test-user-id", name: "lunch" },
+            });
+            expect(mockDb.tag.upsert).toHaveBeenNthCalledWith(2, {
+                where: { userId_name: { userId: "test-user-id", name: "office" } },
+                update: {},
+                create: { userId: "test-user-id", name: "office" },
+            });
+            expect(mockDb.expenseTag.create).toHaveBeenCalledTimes(2);
+        });
+
+        it("should skip empty tags", async () => {
+            const mockExpense = {
+                id: UUIDS.expense1,
+                userId: "test-user-id",
+                amount: 100,
+                category: "Food",
+            };
+
+            mockDb.expense.create.mockResolvedValue(mockExpense);
+            mockDb.tag.upsert.mockResolvedValue({ id: "tag-1", name: "lunch" });
+            mockDb.expenseTag.create.mockResolvedValue({});
+
+            vi.resetModules();
+            const { createExpense } = await import("@/lib/actions/expenses");
+
+            await createExpense({
+                amount: 100,
+                category: "Food",
+                tags: ["  lunch  ", "  ", ""],
+            });
+
+            // Only "lunch" should be created (trimmed, non-empty)
+            expect(mockDb.tag.upsert).toHaveBeenCalledTimes(1);
+            expect(mockDb.tag.upsert).toHaveBeenCalledWith({
+                where: { userId_name: { userId: "test-user-id", name: "lunch" } },
+                update: {},
+                create: { userId: "test-user-id", name: "lunch" },
+            });
+        });
+
+        it("should update expense tags - replace existing with new", async () => {
+            const existingExpense = {
+                id: UUIDS.expense1,
+                userId: "test-user-id",
+                amount: 100,
+                category: "Food",
+                accountId: null,
+            };
+
+            mockDb.expense.findFirst.mockResolvedValue(existingExpense);
+            mockDb.expense.update.mockResolvedValue(existingExpense);
+            mockDb.expenseTag.deleteMany.mockResolvedValue({ count: 2 });
+            mockDb.tag.upsert
+                .mockResolvedValueOnce({ id: "tag-1", name: "dinner" })
+                .mockResolvedValueOnce({ id: "tag-2", name: "party" });
+            mockDb.expenseTag.create.mockResolvedValue({});
+
+            vi.resetModules();
+            const { updateExpense } = await import("@/lib/actions/expenses");
+
+            await updateExpense(UUIDS.expense1, { tags: ["dinner", "party"] });
+
+            expect(mockDb.expenseTag.deleteMany).toHaveBeenCalledWith({
+                where: { expenseId: UUIDS.expense1 },
+            });
+            expect(mockDb.tag.upsert).toHaveBeenCalledTimes(2);
+            expect(mockDb.expenseTag.create).toHaveBeenCalledTimes(2);
+        });
+
+        it("should filter expenses by tag", async () => {
+            mockDb.expense.findMany.mockResolvedValue([]);
+
+            vi.resetModules();
+            const { getExpenses } = await import("@/lib/actions/expenses");
+
+            await getExpenses({ tag: "groceries" });
+
+            expect(mockDb.expense.findMany).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    where: expect.objectContaining({
+                        tags: expect.objectContaining({
+                            some: expect.objectContaining({
+                                tag: expect.objectContaining({
+                                    name: expect.objectContaining({
+                                        contains: "groceries",
+                                    }),
+                                }),
+                            }),
+                        }),
+                    }),
+                })
+            );
+        });
+
+        it("should search by tag text in main search", async () => {
+            mockDb.expense.findMany.mockResolvedValue([]);
+
+            vi.resetModules();
+            const { getExpenses } = await import("@/lib/actions/expenses");
+
+            await getExpenses({ search: "groceries" });
+
+            expect(mockDb.expense.findMany).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    where: expect.objectContaining({
+                        OR: expect.arrayContaining([
+                            expect.objectContaining({
+                                tags: expect.objectContaining({
+                                    some: expect.objectContaining({
+                                        tag: expect.objectContaining({
+                                            name: expect.objectContaining({
+                                                contains: "groceries",
+                                            }),
+                                        }),
+                                    }),
+                                }),
+                            }),
+                        ]),
+                    }),
+                })
+            );
+        });
+
+        it("should leave tags untouched when tags is undefined in update", async () => {
+            const existingExpense = {
+                id: UUIDS.expense1,
+                userId: "test-user-id",
+                amount: 100,
+                category: "Food",
+                accountId: null,
+            };
+
+            mockDb.expense.findFirst.mockResolvedValue(existingExpense);
+            mockDb.expense.update.mockResolvedValue(existingExpense);
+
+            vi.resetModules();
+            const { updateExpense } = await import("@/lib/actions/expenses");
+
+            await updateExpense(UUIDS.expense1, { amount: 200 });
+
+            // Tags not provided - should not touch expenseTag at all
+            expect(mockDb.expenseTag.deleteMany).not.toHaveBeenCalled();
+            expect(mockDb.expenseTag.create).not.toHaveBeenCalled();
+        });
+
+        it("should clear all tags when empty array provided", async () => {
+            const existingExpense = {
+                id: UUIDS.expense1,
+                userId: "test-user-id",
+                amount: 100,
+                category: "Food",
+                accountId: null,
+            };
+
+            mockDb.expense.findFirst.mockResolvedValue(existingExpense);
+            mockDb.expense.update.mockResolvedValue(existingExpense);
+            mockDb.expenseTag.deleteMany.mockResolvedValue({ count: 2 });
+
+            vi.resetModules();
+            const { updateExpense } = await import("@/lib/actions/expenses");
+
+            await updateExpense(UUIDS.expense1, { tags: [] });
+
+            expect(mockDb.expenseTag.deleteMany).toHaveBeenCalledWith({
+                where: { expenseId: UUIDS.expense1 },
+            });
+            // No tags to create
+            expect(mockDb.expenseTag.create).not.toHaveBeenCalled();
         });
     });
 });

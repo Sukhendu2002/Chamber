@@ -30,6 +30,7 @@ const CreateExpenseSchema = z.object({
   paymentMethod: z.string().max(100).optional(),
   accountId: z.string().uuid().optional(),
   receiptUrl: z.string().max(500).optional(),
+  tags: z.array(z.string().max(50)).optional(),
 });
 
 const UpdateExpenseSchema = CreateExpenseSchema.partial();
@@ -43,6 +44,7 @@ const GetExpensesOptionsSchema = z.object({
   endDate: z.date().optional(),
   category: z.string().optional(),
   excludeCategory: z.string().optional(),
+  tag: z.string().optional(),
   search: z.string().max(200).optional(),
 }).optional();
 
@@ -51,6 +53,7 @@ const GetExpensesCountOptionsSchema = z.object({
   endDate: z.date().optional(),
   category: z.string().optional(),
   excludeCategory: z.string().optional(),
+  tag: z.string().optional(),
   search: z.string().max(200).optional(),
 }).optional();
 
@@ -86,6 +89,19 @@ async function recordBalanceHistory(
       date: date || new Date(),
     },
   });
+}
+
+export async function getUserTags(): Promise<string[]> {
+  const { userId } = await auth();
+  if (!userId) throw new Error("Unauthorized");
+
+  const tags = await db.tag.findMany({
+    where: { userId },
+    select: { name: true },
+    orderBy: { name: "asc" },
+  });
+
+  return tags.map((t) => t.name);
 }
 
 export async function createExpense(input: CreateExpenseInput) {
@@ -125,6 +141,22 @@ export async function createExpense(input: CreateExpenseInput) {
       }
     }
 
+    // Link tags
+    if (validated.tags && validated.tags.length > 0) {
+      for (const tagName of validated.tags) {
+        const trimmed = tagName.trim().toLowerCase();
+        if (!trimmed) continue;
+        const tag = await tx.tag.upsert({
+          where: { userId_name: { userId, name: trimmed } },
+          update: {},
+          create: { userId, name: trimmed },
+        });
+        await tx.expenseTag.create({
+          data: { expenseId: created.id, tagId: tag.id },
+        });
+      }
+    }
+
     return created;
   });
 
@@ -158,16 +190,28 @@ export async function getExpenses(options?: z.infer<typeof GetExpensesOptionsSch
     where.category = { not: validated.excludeCategory };
   }
 
+  if (validated?.tag) {
+    where.tags = {
+      some: {
+        tag: {
+          name: { contains: validated.tag, mode: "insensitive" },
+        },
+      },
+    };
+  }
+
   if (validated?.search) {
     where.OR = [
       { description: { contains: validated.search, mode: "insensitive" } },
       { merchant: { contains: validated.search, mode: "insensitive" } },
       { category: { contains: validated.search, mode: "insensitive" } },
+      { tags: { some: { tag: { name: { contains: validated.search, mode: "insensitive" } } } } },
     ];
   }
 
   const expenses = await db.expense.findMany({
     where,
+    include: { tags: { include: { tag: true } } },
     orderBy: [
       { createdAt: "desc" },
       { id: "desc" },
@@ -176,7 +220,10 @@ export async function getExpenses(options?: z.infer<typeof GetExpensesOptionsSch
     skip: validated?.offset,
   });
 
-  return expenses;
+  return expenses.map((e) => ({
+    ...e,
+    tags: e.tags?.map((et: { tag: { name: string } }) => et.tag.name) ?? [],
+  }));
 }
 
 export async function getExpensesCount(options?: z.infer<typeof GetExpensesCountOptionsSchema>) {
@@ -199,11 +246,22 @@ export async function getExpensesCount(options?: z.infer<typeof GetExpensesCount
     where.category = { not: validated.excludeCategory };
   }
 
+  if (validated?.tag) {
+    where.tags = {
+      some: {
+        tag: {
+          name: { contains: validated.tag, mode: "insensitive" },
+        },
+      },
+    };
+  }
+
   if (validated?.search) {
     where.OR = [
       { description: { contains: validated.search, mode: "insensitive" } },
       { merchant: { contains: validated.search, mode: "insensitive" } },
       { category: { contains: validated.search, mode: "insensitive" } },
+      { tags: { some: { tag: { name: { contains: validated.search, mode: "insensitive" } } } } },
     ];
   }
 
@@ -293,6 +351,23 @@ export async function updateExpense(
         receiptUrl: validated.receiptUrl,
       },
     });
+
+    // Handle tags if provided
+    if (validated.tags !== undefined) {
+      await tx.expenseTag.deleteMany({ where: { expenseId: validatedId } });
+      for (const tagName of validated.tags) {
+        const trimmed = tagName.trim().toLowerCase();
+        if (!trimmed) continue;
+        const tag = await tx.tag.upsert({
+          where: { userId_name: { userId, name: trimmed } },
+          update: {},
+          create: { userId, name: trimmed },
+        });
+        await tx.expenseTag.create({
+          data: { expenseId: validatedId, tagId: tag.id },
+        });
+      }
+    }
 
     return updated;
   });

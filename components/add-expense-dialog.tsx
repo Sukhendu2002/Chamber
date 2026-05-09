@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { toLocalDateString } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -20,8 +20,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { TagInput } from "@/components/tag-input";
 import { IconPlus, IconUpload, IconX } from "@tabler/icons-react";
 import { createExpense } from "@/lib/actions/expenses";
+import { getUserTags } from "@/lib/actions/expenses";
 import { createSubscription } from "@/lib/actions/subscriptions";
 
 type AccountOption = {
@@ -71,6 +73,15 @@ export function AddExpenseDialog({ accounts = [] }: AddExpenseDialogProps) {
   // Derive account name for display/label
   const selectedAccountName = accounts.find(a => a.id === selectedAccountId)?.name;
   const [receipt, setReceipt] = useState<File | null>(null);
+  const [tags, setTags] = useState<string[]>([]);
+  const [tagSuggestions, setTagSuggestions] = useState<string[]>([]);
+  
+  // Fetch existing tags when dialog opens
+  useEffect(() => {
+    if (open) {
+      getUserTags().then(setTagSuggestions);
+    }
+  }, [open]);
   
   // Subscription-specific fields
   const [billingCycle, setBillingCycle] = useState<"ONCE" | "WEEKLY" | "MONTHLY" | "QUARTERLY" | "YEARLY">("MONTHLY");
@@ -117,6 +128,7 @@ export function AddExpenseDialog({ accounts = [] }: AddExpenseDialogProps) {
           date: new Date(date),
           paymentMethod: selectedAccountName || undefined,
           accountId: selectedAccountId || undefined,
+          tags: tags.length > 0 ? tags : undefined,
         });
 
         // If there's a receipt, upload it
@@ -149,6 +161,7 @@ export function AddExpenseDialog({ accounts = [] }: AddExpenseDialogProps) {
     setDate(toLocalDateString());
     setSelectedAccountId("");
     setReceipt(null);
+    setTags([]);
     setBillingCycle("MONTHLY");
     setAlertDaysBefore("3");
   };
@@ -220,6 +233,16 @@ export function AddExpenseDialog({ accounts = [] }: AddExpenseDialogProps) {
               placeholder={isSubscription ? "Notes about this subscription" : "What was this expense for?"}
               value={description}
               onChange={(e) => setDescription(e.target.value)}
+            />
+          </div>
+          
+          <div className="space-y-2">
+            <Label>Tags</Label>
+            <TagInput
+              value={tags}
+              onChange={setTags}
+              suggestions={tagSuggestions}
+              placeholder="Add keywords..."
             />
           </div>
           

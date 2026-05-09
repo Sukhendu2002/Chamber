@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
-import { useState, useRef, useTransition } from "react";
+import { useState, useTransition } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -12,8 +12,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { IconSearch, IconX, IconTag } from "@tabler/icons-react";
+import { IconSearch, IconX, IconCalendar } from "@tabler/icons-react";
 import { cn } from "@/lib/utils";
+import type { DateRangePreset } from "@/lib/actions/expenses";
 
 const categories = [
   "All",
@@ -29,11 +30,20 @@ const categories = [
   "General",
 ];
 
+const DATE_RANGE_OPTIONS: { value: DateRangePreset; label: string }[] = [
+  { value: "this_month", label: "This Month" },
+  { value: "last_month", label: "Last Month" },
+  { value: "last_3_months", label: "Last 3 Months" },
+  { value: "last_6_months", label: "Last 6 Months" },
+  { value: "this_year", label: "This Year" },
+];
+
 type ExpenseFiltersProps = {
   currentSearch: string;
   currentCategory: string;
   currentExcludeCategory?: string;
-  currentTag?: string;
+  currentTags?: string[];
+  currentDateRange?: DateRangePreset;
   allTags?: string[];
 };
 
@@ -41,242 +51,156 @@ export function ExpenseFilters({
   currentSearch,
   currentCategory,
   currentExcludeCategory,
-  currentTag = "",
+  currentTags = [],
+  currentDateRange,
   allTags = [],
 }: ExpenseFiltersProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [isPending, startTransition] = useTransition();
   const [search, setSearch] = useState(currentSearch);
-  const [tag, setTag] = useState(currentTag);
-  const [showSuggestions, setShowSuggestions] = useState(false);
-  const [highlightedIndex, setHighlightedIndex] = useState(-1);
-  const tagInputRef = useRef<HTMLInputElement>(null);
 
-  const filteredSuggestions = allTags.filter(
-    (t) =>
-      t.toLowerCase().includes(tag.toLowerCase()) &&
-      t !== tag,
-  );
+  const updateFilters = (updates: {
+    search?: string;
+    category?: string;
+    tags?: string[];
+    dateRange?: DateRangePreset | "";
+  }) => {
+    const params = new URLSearchParams();
 
-  const updateFilters = (
-    newSearch: string,
-    newCategory: string,
-    newTag: string,
-  ) => {
-    const params = new URLSearchParams(searchParams.toString());
+    const newSearch = updates.search !== undefined ? updates.search : search;
+    const newCategory = updates.category !== undefined ? updates.category : currentCategory;
+    const newTags = updates.tags !== undefined ? updates.tags : currentTags;
+    const newDateRange = updates.dateRange !== undefined ? updates.dateRange : currentDateRange;
 
-    if (newSearch) {
-      params.set("search", newSearch);
-    } else {
-      params.delete("search");
-    }
-
+    if (newSearch) params.set("search", newSearch);
     if (newCategory && newCategory !== "All") {
       params.set("category", newCategory);
-      params.delete("excludeCategory");
-    } else {
-      params.delete("category");
-      if (currentExcludeCategory) {
-        params.set("excludeCategory", currentExcludeCategory);
-      }
+    } else if (currentExcludeCategory && !newCategory) {
+      params.set("excludeCategory", currentExcludeCategory);
     }
-
-    if (newTag) {
-      params.set("tag", newTag);
-    } else {
-      params.delete("tag");
-    }
-
-    params.delete("page");
+    for (const t of newTags) params.append("tags", t);
+    if (newDateRange) params.set("dateRange", newDateRange);
 
     startTransition(() => {
       router.push(`/expenses?${params.toString()}`);
     });
   };
 
-  const selectTag = (selectedTag: string) => {
-    setTag(selectedTag);
-    setShowSuggestions(false);
-    setHighlightedIndex(-1);
-    updateFilters(search, currentCategory, selectedTag);
+  const toggleTag = (tag: string) => {
+    const next = currentTags.includes(tag)
+      ? currentTags.filter((t) => t !== tag)
+      : [...currentTags, tag];
+    updateFilters({ tags: next });
   };
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
-    updateFilters(search, currentCategory, tag);
-  };
-
-  const handleCategoryChange = (value: string) => {
-    updateFilters(search, value, tag);
-  };
-
-  const handleTagChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setTag(e.target.value);
-    setShowSuggestions(true);
-    setHighlightedIndex(-1);
-  };
-
-  const handleTagKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter") {
-      e.preventDefault();
-      if (highlightedIndex >= 0 && filteredSuggestions[highlightedIndex]) {
-        selectTag(filteredSuggestions[highlightedIndex]);
-      } else {
-        setShowSuggestions(false);
-        updateFilters(search, currentCategory, tag);
-      }
-    } else if (e.key === "ArrowDown" && filteredSuggestions.length > 0) {
-      e.preventDefault();
-      setHighlightedIndex((prev) =>
-        prev < filteredSuggestions.length - 1 ? prev + 1 : 0,
-      );
-    } else if (e.key === "ArrowUp" && filteredSuggestions.length > 0) {
-      e.preventDefault();
-      setHighlightedIndex((prev) =>
-        prev > 0 ? prev - 1 : filteredSuggestions.length - 1,
-      );
-    } else if (e.key === "Escape") {
-      setShowSuggestions(false);
-      setHighlightedIndex(-1);
-    }
+    updateFilters({ search });
   };
 
   const clearFilters = () => {
     setSearch("");
-    setTag("");
-    startTransition(() => {
-      router.push("/expenses");
-    });
+    startTransition(() => router.push("/expenses"));
   };
 
   const hasFilters =
-    currentSearch || currentCategory || currentExcludeCategory || currentTag;
+    currentSearch || currentCategory || currentExcludeCategory || currentTags.length > 0 || currentDateRange;
+
+  // Preserve existing searchParams for category change (keep other filters)
+  const handleCategoryChange = (value: string) => {
+    updateFilters({ category: value });
+  };
+
+  const handleDateRangeChange = (value: string) => {
+    updateFilters({ dateRange: value === "all" ? "" : (value as DateRangePreset) });
+  };
 
   return (
-    <div className="mb-6 space-y-4">
-      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:gap-4">
+    <div className="mb-6 space-y-3">
+      {/* Row 1: search + category + date range + clear */}
+      <div className="flex flex-wrap items-center gap-3">
         <form onSubmit={handleSearch} className="flex items-center gap-2">
-          <div className="relative flex-1 sm:flex-initial">
+          <div className="relative">
             <IconSearch className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input
               type="text"
               placeholder="Search expenses..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full pl-9 sm:w-64"
+              className="w-56 pl-9"
             />
           </div>
-          <Button type="submit" variant="secondary" disabled={isPending}>
+          <Button type="submit" variant="secondary" size="sm" disabled={isPending}>
             Search
           </Button>
         </form>
 
-        <div className="flex items-center gap-3">
-          <Select
-            value={currentCategory || "All"}
-            onValueChange={handleCategoryChange}
-          >
-            <SelectTrigger className="w-40">
-              <SelectValue placeholder="Category" />
-            </SelectTrigger>
-            <SelectContent>
-              {categories.map((cat) => (
-                <SelectItem key={cat} value={cat}>
-                  {cat}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+        <Select value={currentCategory || "All"} onValueChange={handleCategoryChange}>
+          <SelectTrigger className="w-36">
+            <SelectValue placeholder="Category" />
+          </SelectTrigger>
+          <SelectContent>
+            {categories.map((cat) => (
+              <SelectItem key={cat} value={cat}>
+                {cat}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
 
-          <div className="relative">
-            <div className="relative">
-              <IconTag className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                ref={tagInputRef}
-                type="text"
-                placeholder="Filter by tag..."
-                value={tag}
-                onChange={handleTagChange}
-                onKeyDown={handleTagKeyDown}
-                onFocus={() => {
-                  if (tag || allTags.length > 0) setShowSuggestions(true);
-                }}
-                onBlur={() => {
-                  setTimeout(() => {
-                    setShowSuggestions(false);
-                    setHighlightedIndex(-1);
-                  }, 150);
-                }}
-                className="w-full pl-7 sm:w-36"
-              />
-            </div>
-            {showSuggestions && filteredSuggestions.length > 0 && (
-              <div className="absolute left-0 right-0 top-full z-50 mt-1 max-h-32 overflow-y-auto rounded-md border bg-popover p-1 shadow-md">
-                {filteredSuggestions.map((suggestion, index) => (
-                  <button
-                    key={suggestion}
-                    type="button"
-                    className={cn(
-                      "flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-xs",
-                      index === highlightedIndex
-                        ? "bg-accent text-accent-foreground"
-                        : "hover:bg-muted",
-                    )}
-                    onMouseDown={(e) => {
-                      e.preventDefault();
-                      selectTag(suggestion);
-                    }}
-                    onMouseEnter={() => setHighlightedIndex(index)}
-                  >
-                    <IconTag className="h-3 w-3 text-muted-foreground" />
-                    {suggestion}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
+        <Select value={currentDateRange || "all"} onValueChange={handleDateRangeChange}>
+          <SelectTrigger className="w-40">
+            <IconCalendar className="mr-1 h-3.5 w-3.5 text-muted-foreground" />
+            <SelectValue placeholder="Date range" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All time</SelectItem>
+            {DATE_RANGE_OPTIONS.map((opt) => (
+              <SelectItem key={opt.value} value={opt.value}>
+                {opt.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
 
-          {hasFilters && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={clearFilters}
-              disabled={isPending}
-            >
-              <IconX className="mr-1 h-4 w-4" />
-              Clear
-            </Button>
-          )}
-        </div>
+        {hasFilters && (
+          <Button variant="ghost" size="sm" onClick={clearFilters} disabled={isPending}>
+            <IconX className="mr-1 h-4 w-4" />
+            Clear
+          </Button>
+        )}
       </div>
 
+      {/* Row 2: tag pills (multi-select) */}
       {allTags.length > 0 && (
         <div className="flex flex-wrap items-center gap-1.5">
           <span className="text-xs text-muted-foreground">Tags:</span>
-          {allTags.map((t) => (
-            <Badge
-              key={t}
-              variant={t === currentTag ? "default" : "secondary"}
-              className={cn(
-                "cursor-pointer text-[11px] px-2 py-0.5 transition-colors",
-                t === currentTag
-                  ? "hover:bg-primary/90"
-                  : "hover:bg-secondary/80",
-              )}
-              onClick={() => {
-                if (t === currentTag) {
-                  setTag("");
-                  updateFilters(search, currentCategory, "");
-                } else {
-                  setTag(t);
-                  updateFilters(search, currentCategory, t);
-                }
-              }}
+          {allTags.map((t) => {
+            const active = currentTags.includes(t);
+            return (
+              <Badge
+                key={t}
+                variant={active ? "default" : "secondary"}
+                className={cn(
+                  "cursor-pointer text-[11px] px-2 py-0.5 transition-colors select-none",
+                  active ? "hover:bg-primary/90" : "hover:bg-secondary/80",
+                )}
+                onClick={() => toggleTag(t)}
+              >
+                {t}
+              </Badge>
+            );
+          })}
+          {currentTags.length > 0 && (
+            <button
+              type="button"
+              className="text-[11px] text-muted-foreground hover:text-foreground underline"
+              onClick={() => updateFilters({ tags: [] })}
             >
-              {t}
-            </Badge>
-          ))}
+              clear tags
+            </button>
+          )}
         </div>
       )}
     </div>

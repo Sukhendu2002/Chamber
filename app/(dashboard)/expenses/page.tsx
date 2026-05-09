@@ -4,22 +4,29 @@ import { ExpenseTable } from "@/components/expense-table";
 import { ExpenseFilters } from "@/components/expense-filters";
 import { Pagination } from "@/components/pagination";
 import { getExpenses, getExpensesCount, getUserTags } from "@/lib/actions/expenses";
+import type { DateRangePreset } from "@/lib/actions/expenses";
 import { getUserSettings } from "@/lib/actions/settings";
 import { getAccounts } from "@/lib/actions/accounts";
 
 const ITEMS_PER_PAGE = 10;
 
+const DATE_RANGE_PRESETS = ["this_month", "last_month", "last_3_months", "last_6_months", "this_year"] as const;
+
 export default async function ExpensesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ page?: string; search?: string; category?: string; excludeCategory?: string; tag?: string }>;
+  searchParams: Promise<{ page?: string; search?: string; category?: string; excludeCategory?: string; tags?: string | string[]; dateRange?: string }>;
 }) {
   const params = await searchParams;
   const page = parseInt(params.page || "1", 10);
   const search = params.search || "";
   const category = params.category || "";
   const excludeCategory = params.excludeCategory || "";
-  const tag = params.tag || "";
+  const rawTags = params.tags;
+  const tags = rawTags ? (Array.isArray(rawTags) ? rawTags : [rawTags]) : [];
+  const dateRange = DATE_RANGE_PRESETS.includes(params.dateRange as DateRangePreset)
+    ? (params.dateRange as DateRangePreset)
+    : undefined;
   const offset = (page - 1) * ITEMS_PER_PAGE;
 
   const [expenses, { count: totalCount, totalAmount }, settings, accounts, allTags] = await Promise.all([
@@ -29,13 +36,15 @@ export default async function ExpensesPage({
       search: search || undefined,
       category: category || undefined,
       excludeCategory: excludeCategory || undefined,
-      tag: tag || undefined,
+      tags: tags.length > 0 ? tags : undefined,
+      dateRange,
     }),
     getExpensesCount({
       search: search || undefined,
       category: category || undefined,
       excludeCategory: excludeCategory || undefined,
-      tag: tag || undefined,
+      tags: tags.length > 0 ? tags : undefined,
+      dateRange,
     }),
     getUserSettings(),
     getAccounts(),
@@ -51,6 +60,8 @@ export default async function ExpensesPage({
       minimumFractionDigits: 2,
     }).format(amount);
   };
+
+  const hasFilters = search || category || excludeCategory || tags.length > 0 || dateRange;
 
   return (
     <div className="p-4 md:p-6">
@@ -70,7 +81,8 @@ export default async function ExpensesPage({
         currentSearch={search}
         currentCategory={category}
         currentExcludeCategory={excludeCategory}
-        currentTag={tag}
+        currentTags={tags}
+        currentDateRange={dateRange}
         allTags={allTags}
       />
 
@@ -78,7 +90,7 @@ export default async function ExpensesPage({
       <Card className="border">
         <CardHeader>
           <CardTitle className="text-sm font-medium">
-            {search || category || excludeCategory || tag
+            {hasFilters
               ? `Filtered Expenses (${totalCount}) - ${formatCurrency(totalAmount)}`
               : `All Expenses (${totalCount}) - ${formatCurrency(totalAmount)}`}
           </CardTitle>
@@ -94,14 +106,15 @@ export default async function ExpensesPage({
                   search={search}
                   category={category}
                   excludeCategory={excludeCategory}
-                  tag={tag}
+                  tags={tags}
+                  dateRange={dateRange}
                 />
               )}
             </>
           ) : (
             <div className="flex h-48 items-center justify-center">
               <p className="text-sm text-muted-foreground">
-                {search || category || excludeCategory || tag
+                {hasFilters
                   ? "No expenses match your filters."
                   : "No expenses yet. Add your first expense to get started."}
               </p>

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { IconChevronLeft, IconChevronRight } from "@tabler/icons-react";
+import type { DateRangePreset } from "@/lib/actions/expenses";
 
 type PaginationProps = {
   currentPage: number;
@@ -10,7 +11,8 @@ type PaginationProps = {
   search?: string;
   category?: string;
   excludeCategory?: string;
-  tag?: string;
+  tags?: string[];
+  dateRange?: DateRangePreset;
 };
 
 export function Pagination({
@@ -19,7 +21,8 @@ export function Pagination({
   search,
   category,
   excludeCategory,
-  tag,
+  tags = [],
+  dateRange,
 }: PaginationProps) {
   const buildUrl = (page: number) => {
     const params = new URLSearchParams();
@@ -27,7 +30,8 @@ export function Pagination({
     if (search) params.set("search", search);
     if (category) params.set("category", category);
     if (excludeCategory) params.set("excludeCategory", excludeCategory);
-    if (tag) params.set("tag", tag);
+    for (const t of tags) params.append("tags", t);
+    if (dateRange) params.set("dateRange", dateRange);
     return `/expenses?${params.toString()}`;
   };
 

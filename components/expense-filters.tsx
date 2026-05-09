@@ -11,7 +11,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { IconSearch, IconX } from "@tabler/icons-react";
+import { IconSearch, IconX, IconTag } from "@tabler/icons-react";
 
 const categories = [
   "All",
@@ -31,15 +31,26 @@ type ExpenseFiltersProps = {
   currentSearch: string;
   currentCategory: string;
   currentExcludeCategory?: string;
+  currentTag?: string;
 };
 
-export function ExpenseFilters({ currentSearch, currentCategory, currentExcludeCategory }: ExpenseFiltersProps) {
+export function ExpenseFilters({
+  currentSearch,
+  currentCategory,
+  currentExcludeCategory,
+  currentTag = "",
+}: ExpenseFiltersProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [isPending, startTransition] = useTransition();
   const [search, setSearch] = useState(currentSearch);
+  const [tag, setTag] = useState(currentTag);
 
-  const updateFilters = (newSearch: string, newCategory: string) => {
+  const updateFilters = (
+    newSearch: string,
+    newCategory: string,
+    newTag: string,
+  ) => {
     const params = new URLSearchParams(searchParams.toString());
 
     if (newSearch) {
@@ -50,7 +61,6 @@ export function ExpenseFilters({ currentSearch, currentCategory, currentExcludeC
 
     if (newCategory && newCategory !== "All") {
       params.set("category", newCategory);
-      // Optional: remove excludeCategory if a specific category is chosen
       params.delete("excludeCategory");
     } else {
       params.delete("category");
@@ -59,7 +69,12 @@ export function ExpenseFilters({ currentSearch, currentCategory, currentExcludeC
       }
     }
 
-    // Reset to page 1 when filters change
+    if (newTag) {
+      params.set("tag", newTag);
+    } else {
+      params.delete("tag");
+    }
+
     params.delete("page");
 
     startTransition(() => {
@@ -69,21 +84,32 @@ export function ExpenseFilters({ currentSearch, currentCategory, currentExcludeC
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
-    updateFilters(search, currentCategory);
+    updateFilters(search, currentCategory, tag);
   };
 
   const handleCategoryChange = (value: string) => {
-    updateFilters(search, value);
+    updateFilters(search, value, tag);
+  };
+
+  const handleTagChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setTag(e.target.value);
+  };
+
+  const handleTagSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    updateFilters(search, currentCategory, tag);
   };
 
   const clearFilters = () => {
     setSearch("");
+    setTag("");
     startTransition(() => {
       router.push("/expenses");
     });
   };
 
-  const hasFilters = currentSearch || currentCategory || currentExcludeCategory;
+  const hasFilters =
+    currentSearch || currentCategory || currentExcludeCategory || currentTag;
 
   return (
     <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:gap-4">
@@ -119,6 +145,19 @@ export function ExpenseFilters({ currentSearch, currentCategory, currentExcludeC
             ))}
           </SelectContent>
         </Select>
+
+        <form onSubmit={handleTagSubmit} className="flex items-center gap-2">
+          <div className="relative flex-1 sm:flex-initial">
+            <IconTag className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              type="text"
+              placeholder="Filter by tag..."
+              value={tag}
+              onChange={handleTagChange}
+              className="w-full pl-7 sm:w-36"
+            />
+          </div>
+        </form>
 
         {hasFilters && (
           <Button

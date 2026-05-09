@@ -10,6 +10,7 @@ type PaginationProps = {
   search?: string;
   category?: string;
   excludeCategory?: string;
+  tag?: string;
 };
 
 export function Pagination({
@@ -18,6 +19,7 @@ export function Pagination({
   search,
   category,
   excludeCategory,
+  tag,
 }: PaginationProps) {
   const buildUrl = (page: number) => {
     const params = new URLSearchParams();
@@ -25,6 +27,7 @@ export function Pagination({
     if (search) params.set("search", search);
     if (category) params.set("category", category);
     if (excludeCategory) params.set("excludeCategory", excludeCategory);
+    if (tag) params.set("tag", tag);
     return `/expenses?${params.toString()}`;
   };
 

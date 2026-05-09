@@ -48,7 +48,8 @@ import {
   IconPhoto,
   IconX,
 } from "@tabler/icons-react";
-import { updateExpense, deleteExpense } from "@/lib/actions/expenses";
+import { updateExpense, deleteExpense, getUserTags } from "@/lib/actions/expenses";
+import { TagInput } from "@/components/tag-input";
 
 type AccountOption = {
   id: string;
@@ -88,8 +89,9 @@ type Expense = {
   accountId: string | null;
   date: Date;
   isVerified: boolean;
-  receiptUrl: string | null;  // Legacy single receipt
-  receiptUrls: string[];      // Multiple receipts array
+  receiptUrl: string | null;
+  receiptUrls: string[];
+  tags: string[];
 };
 
 type SortField = "date" | "amount" | "category";
@@ -121,6 +123,8 @@ export function ExpenseTable({ expenses: initialExpenses, currency, accounts = [
   const [editDate, setEditDate] = useState("");
   const [editAccountId, setEditAccountId] = useState("");
   const [editReceipt, setEditReceipt] = useState<File | null>(null);
+  const [editTags, setEditTags] = useState<string[]>([]);
+  const [editTagSuggestions, setEditTagSuggestions] = useState<string[]>([]);
   const [editLoading, setEditLoading] = useState(false);
   
   // Delete state
@@ -223,6 +227,8 @@ export function ExpenseTable({ expenses: initialExpenses, currency, accounts = [
     setEditDate(toLocalDateString(new Date(expense.date)));
     setEditAccountId(expense.accountId || "");
     setEditReceipt(null);
+    setEditTags(expense.tags || []);
+    getUserTags().then(setEditTagSuggestions);
   };
 
   const handleEdit = async () => {
@@ -238,6 +244,7 @@ export function ExpenseTable({ expenses: initialExpenses, currency, accounts = [
         date: new Date(editDate),
         paymentMethod: accountName || undefined,
         accountId: editAccountId || undefined,
+        tags: editTags,
       });
 
       // If there's a new receipt, upload it
@@ -410,6 +417,20 @@ export function ExpenseTable({ expenses: initialExpenses, currency, accounts = [
                     {expense.paymentMethod}
                   </span>
                 )}
+                {expense.tags && expense.tags.length > 0 && (
+                  <div className="mt-1 flex flex-wrap gap-1">
+                    {expense.tags.slice(0, 3).map((tag) => (
+                      <Badge key={tag} variant="outline" className="text-[10px] px-1 py-0">
+                        {tag}
+                      </Badge>
+                    ))}
+                    {expense.tags.length > 3 && (
+                      <Badge variant="outline" className="text-[10px] px-1 py-0">
+                        +{expense.tags.length - 3} more
+                      </Badge>
+                    )}
+                  </div>
+                )}
               </div>
               <p className="text-sm font-bold whitespace-nowrap">
                 {formatCurrency(expense.amount)}
@@ -440,6 +461,7 @@ export function ExpenseTable({ expenses: initialExpenses, currency, accounts = [
               >
                 Category <SortIcon field="category" />
               </TableHead>
+              <TableHead>Tags</TableHead>
               <TableHead>Source</TableHead>
               <TableHead>Payment</TableHead>
               <TableHead
@@ -465,6 +487,24 @@ export function ExpenseTable({ expenses: initialExpenses, currency, accounts = [
                 </TableCell>
                 <TableCell>
                   <Badge variant="secondary">{expense.category}</Badge>
+                </TableCell>
+                <TableCell>
+                  {expense.tags && expense.tags.length > 0 ? (
+                    <div className="flex flex-wrap gap-1">
+                      {expense.tags.slice(0, 3).map((tag) => (
+                        <Badge key={tag} variant="outline" className="text-[10px] px-1 py-0">
+                          {tag}
+                        </Badge>
+                      ))}
+                      {expense.tags.length > 3 && (
+                        <Badge variant="outline" className="text-[10px] px-1 py-0">
+                          +{expense.tags.length - 3}
+                        </Badge>
+                      )}
+                    </div>
+                  ) : (
+                    <span className="text-muted-foreground text-xs">-</span>
+                  )}
                 </TableCell>
                 <TableCell>
                   <span
@@ -539,6 +579,15 @@ export function ExpenseTable({ expenses: initialExpenses, currency, accounts = [
                 id="edit-description"
                 value={editDescription}
                 onChange={(e) => setEditDescription(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Tags</Label>
+              <TagInput
+                value={editTags}
+                onChange={setEditTags}
+                suggestions={editTagSuggestions}
+                placeholder="Add keywords..."
               />
             </div>
             <div className="grid grid-cols-2 gap-4">

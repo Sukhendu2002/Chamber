@@ -3,7 +3,7 @@ import { AddExpenseDialog } from "@/components/add-expense-dialog";
 import { ExpenseTable } from "@/components/expense-table";
 import { ExpenseFilters } from "@/components/expense-filters";
 import { Pagination } from "@/components/pagination";
-import { getExpenses, getExpensesCount } from "@/lib/actions/expenses";
+import { getExpenses, getExpensesCount, getUserTags } from "@/lib/actions/expenses";
 import { getUserSettings } from "@/lib/actions/settings";
 import { getAccounts } from "@/lib/actions/accounts";
 
@@ -22,7 +22,7 @@ export default async function ExpensesPage({
   const tag = params.tag || "";
   const offset = (page - 1) * ITEMS_PER_PAGE;
 
-  const [expenses, { count: totalCount, totalAmount }, settings, accounts] = await Promise.all([
+  const [expenses, { count: totalCount, totalAmount }, settings, accounts, allTags] = await Promise.all([
     getExpenses({
       limit: ITEMS_PER_PAGE,
       offset,
@@ -39,6 +39,7 @@ export default async function ExpensesPage({
     }),
     getUserSettings(),
     getAccounts(),
+    getUserTags(),
   ]);
 
   const totalPages = Math.ceil(totalCount / ITEMS_PER_PAGE);
@@ -70,6 +71,7 @@ export default async function ExpensesPage({
         currentCategory={category}
         currentExcludeCategory={excludeCategory}
         currentTag={tag}
+        allTags={allTags}
       />
 
       {/* Expenses Table */}

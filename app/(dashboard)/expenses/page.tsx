@@ -3,7 +3,7 @@ import { AddExpenseDialog } from "@/components/add-expense-dialog";
 import { ExpenseTable } from "@/components/expense-table";
 import { ExpenseFilters } from "@/components/expense-filters";
 import { Pagination } from "@/components/pagination";
-import { getExpenses, getExpensesCount } from "@/lib/actions/expenses";
+import { getExpenses, getExpensesCount, getUserTags } from "@/lib/actions/expenses";
 import { getUserSettings } from "@/lib/actions/settings";
 import { getAccounts } from "@/lib/actions/accounts";
 
@@ -12,30 +12,34 @@ const ITEMS_PER_PAGE = 10;
 export default async function ExpensesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ page?: string; search?: string; category?: string; excludeCategory?: string }>;
+  searchParams: Promise<{ page?: string; search?: string; category?: string; excludeCategory?: string; tag?: string }>;
 }) {
   const params = await searchParams;
   const page = parseInt(params.page || "1", 10);
   const search = params.search || "";
   const category = params.category || "";
   const excludeCategory = params.excludeCategory || "";
+  const tag = params.tag || "";
   const offset = (page - 1) * ITEMS_PER_PAGE;
 
-  const [expenses, { count: totalCount, totalAmount }, settings, accounts] = await Promise.all([
+  const [expenses, { count: totalCount, totalAmount }, settings, accounts, allTags] = await Promise.all([
     getExpenses({
       limit: ITEMS_PER_PAGE,
       offset,
       search: search || undefined,
       category: category || undefined,
       excludeCategory: excludeCategory || undefined,
+      tag: tag || undefined,
     }),
     getExpensesCount({
       search: search || undefined,
       category: category || undefined,
       excludeCategory: excludeCategory || undefined,
+      tag: tag || undefined,
     }),
     getUserSettings(),
     getAccounts(),
+    getUserTags(),
   ]);
 
   const totalPages = Math.ceil(totalCount / ITEMS_PER_PAGE);
@@ -66,13 +70,15 @@ export default async function ExpensesPage({
         currentSearch={search}
         currentCategory={category}
         currentExcludeCategory={excludeCategory}
+        currentTag={tag}
+        allTags={allTags}
       />
 
       {/* Expenses Table */}
       <Card className="border">
         <CardHeader>
           <CardTitle className="text-sm font-medium">
-            {search || category || excludeCategory
+            {search || category || excludeCategory || tag
               ? `Filtered Expenses (${totalCount}) - ${formatCurrency(totalAmount)}`
               : `All Expenses (${totalCount}) - ${formatCurrency(totalAmount)}`}
           </CardTitle>
@@ -88,13 +94,14 @@ export default async function ExpensesPage({
                   search={search}
                   category={category}
                   excludeCategory={excludeCategory}
+                  tag={tag}
                 />
               )}
             </>
           ) : (
             <div className="flex h-48 items-center justify-center">
               <p className="text-sm text-muted-foreground">
-                {search || category || excludeCategory
+                {search || category || excludeCategory || tag
                   ? "No expenses match your filters."
                   : "No expenses yet. Add your first expense to get started."}
               </p>

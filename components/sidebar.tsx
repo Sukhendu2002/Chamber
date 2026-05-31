@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useClerk, useUser } from "@clerk/nextjs";
 import { cn } from "@/lib/utils";
-import { ThemeToggle } from "@/components/theme-toggle";
+
 import { useDemoMode } from "@/components/demo-mode-provider";
 import { Button } from "@/components/ui/button";
 import {
@@ -145,7 +145,6 @@ function SidebarFooter({ mounted, isLoaded, user, signOut, isDemoMode, toggleDem
     <div className="border-t p-2">
       <div className="flex items-center justify-between px-2 py-1">
         <div className="flex items-center gap-1">
-          <ThemeToggle />
           <Button
             variant="ghost"
             size="icon"

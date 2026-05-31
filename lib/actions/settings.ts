@@ -11,6 +11,7 @@ const DashboardWidgetsSchema = z.object({
   showStats: z.boolean().optional(),
   showNetWorth: z.boolean().optional(),
   showBalanceTrend: z.boolean().optional(),
+  showForecast: z.boolean().optional(),
   showCalendar: z.boolean().optional(),
   showCategories: z.boolean().optional(),
   showRecent: z.boolean().optional(),

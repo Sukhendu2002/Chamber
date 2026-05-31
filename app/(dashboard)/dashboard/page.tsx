@@ -248,8 +248,6 @@ export default async function DashboardPage() {
                 date: e.date,
               }))}
               currency={settings.currency}
-              monthlyIncome={settings.monthlyIncome || 0}
-              salaryDay={settings.salaryDay || 1}
             />
           )}
 

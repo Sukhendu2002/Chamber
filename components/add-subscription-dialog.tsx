@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import {
@@ -20,8 +20,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { IconPlus } from "@tabler/icons-react";
+import { IconPlus, IconCalendarMonth, IconChevronDown } from "@tabler/icons-react";
 import { createSubscription } from "@/lib/actions/subscriptions";
+import { calculateNextBillingDateFromStart } from "@/lib/subscription-utils";
 import { createExpense } from "@/lib/actions/expenses";
 
 type AccountOption = {
@@ -49,44 +50,81 @@ export function AddSubscriptionDialog({ accounts = [] }: AddSubscriptionDialogPr
   const [name, setName] = useState("");
   const [amount, setAmount] = useState("");
   const [billingCycle, setBillingCycle] = useState<"ONCE" | "WEEKLY" | "MONTHLY" | "QUARTERLY" | "YEARLY">("MONTHLY");
-  const [nextBillingDate, setNextBillingDate] = useState("");
+  const [startDate, setStartDate] = useState("");
+  const [showManualDate, setShowManualDate] = useState(false);
+  const [manualNextDate, setManualNextDate] = useState("");
   const [paymentMethod, setPaymentMethod] = useState("");
+  const [category, setCategory] = useState("");
   const [description, setDescription] = useState("");
   const [alertDaysBefore, setAlertDaysBefore] = useState("3");
+
+  // Auto-calculate next billing date from start date + billing cycle
+  const computedNextBilling = useMemo(() => {
+    if (!startDate || !billingCycle || billingCycle === "ONCE") return null;
+    return calculateNextBillingDateFromStart(new Date(startDate), billingCycle);
+  }, [startDate, billingCycle]);
+
+  const formatDate = (date: Date) => {
+    return date.toLocaleDateString("en-US", {
+      weekday: "short",
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+    });
+  };
 
   const resetForm = () => {
     setName("");
     setAmount("");
     setBillingCycle("MONTHLY");
-    setNextBillingDate("");
+    setStartDate("");
+    setShowManualDate(false);
+    setManualNextDate("");
     setPaymentMethod("");
+    setCategory("");
     setDescription("");
     setAlertDaysBefore("3");
   };
 
+  // Use computed date if available, otherwise manual date, otherwise null
+  const getNextBillingDate = (): Date | undefined => {
+    if (showManualDate && manualNextDate) {
+      return new Date(manualNextDate);
+    }
+    if (computedNextBilling) {
+      return computedNextBilling;
+    }
+    return undefined;
+  };
+
   const handleSubmit = async () => {
-    if (!name || !amount || !nextBillingDate) return;
+    if (!name || !amount) return;
+    
+    const nextBillingDate = getNextBillingDate();
+    if (!nextBillingDate && billingCycle !== "ONCE") return;
+    // For ONCE, if no start date, use today
 
     setLoading(true);
     try {
-      // Create subscription
       await createSubscription({
         name,
         amount: parseFloat(amount),
         billingCycle,
-        nextBillingDate: new Date(nextBillingDate),
+        nextBillingDate: nextBillingDate || new Date(),
+        startDate: startDate ? new Date(startDate) : undefined,
         paymentMethod: paymentMethod || undefined,
+        category: category || undefined,
         description: description || undefined,
         alertDaysBefore: parseInt(alertDaysBefore) || 3,
       });
 
-      // Also create an expense for the first payment (use today's date, not next billing date)
+      // Also create an expense for the first payment (use today's date)
       await createExpense({
         amount: parseFloat(amount),
         category: "Subscription",
         description: `${name} - ${billingCycle.toLowerCase()} subscription`,
         merchant: name,
-        date: new Date(), // Today's date
+        date: new Date(),
         paymentMethod: paymentMethod || undefined,
       });
 
@@ -100,6 +138,8 @@ export function AddSubscriptionDialog({ accounts = [] }: AddSubscriptionDialogPr
     }
   };
 
+  const canSubmit = name && amount && (getNextBillingDate() || billingCycle === "ONCE");
+
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
@@ -108,11 +148,12 @@ export function AddSubscriptionDialog({ accounts = [] }: AddSubscriptionDialogPr
           Add Subscription
         </Button>
       </DialogTrigger>
-      <DialogContent>
+      <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
           <DialogTitle>Add Subscription</DialogTitle>
         </DialogHeader>
         <div className="space-y-4">
+          {/* Name + Amount */}
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="name">Name</Label>
@@ -136,6 +177,7 @@ export function AddSubscriptionDialog({ accounts = [] }: AddSubscriptionDialogPr
             </div>
           </div>
 
+          {/* Billing Cycle + Start Date */}
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="billing-cycle">Billing Cycle</Label>
@@ -153,16 +195,70 @@ export function AddSubscriptionDialog({ accounts = [] }: AddSubscriptionDialogPr
               </Select>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="next-billing">Next Billing Date</Label>
+              <Label htmlFor="start-date">Start Date</Label>
               <Input
-                id="next-billing"
+                id="start-date"
                 type="date"
-                value={nextBillingDate}
-                onChange={(e) => setNextBillingDate(e.target.value)}
+                value={startDate}
+                onChange={(e) => {
+                  setStartDate(e.target.value);
+                  // Clear manual date when start date changes
+                  if (showManualDate) setShowManualDate(false);
+                }}
               />
+              <p className="text-[10px] text-muted-foreground">When did you subscribe?</p>
             </div>
           </div>
 
+          {/* Auto-calculated next billing preview */}
+          {startDate && computedNextBilling && (
+            <div className="bg-primary/5 border border-primary/20 rounded px-3 py-2 flex items-center gap-2">
+              <IconCalendarMonth className="h-4 w-4 text-primary shrink-0" />
+              <div className="text-xs">
+                <span className="font-medium">Next billing: </span>
+                <span className="font-semibold">{formatDate(computedNextBilling)}</span>
+                <span className="text-muted-foreground ml-1">
+                  (auto-calculated from start date)
+                </span>
+              </div>
+            </div>
+          )}
+
+          {/* Manual date override (collapsed by default) */}
+          {!showManualDate ? (
+            <button
+              type="button"
+              onClick={() => setShowManualDate(true)}
+              className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 transition-colors"
+            >
+              <IconChevronDown className="h-3 w-3" />
+              Set a custom next billing date instead
+            </button>
+          ) : (
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label htmlFor="manual-next-date">Custom Next Billing Date</Label>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowManualDate(false);
+                    setManualNextDate("");
+                  }}
+                  className="text-xs text-muted-foreground hover:text-foreground"
+                >
+                  Use auto-calculated
+                </button>
+              </div>
+              <Input
+                id="manual-next-date"
+                type="date"
+                value={manualNextDate}
+                onChange={(e) => setManualNextDate(e.target.value)}
+              />
+            </div>
+          )}
+
+          {/* Payment Method + Alert Days */}
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="payment-method">Payment Method</Label>
@@ -192,21 +288,34 @@ export function AddSubscriptionDialog({ accounts = [] }: AddSubscriptionDialogPr
             </div>
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="description">Description (optional)</Label>
-            <Input
-              id="description"
-              placeholder="Notes about this subscription"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-            />
+          {/* Category + Description */}
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="category">Category</Label>
+              <Input
+                id="category"
+                placeholder="e.g. Domains, Streaming"
+                value={category}
+                onChange={(e) => setCategory(e.target.value)}
+              />
+              <p className="text-[10px] text-muted-foreground">Group related subscriptions</p>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="description">Description (optional)</Label>
+              <Input
+                id="description"
+                placeholder="Notes"
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+              />
+            </div>
           </div>
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => setOpen(false)}>
             Cancel
           </Button>
-          <Button onClick={handleSubmit} disabled={loading || !name || !amount || !nextBillingDate}>
+          <Button onClick={handleSubmit} disabled={loading || !canSubmit}>
             {loading ? "Adding..." : "Add Subscription"}
           </Button>
         </DialogFooter>

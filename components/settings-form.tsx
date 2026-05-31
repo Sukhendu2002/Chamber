@@ -13,10 +13,11 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
-import { IconDeviceFloppy, IconDownload, IconTrash, IconLayoutDashboard, IconEyeOff } from "@tabler/icons-react";
+import { IconDeviceFloppy, IconDownload, IconTrash, IconLayoutDashboard, IconEyeOff, IconPalette } from "@tabler/icons-react";
 import { updateUserSettings, exportExpensesCSV, deleteAllUserData } from "@/lib/actions/settings";
 import { DashboardWidgets, DEFAULT_DASHBOARD_WIDGETS, DASHBOARD_WIDGET_OPTIONS } from "@/types/dashboard";
 import { useDemoMode } from "@/components/demo-mode-provider";
+import { ThemeSelector } from "@/components/theme-selector";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -305,6 +306,19 @@ export function SettingsForm({ initialSettings }: SettingsFormProps) {
               </div>
             ))}
           </div>
+        </CardContent>
+      </Card>
+
+      {/* Theme Settings */}
+      <Card className="mb-6 border">
+        <CardHeader>
+          <CardTitle className="text-sm font-medium flex items-center gap-2">
+            <IconPalette className="h-4 w-4" />
+            Theme
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <ThemeSelector />
         </CardContent>
       </Card>
 

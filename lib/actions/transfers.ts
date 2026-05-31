@@ -22,6 +22,24 @@ const DeleteTransferSchema = z.string().uuid();
 
 export type CreateTransferInput = z.infer<typeof CreateTransferSchema>;
 
+// For credit cards, currentBalance represents outstanding debt.
+// Transferring FROM a credit card increases debt (cash advance).
+// Transferring TO a credit card decreases debt (payment).
+function getTransferAdjustment(
+  accountType: string,
+  direction: "from" | "to",
+  amount: number
+): number {
+  if (accountType === "CREDIT_CARD") {
+    // For credit cards, direction is reversed:
+    // from = money leaving card = debt increases = +amount
+    // to = money entering card = debt decreases = -amount
+    return direction === "from" ? amount : -amount;
+  }
+  // Regular accounts: from decreases balance, to increases balance
+  return direction === "from" ? -amount : amount;
+}
+
 export type TransferWithAccounts = {
   id: string;
   userId: string;
@@ -58,8 +76,16 @@ export async function createTransfer(input: CreateTransferInput) {
     if (!fromAccount) throw new Error("Source account not found");
     if (!toAccount) throw new Error("Destination account not found");
 
-    if (fromAccount.currentBalance < validated.amount) {
-      throw new Error("Insufficient funds");
+    // Check sufficient funds / available credit
+    if (fromAccount.type === "CREDIT_CARD") {
+      const availableCredit = (fromAccount.creditLimit ?? 0) - fromAccount.currentBalance;
+      if (validated.amount > availableCredit) {
+        throw new Error("Insufficient credit limit");
+      }
+    } else {
+      if (fromAccount.currentBalance < validated.amount) {
+        throw new Error("Insufficient funds");
+      }
     }
 
     const created = await tx.transfer.create({
@@ -73,9 +99,10 @@ export async function createTransfer(input: CreateTransferInput) {
       },
     });
 
+    const fromAdjustment = getTransferAdjustment(fromAccount.type, "from", validated.amount);
     const updatedFrom = await tx.account.update({
       where: { id: validated.fromAccountId },
-      data: { currentBalance: { increment: -validated.amount } },
+      data: { currentBalance: { increment: fromAdjustment } },
     });
 
     await tx.balanceHistory.create({
@@ -87,9 +114,10 @@ export async function createTransfer(input: CreateTransferInput) {
       },
     });
 
+    const toAdjustment = getTransferAdjustment(toAccount.type, "to", validated.amount);
     const updatedTo = await tx.account.update({
       where: { id: validated.toAccountId },
-      data: { currentBalance: { increment: validated.amount } },
+      data: { currentBalance: { increment: toAdjustment } },
     });
 
     await tx.balanceHistory.create({
@@ -151,8 +179,8 @@ export async function deleteTransfer(transferId: string) {
       amount: true,
       fromAccountId: true,
       toAccountId: true,
-      fromAccount: { select: { name: true } },
-      toAccount: { select: { name: true } },
+      fromAccount: { select: { name: true, type: true } },
+      toAccount: { select: { name: true, type: true } },
     },
   });
 
@@ -162,9 +190,11 @@ export async function deleteTransfer(transferId: string) {
   await db.$transaction(async (tx) => {
     await tx.transfer.delete({ where: { id: validatedId } });
 
+    // Reversal uses the opposite direction adjustment
+    const fromReversal = getTransferAdjustment(transfer.fromAccount.type, "to", transfer.amount);
     const updatedFrom = await tx.account.update({
       where: { id: transfer.fromAccountId },
-      data: { currentBalance: { increment: transfer.amount } },
+      data: { currentBalance: { increment: fromReversal } },
     });
 
     await tx.balanceHistory.create({
@@ -176,9 +206,10 @@ export async function deleteTransfer(transferId: string) {
       },
     });
 
+    const toReversal = getTransferAdjustment(transfer.toAccount.type, "from", transfer.amount);
     const updatedTo = await tx.account.update({
       where: { id: transfer.toAccountId },
-      data: { currentBalance: { increment: -transfer.amount } },
+      data: { currentBalance: { increment: toReversal } },
     });
 
     await tx.balanceHistory.create({

@@ -104,6 +104,7 @@ model Subscription {
   amount        Float
   billingCycle  BillingCycle @default(MONTHLY)
   nextBillingDate DateTime
+  startDate     DateTime?     // When the user first subscribed (for auto-calculating next billing)
   paymentMethod String?       // Account name (dynamic, from user's accounts)
   category      String       @default("Subscription")
   description   String?

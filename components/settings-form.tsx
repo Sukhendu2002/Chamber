@@ -63,6 +63,9 @@ const categories = [
   "Shopping",
   "Health",
   "Education",
+  "Investments",
+  "Subscription",
+  "Lent Money",
   "General",
 ];
 

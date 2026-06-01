@@ -18,6 +18,7 @@ const EXPENSE_CATEGORIES = [
   "Education",
   "Investments",
   "Subscription",
+  "Lent Money",
   "General",
 ] as const;
 
@@ -243,7 +244,15 @@ export async function getExpenses(options?: z.infer<typeof GetExpensesOptionsSch
 
   const expenses = await db.expense.findMany({
     where,
-    include: { tags: { include: { tag: true } } },
+    include: {
+      tags: { include: { tag: true } },
+      loan: {
+        select: {
+          id: true,
+          borrowerName: true,
+        },
+      },
+    },
     orderBy: [
       { createdAt: "desc" },
       { id: "desc" },

@@ -30,8 +30,8 @@ export default async function TelegramPage() {
               Tap an amount button and it&apos;s saved instantly!
             </p>
             <ul className="mt-2 space-y-1 text-sm text-muted-foreground">
-              <li>• Send <code>25</code> → tap ₹25 → instantly saved</li>
-              <li>• Use <code>/quick</code> → tap ₹50 → instantly saved</li>
+              <li>• Send <code>25</code> → pick account → instantly saved</li>
+              <li>• Use <code>/quick</code> → tap ₹50 → pick account → saved</li>
               <li>• No AI, no review, no typing needed</li>
               <li>• Categorised as &quot;General&quot; by default</li>
             </ul>

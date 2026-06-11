@@ -689,7 +689,7 @@ describe("Telegram Webhook", () => {
 
             expect(sendMessageCall).toBeDefined();
             const body = JSON.parse(String(sendMessageCall?.[1]?.body));
-            expect(body.text).toContain("buttons are at the bottom");
+            expect(body.text).toContain("bottom");
             expect(body.reply_markup).toBeDefined();
             expect(body.reply_markup.keyboard).toBeDefined();
             // Should have amount buttons in the reply keyboard
@@ -697,25 +697,17 @@ describe("Telegram Webhook", () => {
             expect(allButtons.length).toBeGreaterThanOrEqual(5);
         });
 
-        it("should instantly save expense when quick-amount button is tapped", async () => {
+        it("should show account selection when quick-amount inline button is tapped", async () => {
+            const { getAccountsByUserId } = await import("@/lib/actions/accounts");
+            vi.mocked(getAccountsByUserId).mockResolvedValue([
+                { id: "acc-1", name: "Cash Wallet", type: "WALLET" },
+                { id: "acc-2", name: "HDFC Bank", type: "BANK" },
+            ]);
+
             mockDb.userSettings.findFirst.mockResolvedValue({
                 userId: "test-user-id",
                 currency: "INR",
                 telegramChatId: "123456",
-            });
-
-            mockDb.account.findFirst.mockResolvedValue({
-                id: "acc-1",
-                name: "Cash Wallet",
-                type: "WALLET",
-                currentBalance: 5000,
-            });
-
-            mockDb.account.update.mockResolvedValue({
-                id: "acc-1",
-                name: "Cash Wallet",
-                type: "WALLET",
-                currentBalance: 4975,
             });
 
             const { POST } = await import("@/app/api/telegram/webhook/route");
@@ -741,33 +733,26 @@ describe("Telegram Webhook", () => {
 
             await POST(request);
 
-            // Should create expense with amount 25 and default category
-            expect(mockDb.expense.create).toHaveBeenCalledWith(
-                expect.objectContaining({
-                    data: expect.objectContaining({
-                        amount: 25,
-                        category: "General",
-                        userId: "test-user-id",
-                    }),
-                })
-            );
+            // Should NOT create expense yet (account not selected)
+            expect(mockDb.expense.create).not.toHaveBeenCalled();
 
-            // Should update account balance
-            expect(mockDb.account.update).toHaveBeenCalled();
-            expect(mockDb.balanceHistory.create).toHaveBeenCalled();
-
-            // Should edit the message to show success
+            // Should edit the message to show account selection
             const fetchCalls = vi.mocked(fetch).mock.calls;
             const editCall = fetchCalls.find((call) =>
                 String(call[0]).includes("/editMessageText")
             );
             expect(editCall).toBeDefined();
             const body = JSON.parse(String(editCall?.[1]?.body));
-            expect(body.text).toContain("Saved!");
-            expect(body.text).toContain("₹25.00");
+            expect(body.text).toContain("Select account for ₹25.00");
+            expect(body.reply_markup.inline_keyboard).toBeDefined();
         });
 
-        it("should detect quick expense from a bare number message", async () => {
+        it("should save expense after account is selected via qpay callback", async () => {
+            const { getAccountsByUserId } = await import("@/lib/actions/accounts");
+            vi.mocked(getAccountsByUserId).mockResolvedValue([
+                { id: "acc-1", name: "Cash Wallet", type: "WALLET" },
+            ]);
+
             mockDb.userSettings.findFirst.mockResolvedValue({
                 userId: "test-user-id",
                 currency: "INR",
@@ -786,6 +771,93 @@ describe("Telegram Webhook", () => {
                 name: "Cash Wallet",
                 type: "WALLET",
                 currentBalance: 4975,
+            });
+
+            const { POST } = await import("@/app/api/telegram/webhook/route");
+
+            // Step 1: tap quick amount to set pending quick expense
+            const step1 = new Request("http://localhost/api/telegram/webhook", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "x-telegram-bot-api-secret-token": "test-webhook-secret",
+                },
+                body: JSON.stringify({
+                    update_id: 124,
+                    callback_query: {
+                        id: "cq-1",
+                        from: { id: 123456 },
+                        message: {
+                            chat: { id: 123456 },
+                            message_id: 100,
+                        },
+                        data: "quick_25",
+                    },
+                }),
+            });
+            await POST(step1);
+
+            // Step 2: select account via qpay callback
+            const step2 = new Request("http://localhost/api/telegram/webhook", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "x-telegram-bot-api-secret-token": "test-webhook-secret",
+                },
+                body: JSON.stringify({
+                    update_id: 125,
+                    callback_query: {
+                        id: "cq-2",
+                        from: { id: 123456 },
+                        message: {
+                            chat: { id: 123456 },
+                            message_id: 100,
+                        },
+                        data: "qpay_acc-1",
+                    },
+                }),
+            });
+            await POST(step2);
+
+            // Should create expense with amount 25 and default category
+            expect(mockDb.expense.create).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    data: expect.objectContaining({
+                        amount: 25,
+                        category: "General",
+                        userId: "test-user-id",
+                        accountId: "acc-1",
+                        paymentMethod: "Cash Wallet",
+                    }),
+                })
+            );
+
+            // Should update account balance
+            expect(mockDb.account.update).toHaveBeenCalled();
+            expect(mockDb.balanceHistory.create).toHaveBeenCalled();
+
+            // Should edit the message to show success
+            const fetchCalls = vi.mocked(fetch).mock.calls;
+            const editCalls = fetchCalls.filter((call) =>
+                String(call[0]).includes("/editMessageText")
+            );
+            expect(editCalls.length).toBeGreaterThanOrEqual(2);
+            const lastEditBody = JSON.parse(String(editCalls[editCalls.length - 1]?.[1]?.body));
+            expect(lastEditBody.text).toContain("Saved!");
+            expect(lastEditBody.text).toContain("₹25.00");
+            expect(lastEditBody.text).toContain("Cash Wallet");
+        });
+
+        it("should show account selection for a bare number message", async () => {
+            const { getAccountsByUserId } = await import("@/lib/actions/accounts");
+            vi.mocked(getAccountsByUserId).mockResolvedValue([
+                { id: "acc-1", name: "Cash Wallet", type: "WALLET" },
+            ]);
+
+            mockDb.userSettings.findFirst.mockResolvedValue({
+                userId: "test-user-id",
+                currency: "INR",
+                telegramChatId: "123456",
             });
 
             const { POST } = await import("@/app/api/telegram/webhook/route");
@@ -809,26 +881,18 @@ describe("Telegram Webhook", () => {
 
             await POST(request);
 
-            // Should save directly (not show inline buttons)
-            expect(mockDb.expense.create).toHaveBeenCalledWith(
-                expect.objectContaining({
-                    data: expect.objectContaining({
-                        amount: 25,
-                        category: "General",
-                        userId: "test-user-id",
-                    }),
-                })
-            );
+            // Should NOT create expense yet (account not selected)
+            expect(mockDb.expense.create).not.toHaveBeenCalled();
 
-            // Should send success message with reply keyboard
+            // Should send account selection message
             const fetchCalls = vi.mocked(fetch).mock.calls;
             const sendMessageCall = fetchCalls.find((call) =>
                 String(call[0]).includes("/sendMessage")
             );
             expect(sendMessageCall).toBeDefined();
             const body = JSON.parse(String(sendMessageCall?.[1]?.body));
-            expect(body.text).toContain("Saved!");
-            expect(body.text).toContain("₹25");
+            expect(body.text).toContain("Select account for ₹25.00");
+            expect(body.reply_markup.inline_keyboard).toBeDefined();
         });
 
         it("should not trigger quick expense for amounts over 200", async () => {

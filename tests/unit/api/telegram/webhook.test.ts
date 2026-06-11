@@ -10,14 +10,21 @@ const mockDb = {
     },
     expense: {
         findMany: vi.fn(),
+        create: vi.fn(),
     },
     account: {
         findMany: vi.fn(),
+        findFirst: vi.fn(),
+        update: vi.fn(),
+    },
+    balanceHistory: {
+        create: vi.fn(),
     },
     linkingCode: {
         findFirst: vi.fn(),
         update: vi.fn(),
     },
+    $transaction: vi.fn((cb: (tx: Record<string, unknown>) => unknown) => cb(mockDb)),
 };
 
 vi.mock("@/lib/db", () => ({
@@ -609,6 +616,262 @@ describe("Telegram Webhook", () => {
             const body = JSON.parse(String(sendMessageCall?.[1]?.body));
             expect(body.text).toContain("$5000.00");
             expect(body.text).not.toContain("₹");
+        });
+    });
+
+    describe("Quick Expense Command", () => {
+        it("should show error when user is not linked for /quick", async () => {
+            mockDb.userSettings.findFirst.mockResolvedValue(null);
+
+            const { POST } = await import("@/app/api/telegram/webhook/route");
+            const request = new Request("http://localhost/api/telegram/webhook", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "x-telegram-bot-api-secret-token": "test-webhook-secret",
+                },
+                body: JSON.stringify({
+                    update_id: 123,
+                    message: {
+                        message_id: 1,
+                        from: { id: 123456, first_name: "Test" },
+                        chat: { id: 123456, type: "private" },
+                        date: Date.now(),
+                        text: "/quick",
+                    },
+                }),
+            });
+
+            await POST(request);
+
+            expect(fetch).toHaveBeenCalledWith(
+                expect.stringContaining("/sendMessage"),
+                expect.objectContaining({
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: expect.stringContaining("not linked"),
+                })
+            );
+        });
+
+        it("should show quick-amount buttons for /quick command", async () => {
+            mockDb.userSettings.findFirst.mockResolvedValue({
+                userId: "test-user-id",
+                currency: "INR",
+                telegramChatId: "123456",
+            });
+
+            const { POST } = await import("@/app/api/telegram/webhook/route");
+            const request = new Request("http://localhost/api/telegram/webhook", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "x-telegram-bot-api-secret-token": "test-webhook-secret",
+                },
+                body: JSON.stringify({
+                    update_id: 123,
+                    message: {
+                        message_id: 1,
+                        from: { id: 123456, first_name: "Test" },
+                        chat: { id: 123456, type: "private" },
+                        date: Date.now(),
+                        text: "/quick",
+                    },
+                }),
+            });
+
+            await POST(request);
+
+            const fetchCalls = vi.mocked(fetch).mock.calls;
+            const sendMessageCall = fetchCalls.find((call) =>
+                String(call[0]).includes("/sendMessage")
+            );
+
+            expect(sendMessageCall).toBeDefined();
+            const body = JSON.parse(String(sendMessageCall?.[1]?.body));
+            expect(body.text).toContain("buttons are at the bottom");
+            expect(body.reply_markup).toBeDefined();
+            expect(body.reply_markup.keyboard).toBeDefined();
+            // Should have amount buttons in the reply keyboard
+            const allButtons = body.reply_markup.keyboard.flat();
+            expect(allButtons.length).toBeGreaterThanOrEqual(5);
+        });
+
+        it("should instantly save expense when quick-amount button is tapped", async () => {
+            mockDb.userSettings.findFirst.mockResolvedValue({
+                userId: "test-user-id",
+                currency: "INR",
+                telegramChatId: "123456",
+            });
+
+            mockDb.account.findFirst.mockResolvedValue({
+                id: "acc-1",
+                name: "Cash Wallet",
+                type: "WALLET",
+                currentBalance: 5000,
+            });
+
+            mockDb.account.update.mockResolvedValue({
+                id: "acc-1",
+                name: "Cash Wallet",
+                type: "WALLET",
+                currentBalance: 4975,
+            });
+
+            const { POST } = await import("@/app/api/telegram/webhook/route");
+            const request = new Request("http://localhost/api/telegram/webhook", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "x-telegram-bot-api-secret-token": "test-webhook-secret",
+                },
+                body: JSON.stringify({
+                    update_id: 124,
+                    callback_query: {
+                        id: "cq-1",
+                        from: { id: 123456 },
+                        message: {
+                            chat: { id: 123456 },
+                            message_id: 100,
+                        },
+                        data: "quick_25",
+                    },
+                }),
+            });
+
+            await POST(request);
+
+            // Should create expense with amount 25 and default category
+            expect(mockDb.expense.create).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    data: expect.objectContaining({
+                        amount: 25,
+                        category: "General",
+                        userId: "test-user-id",
+                    }),
+                })
+            );
+
+            // Should update account balance
+            expect(mockDb.account.update).toHaveBeenCalled();
+            expect(mockDb.balanceHistory.create).toHaveBeenCalled();
+
+            // Should edit the message to show success
+            const fetchCalls = vi.mocked(fetch).mock.calls;
+            const editCall = fetchCalls.find((call) =>
+                String(call[0]).includes("/editMessageText")
+            );
+            expect(editCall).toBeDefined();
+            const body = JSON.parse(String(editCall?.[1]?.body));
+            expect(body.text).toContain("Saved!");
+            expect(body.text).toContain("₹25.00");
+        });
+
+        it("should detect quick expense from a bare number message", async () => {
+            mockDb.userSettings.findFirst.mockResolvedValue({
+                userId: "test-user-id",
+                currency: "INR",
+                telegramChatId: "123456",
+            });
+
+            mockDb.account.findFirst.mockResolvedValue({
+                id: "acc-1",
+                name: "Cash Wallet",
+                type: "WALLET",
+                currentBalance: 5000,
+            });
+
+            mockDb.account.update.mockResolvedValue({
+                id: "acc-1",
+                name: "Cash Wallet",
+                type: "WALLET",
+                currentBalance: 4975,
+            });
+
+            const { POST } = await import("@/app/api/telegram/webhook/route");
+            const request = new Request("http://localhost/api/telegram/webhook", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "x-telegram-bot-api-secret-token": "test-webhook-secret",
+                },
+                body: JSON.stringify({
+                    update_id: 125,
+                    message: {
+                        message_id: 2,
+                        from: { id: 123456, first_name: "Test" },
+                        chat: { id: 123456, type: "private" },
+                        date: Date.now(),
+                        text: "25",
+                    },
+                }),
+            });
+
+            await POST(request);
+
+            // Should save directly (not show inline buttons)
+            expect(mockDb.expense.create).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    data: expect.objectContaining({
+                        amount: 25,
+                        category: "General",
+                        userId: "test-user-id",
+                    }),
+                })
+            );
+
+            // Should send success message with reply keyboard
+            const fetchCalls = vi.mocked(fetch).mock.calls;
+            const sendMessageCall = fetchCalls.find((call) =>
+                String(call[0]).includes("/sendMessage")
+            );
+            expect(sendMessageCall).toBeDefined();
+            const body = JSON.parse(String(sendMessageCall?.[1]?.body));
+            expect(body.text).toContain("Saved!");
+            expect(body.text).toContain("₹25");
+        });
+
+        it("should not trigger quick expense for amounts over 200", async () => {
+            mockDb.userSettings.findFirst.mockResolvedValue({
+                userId: "test-user-id",
+                currency: "INR",
+                telegramChatId: "123456",
+            });
+
+            // Mock expense create to prevent real DB call
+            mockDb.expense.findMany.mockResolvedValue([]);
+
+            const { POST } = await import("@/app/api/telegram/webhook/route");
+            const request = new Request("http://localhost/api/telegram/webhook", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "x-telegram-bot-api-secret-token": "test-webhook-secret",
+                },
+                body: JSON.stringify({
+                    update_id: 126,
+                    message: {
+                        message_id: 3,
+                        from: { id: 123456, first_name: "Test" },
+                        chat: { id: 123456, type: "private" },
+                        date: Date.now(),
+                        text: "500",
+                    },
+                }),
+            });
+
+            await POST(request);
+
+            // Should NOT show quick-amount buttons (goes through normal AI flow)
+            const fetchCalls = vi.mocked(fetch).mock.calls;
+            const sendMessageCall = fetchCalls.find((call) =>
+                String(call[0]).includes("/sendMessage")
+            );
+
+            expect(sendMessageCall).toBeDefined();
+            const body = JSON.parse(String(sendMessageCall?.[1]?.body));
+            // Normal flow shows "Processing...", not quick expense message
+            expect(body.text).toContain("Processing");
         });
     });
 });

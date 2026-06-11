@@ -48,13 +48,13 @@ type Account = {
 };
 
 const ACCOUNT_TYPE_ICONS: Record<string, string> = {
-    BANK: "🏦",
-    INVESTMENT: "📈",
-    WALLET: "💳",
-    CASH: "💵",
-    CREDIT_CARD: "💳",
-    DEBIT_CARD: "💳",
-    OTHER: "💰",
+    BANK: "Bank",
+    INVESTMENT: "Inv",
+    WALLET: "Wallet",
+    CASH: "Cash",
+    CREDIT_CARD: "Card",
+    DEBIT_CARD: "Card",
+    OTHER: "Other",
 };
 
 function generateId() {
@@ -123,7 +123,7 @@ export function ChatSidebar() {
             {
                 id: assistantMsgId,
                 role: "assistant",
-                content: "🤖 Parsing...",
+                content: "Processing...",
                 timestamp: new Date(),
                 status: "parsing",
             },
@@ -143,20 +143,20 @@ export function ChatSidebar() {
             if (result.success && result.expense) {
                 const exp = result.expense;
                 updateMessage(assistantMsgId, {
-                    content: `💰 ₹${exp.amount.toFixed(2)}\n📁 ${exp.category}\n📝 ${exp.description}${exp.merchant ? `\n🏪 ${exp.merchant}` : ""}`,
+                    content: `Rs${exp.amount.toFixed(2)}\n${exp.category}\n${exp.description}${exp.merchant ? ` - ${exp.merchant}` : ""}`,
                     parsedExpense: exp,
                     status: "confirm",
                 });
             } else {
                 updateMessage(assistantMsgId, {
-                    content: `❓ ${result.error || "Could not parse expense"}. Try: "Lunch 450"`,
+                    content: `${result.error || "Could not parse expense"}. Try: "Lunch 450"`,
                     status: "error",
                     errorMessage: result.error,
                 });
             }
         } catch {
             updateMessage(assistantMsgId, {
-                content: "❌ Failed to process. Please try again.",
+                content: "Failed to process. Please try again.",
                 status: "error",
             });
         }
@@ -177,7 +177,7 @@ export function ChatSidebar() {
                 {
                     id: generateId(),
                     role: "assistant",
-                    content: "❌ Only images and PDFs are supported.",
+                    content: "Only images and PDFs are supported.",
                     timestamp: new Date(),
                     status: "error",
                 },
@@ -203,7 +203,7 @@ export function ChatSidebar() {
             {
                 id: userMsgId,
                 role: "user",
-                content: isImage ? "📷 Receipt image" : "📄 PDF document",
+                content: isImage ? "Receipt image" : "PDF document",
                 timestamp: new Date(),
                 attachment: {
                     type: isImage ? "image" : "pdf",
@@ -214,7 +214,7 @@ export function ChatSidebar() {
             {
                 id: assistantMsgId,
                 role: "assistant",
-                content: "🤖 Analyzing with AI vision...",
+                content: "Analyzing with AI vision...",
                 timestamp: new Date(),
                 status: "parsing",
             },
@@ -238,20 +238,20 @@ export function ChatSidebar() {
             if (result.success && result.expense) {
                 const exp = result.expense;
                 updateMessage(assistantMsgId, {
-                    content: `💰 ₹${exp.amount.toFixed(2)}\n📁 ${exp.category}\n📝 ${exp.description}${exp.merchant ? `\n🏪 ${exp.merchant}` : ""}`,
+                    content: `Rs${exp.amount.toFixed(2)}\n${exp.category}\n${exp.description}${exp.merchant ? ` - ${exp.merchant}` : ""}`,
                     parsedExpense: { ...exp, receiptUrl: result.receiptUrl },
                     status: "confirm",
                 });
             } else {
                 updateMessage(assistantMsgId, {
-                    content: `❓ ${result.error || "Could not parse"}. Try adding a text description instead.`,
+                    content: `${result.error || "Could not parse"}. Try adding a text description instead.`,
                     status: "error",
                     errorMessage: result.error,
                 });
             }
         } catch {
             updateMessage(assistantMsgId, {
-                content: "❌ Failed to process file. Please try again.",
+                content: "Failed to process file. Please try again.",
                 status: "error",
             });
         }
@@ -282,12 +282,12 @@ export function ChatSidebar() {
             });
 
             updateMessage(messageId, {
-                content: `✅ Saved!\n💰 ₹${msg.parsedExpense.amount.toFixed(2)} · ${msg.parsedExpense.category}\n💳 ${account.name}`,
+                content: `Saved!\nRs${msg.parsedExpense.amount.toFixed(2)} · ${msg.parsedExpense.category}\nAccount: ${account.name}`,
                 status: "saved",
             });
         } catch {
             updateMessage(messageId, {
-                content: "❌ Failed to save. Please try again.",
+                content: "Failed to save. Please try again.",
                 status: "error",
             });
         }
@@ -483,7 +483,7 @@ export function ChatSidebar() {
                                                 onClick={() => handleSaveExpense(msg.id, acc.id)}
                                                 className="flex items-center gap-1.5 rounded-md border bg-card px-2.5 py-1.5 text-xs font-medium transition-colors hover:bg-accent hover:text-accent-foreground"
                                             >
-                                                <span>{ACCOUNT_TYPE_ICONS[acc.type] || "💰"}</span>
+                                                <span>{ACCOUNT_TYPE_ICONS[acc.type] || "Other"}</span>
                                                 <span className="truncate">{acc.name}</span>
                                             </button>
                                         ))}

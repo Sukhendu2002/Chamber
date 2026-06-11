@@ -379,7 +379,7 @@ export function AccountList({ accounts, currency }: AccountListProps) {
             </div>
             {utilization > 30 && (
               <div className="text-xs text-red-600 font-medium">
-                ⚠ Over 30% utilization
+                Over 30% utilization
               </div>
             )}
           </>

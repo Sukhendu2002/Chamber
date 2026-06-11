@@ -24,6 +24,10 @@ import {
     IconArrowRight,
     IconReceipt,
     IconCamera,
+    IconCheck,
+    IconX,
+    IconBolt,
+    IconRocket,
 } from "@tabler/icons-react";
 
 // ─── Animation Variants ────────────────────────────────────────────────────────
@@ -240,11 +244,11 @@ function StepItem({
 function TelegramMock() {
     const messages = [
         { text: "Lunch 450", sent: true },
-        { text: "✅ Logged: ₹450 → Food", sent: false },
+        { text: "Logged: ₹450 → Food", sent: false },
         { text: "Uber 280", sent: true },
-        { text: "✅ Logged: ₹280 → Travel", sent: false },
+        { text: "Logged: ₹280 → Travel", sent: false },
         { text: "show spending", sent: true },
-        { text: "📊 This month: ₹12,400\n🍔 Food 40% · 🚗 Travel 25%", sent: false },
+        { text: "This month: ₹12,400\nFood 40% · Travel 25%", sent: false },
     ];
 
     return (
@@ -295,16 +299,16 @@ function TelegramMock() {
 // ─── Ticker tape of features ─────────────────────────────────────────────────
 
 const tickerItems = [
-    "✦ Smart Categorization",
-    "✦ Budget Tracking",
-    "✦ Receipt Scanner",
-    "✦ Telegram Bot",
-    "✦ Analytics",
-    "✦ Subscriptions",
-    "✦ Lent Money",
-    "✦ Multi-Account",
-    "✦ CSV Export",
-    "✦ Monthly Summary",
+    "Smart Categorization",
+    "Budget Tracking",
+    "Receipt Scanner",
+    "Telegram Bot",
+    "Analytics",
+    "Subscriptions",
+    "Lent Money",
+    "Multi-Account",
+    "CSV Export",
+    "Monthly Summary",
 ];
 
 function Ticker() {
@@ -701,8 +705,8 @@ export function AnimatedLanding() {
                             <div className="mx-auto max-w-2xl overflow-hidden rounded-2xl border">
                                 <div className="grid grid-cols-3 border-b bg-muted/30 px-4 py-3 text-sm font-semibold">
                                     <span>Feature</span>
-                                    <span className="text-center">📒 Spreadsheet</span>
-                                    <span className="text-center text-primary">⚡ Chamber</span>
+                                    <span className="text-center">Spreadsheet</span>
+                                    <span className="text-center text-primary">Chamber</span>
                                 </div>
                                 {[
                                     ["AI Categorization", false, true],
@@ -725,12 +729,12 @@ export function AnimatedLanding() {
                                         <span className="font-medium">{label as string}</span>
                                         <span className="text-center">
                                             {spreadsheet === false ? (
-                                                <span className="text-red-500">✗</span>
+                                                <IconX className="inline h-4 w-4 text-red-500" />
                                             ) : (
                                                 <span className="text-muted-foreground text-xs">{spreadsheet as string}</span>
                                             )}
                                         </span>
-                                        <span className="text-center text-green-500 font-medium">✓</span>
+                                        <span className="text-center text-green-500 font-medium"><IconCheck className="inline h-4 w-4" /></span>
                                     </motion.div>
                                 ))}
                             </div>
@@ -743,21 +747,21 @@ export function AnimatedLanding() {
                     <div className="grid gap-8 md:grid-cols-3">
                         {[
                             {
-                                emoji: "🔒",
+                                icon: IconShieldLock,
                                 title: "Privacy First",
                                 body: "Your financial data never leaves your control. Chamber is self-hostable — run it on your own server if you want full ownership.",
                                 delay: 0,
                                 accent: "border-blue-500/20 bg-blue-500/5",
                             },
                             {
-                                emoji: "⚡",
+                                icon: IconBolt,
                                 title: "Open Source",
                                 body: "Every line of code is on GitHub. No black boxes, no hidden fees. Fork it, extend it, make it yours.",
                                 delay: 0.1,
                                 accent: "border-green-500/20 bg-green-500/5",
                             },
                             {
-                                emoji: "🚀",
+                                icon: IconRocket,
                                 title: "Always Free",
                                 body: "Core features are free forever. No trial periods, no credit card required, no surprise paywalls.",
                                 delay: 0.2,
@@ -774,11 +778,11 @@ export function AnimatedLanding() {
                                 whileHover={{ y: -4 }}
                             >
                                 <motion.span
-                                    className="mb-4 block text-4xl"
+                                    className="mb-4 block"
                                     animate={{ rotate: [0, 8, -5, 8, 0] }}
                                     transition={{ duration: 3, repeat: Infinity, repeatDelay: 4, delay: item.delay * 2 }}
                                 >
-                                    {item.emoji}
+                                    <item.icon className="h-10 w-10 text-foreground" />
                                 </motion.span>
                                 <h3 className="mb-2 text-lg font-bold">{item.title}</h3>
                                 <p className="text-sm text-muted-foreground leading-relaxed">{item.body}</p>

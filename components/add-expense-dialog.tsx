@@ -211,7 +211,7 @@ export function AddExpenseDialog({ accounts = [] }: AddExpenseDialogProps) {
           
           {isSubscription && (
             <div className="rounded-md border border-blue-200 bg-blue-50 p-3 text-sm text-blue-800 dark:border-blue-800 dark:bg-blue-900/20 dark:text-blue-300">
-              📅 This will create a recurring subscription that you can track in the Subscriptions page.
+              This will create a recurring subscription that you can track in the Subscriptions page.
             </div>
           )}
           

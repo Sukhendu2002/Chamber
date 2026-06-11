@@ -165,7 +165,7 @@ export function ExpenseCalendarWidget({ expenses, currency, monthlyIncome = 0, s
               </div>
               {salaryDayFlag && (
                 <div className="flex justify-between gap-2 text-xs text-green-600 font-medium">
-                  <span>💰 Salary</span>
+                  <span>Salary</span>
                   <span>+{formatCurrency(monthlyIncome)}</span>
                 </div>
               )}

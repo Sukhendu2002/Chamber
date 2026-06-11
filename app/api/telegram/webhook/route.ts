@@ -82,6 +82,13 @@ const pendingExpenses = new Map<number, {
  expiresAt: number;
 }>();
 
+// Store pending quick expenses awaiting account selection (in-memory, resets on server restart)
+const pendingQuickExpenses = new Map<number, {
+ userId: string;
+ amount: number;
+ expiresAt: number;
+}>();
+
 // Handle summary command - /summary [today|week|month]
 async function handleSummaryCommand(chatId: number, args: string) {
  const userSettings = await db.userSettings.findFirst({
@@ -197,7 +204,7 @@ async function handleHelpCommand(chatId: number) {
 <i>Tip: You can also send voice messages to add expenses!</i>
 
 <b>Quick Expenses</b>
-• Send just a number (e.g., <code>25</code>) or use <code>/quick</code> — tap an amount and it’s saved instantly!`;
+• Send just a number (e.g., <code>25</code>) or use <code>/quick</code> — tap an amount, then pick an account to save instantly!`;
 
  await sendTelegramMessage(chatId, helpMessage);
 }
@@ -218,12 +225,12 @@ async function handleQuickCommand(chatId: number) {
 
  await sendTelegramMessage(
  chatId,
- "Quick-expense buttons are at the bottom of the chat. Tap any amount to save instantly!",
+ "Quick-expense buttons are at the bottom. Tap an amount, then pick the account to charge.",
  buildQuickReplyKeyboard()
  );
 }
 
-// Handle quick expense - saves immediately without confirmation
+// Handle quick expense - shows account selection inline keyboard
 // Works for both inline button taps (with messageId) and direct text messages (messageId=0)
 async function handleQuickExpenseTap(
  chatId: number,
@@ -240,29 +247,82 @@ async function handleQuickExpenseTap(
  return;
  }
 
- // Find first active account for this user
- const account = await db.account.findFirst({
- where: { userId: userSettings.userId, isActive: true },
- orderBy: { createdAt: "asc" },
+ const accounts = await getAccountsByUserId(userSettings.userId);
+
+ if (accounts.length === 0) {
+ const text = "No accounts found. Please add accounts in Chamber first.";
+ if (messageId > 0) {
+ await editMessageText(chatId, messageId, text);
+ } else {
+ await sendTelegramMessage(chatId, text, buildQuickReplyKeyboard());
+ }
+ if (callbackQueryId) await answerCallbackQuery(callbackQueryId, "No accounts");
+ return;
+ }
+
+ // Store pending quick expense so we can save it after account selection
+ pendingQuickExpenses.set(chatId, {
+ userId: userSettings.userId,
+ amount,
+ expiresAt: Date.now() + 5 * 60 * 1000, // 5 minutes
  });
+
+ const text = `<b>Select account for ₹${amount.toFixed(2)} quick expense:</b>`;
+ const keyboard = buildAccountKeyboard(accounts, "qpay_");
+
+ if (messageId > 0) {
+ await editMessageText(chatId, messageId, text, keyboard);
+ } else {
+ await sendTelegramMessage(chatId, text, keyboard);
+ }
+
+ if (callbackQueryId) {
+ await answerCallbackQuery(callbackQueryId, "Select account");
+ }
+}
+
+// Save a quick expense after the user picks an account
+async function handleQuickAccountSelection(
+ chatId: number,
+ messageId: number,
+ callbackQueryId: string,
+ accountId: string
+) {
+ const pending = pendingQuickExpenses.get(chatId);
+
+ if (!pending || pending.expiresAt <= Date.now()) {
+ pendingQuickExpenses.delete(chatId);
+ await editMessageText(chatId, messageId, "⏰ Expired. Please send the amount again.");
+ await answerCallbackQuery(callbackQueryId, "Expired");
+ return;
+ }
+
+ const account = await db.account.findFirst({
+ where: { id: accountId, userId: pending.userId },
+ });
+
+ if (!account) {
+ await editMessageText(chatId, messageId, "Account not found or access denied. Please try again.");
+ await answerCallbackQuery(callbackQueryId, "Account not found");
+ return;
+ }
 
  try {
  await db.$transaction(async (tx) => {
  await tx.expense.create({
  data: {
- userId: userSettings.userId,
- amount,
+ userId: pending.userId,
+ amount: pending.amount,
  category: QUICK_DEFAULT_CATEGORY,
  description: "Quick expense",
  source: "TELEGRAM",
- accountId: account?.id,
- paymentMethod: account?.name,
+ accountId: account.id,
+ paymentMethod: account.name,
  date: new Date(),
  },
  });
 
- if (account) {
- const adjustment = getTelegramBalanceAdjustment(account.type, amount);
+ const adjustment = getTelegramBalanceAdjustment(account.type, pending.amount);
  const updatedAccount = await tx.account.update({
  where: { id: account.id },
  data: { currentBalance: { increment: adjustment } },
@@ -271,42 +331,26 @@ async function handleQuickExpenseTap(
  data: {
  accountId: account.id,
  balance: updatedAccount.currentBalance,
- note: `Quick expense: ₹${amount}`,
+ note: `Quick expense: ₹${pending.amount}`,
  date: new Date(),
  },
  });
- }
  });
 
- notifyUser(userSettings.userId);
+ notifyUser(pending.userId);
+ checkAndSendSubscriptionAlerts(pending.userId).catch(console.error);
+ pendingQuickExpenses.delete(chatId);
 
- // Check subscription alerts (non-blocking)
- checkAndSendSubscriptionAlerts(userSettings.userId).catch(console.error);
-
- const successText = `<b>Saved!</b> Amount: ₹${amount.toFixed(2)} · ${account?.name || "No account"}`;
-
- if (messageId > 0) {
- // Called from inline button tap - edit the existing message
- await editMessageText(chatId, messageId, successText);
- } else {
- // Called from direct text message - send new message with reply keyboard
- await sendTelegramMessage(chatId, successText, buildQuickReplyKeyboard());
- }
-
- if (callbackQueryId) {
+ await editMessageText(
+ chatId,
+ messageId,
+ `<b>Saved!</b>\n\n₹${pending.amount.toFixed(2)} · ${account.name}`
+ );
  await answerCallbackQuery(callbackQueryId, "Saved!");
- }
  } catch (error) {
  console.error("Quick expense save error:", error);
- const errText = "Failed to save expense. Please try again.";
- if (messageId > 0) {
- await editMessageText(chatId, messageId, errText);
- } else {
- await sendTelegramMessage(chatId, errText);
- }
- if (callbackQueryId) {
+ await editMessageText(chatId, messageId, "Failed to save expense. Please try again.");
  await answerCallbackQuery(callbackQueryId, "Failed");
- }
  }
 }
 
@@ -416,18 +460,21 @@ function buildQuickReplyKeyboard(): object {
 }
 
 // Build inline keyboard from user's accounts (uses accountId in callback_data)
-function buildAccountKeyboard(accounts: { id: string; name: string; type: string }[]) {
+function buildAccountKeyboard(
+ accounts: { id: string; name: string; type: string }[],
+ callbackPrefix: string = "pay_"
+) {
  const rows: { text: string; callback_data: string }[][] = [];
  for (let i = 0; i < accounts.length; i += 2) {
  const row: { text: string; callback_data: string }[] = [];
  row.push({
  text: `${ACCOUNT_TYPE_ICONS[accounts[i].type] || "\u{1F4B0}"} ${accounts[i].name}`,
- callback_data: `pay_${accounts[i].id}`,
+ callback_data: `${callbackPrefix}${accounts[i].id}`,
  });
  if (i + 1 < accounts.length) {
  row.push({
  text: `${ACCOUNT_TYPE_ICONS[accounts[i + 1].type] || "\u{1F4B0}"} ${accounts[i + 1].name}`,
- callback_data: `pay_${accounts[i + 1].id}`,
+ callback_data: `${callbackPrefix}${accounts[i + 1].id}`,
  });
  }
  rows.push(row);
@@ -605,7 +652,7 @@ async function handleStartCommand(chatId: number, code: string) {
 
  await sendTelegramMessage(
  chatId,
- "<b>Account linked successfully!</b>\n\nQuick-expense buttons are now at the bottom. Tap any amount to save instantly!\n\nYou can also type expenses like:\n• <code>Lunch 450</code>\n• <code>Uber 250</code>\n• Or send a receipt photo",
+ "<b>Account linked successfully!</b>\n\nQuick-expense buttons are now at the bottom. Tap an amount, then pick the account to charge.\n\nYou can also type expenses like:\n• <code>Lunch 450</code>\n• <code>Uber 250</code>\n• Or send a receipt photo",
  buildQuickReplyKeyboard()
  );
 }
@@ -737,7 +784,7 @@ async function handlePhotoMessage(chatId: number, photo: TelegramMessage["photo"
  console.log("Caption has expense info, using free text model:", caption);
  aiResult = await parseExpenseWithAI(`User sent a payment screenshot with this caption: "${caption}"`, userSettings.currency || "INR");
  } else {
- // Send image directly to GPT-4.1 Nano vision — no OCR needed
+ // Send image directly to GPT-4.1 Nano vision - no OCR needed
  console.log("Sending image to Vision AI (GPT-4.1 Nano)...");
  aiResult = await parseReceiptWithVision(imageBase64, "image/jpeg", caption, userSettings.currency || "INR");
  }
@@ -800,7 +847,7 @@ async function handlePhotoMessage(chatId: number, photo: TelegramMessage["photo"
  await sendTelegramMessage(chatId, confirmMsg, keyboard);
 }
 
-// Handle PDF document messages — now also supports image files
+// Handle PDF document messages - now also supports image files
 async function handleDocumentMessage(chatId: number, document: TelegramMessage["document"], caption?: string) {
  // Find user by chat ID
  const userSettings = await db.userSettings.findFirst({
@@ -958,7 +1005,7 @@ export async function POST(request: NextRequest) {
  const data = callbackQuery.data;
 
  if (chatId && messageId) {
- // Handle quick expense tap - save instantly without confirmation
+ // Handle quick expense tap - show account selection
  if (data?.startsWith("quick_")) {
  const amountStr = data.replace("quick_", "");
  if (amountStr === "cancel") {
@@ -970,6 +1017,9 @@ export async function POST(request: NextRequest) {
  await handleQuickExpenseTap(chatId, messageId, callbackQuery.id, amount);
  }
  }
+ } else if (data?.startsWith("qpay_")) {
+ const accountId = data.replace("qpay_", "");
+ await handleQuickAccountSelection(chatId, messageId, callbackQuery.id, accountId);
  } else if (data?.startsWith("pay_")) {
  const accountId = data.replace("pay_", "");
  const pending = pendingExpenses.get(chatId);
@@ -1039,6 +1089,7 @@ export async function POST(request: NextRequest) {
  }
  } else if (data === "confirm_no") {
  pendingExpenses.delete(chatId);
+ pendingQuickExpenses.delete(chatId);
  await editMessageText(chatId, messageId, " Cancelled. Send another expense or receipt.");
  await answerCallbackQuery(callbackQuery.id, "Cancelled");
  }
@@ -1094,7 +1145,7 @@ export async function POST(request: NextRequest) {
  where: { telegramChatId: chatId.toString() },
  });
  if (userSettings) {
- // Save directly without any confirmation
+ // Show account selection for the quick amount
  await handleQuickExpenseTap(chatId, 0, "", quickAmount);
  return NextResponse.json({ ok: true });
  }

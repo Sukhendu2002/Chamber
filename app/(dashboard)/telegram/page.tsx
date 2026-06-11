@@ -24,6 +24,19 @@ export default async function TelegramPage() {
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="rounded-md bg-muted p-4">
+            <p className="mb-2 text-sm font-medium">Quick Expenses</p>
+            <p className="text-sm text-muted-foreground">
+              For small bills, send just the amount (e.g., <code>25</code>) or use <code>/quick</code>.
+              Tap an amount button and it&apos;s saved instantly!
+            </p>
+            <ul className="mt-2 space-y-1 text-sm text-muted-foreground">
+              <li>• Send <code>25</code> → tap ₹25 → instantly saved</li>
+              <li>• Use <code>/quick</code> → tap ₹50 → instantly saved</li>
+              <li>• No AI, no review, no typing needed</li>
+              <li>• Categorised as &quot;General&quot; by default</li>
+            </ul>
+          </div>
+          <div className="rounded-md bg-muted p-4">
             <p className="mb-2 text-sm font-medium">Text Messages</p>
             <p className="text-sm text-muted-foreground">
               Send &quot;Lunch 450&quot; and AI will extract:

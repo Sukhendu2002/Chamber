@@ -5,6 +5,7 @@ import { notifyUser } from "@/app/api/events/route";
 import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 import { checkAndSendSubscriptionAlerts } from "@/lib/subscription-alerts";
 import { getAccountsByUserId } from "@/lib/actions/accounts";
+import { escapeHtml } from "@/lib/utils";
 
 const TELEGRAM_WEBHOOK_SECRET = process.env.TELEGRAM_WEBHOOK_SECRET;
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
@@ -168,14 +169,14 @@ async function handleSummaryCommand(chatId: number, args: string) {
  message += `\n<b>By Category:</b>\n`;
  for (const [category, amount] of sortedCategories) {
  const percentage = ((amount / totalSpent) * 100).toFixed(0);
- message += `• ${category}: ${currencySymbol}${amount.toFixed(2)} (${percentage}%)\n`;
+ message += `• ${escapeHtml(category)}: ${currencySymbol}${amount.toFixed(2)} (${percentage}%)\n`;
  }
 
  message += `\n<b>Recent Transactions:</b>\n`;
  for (const exp of recentExpenses) {
  const label = exp.merchant || exp.description || exp.category;
  const date = new Date(exp.date).toLocaleDateString("en-US", { month: "short", day: "numeric" });
- message += `• ${label}: ${currencySymbol}${exp.amount.toFixed(2)} (${date})\n`;
+ message += `• ${escapeHtml(label)}: ${currencySymbol}${exp.amount.toFixed(2)} (${date})\n`;
  }
  } else {
  message += `\n<i>No expenses recorded for ${periodLabel.toLowerCase()}.</i>`;
@@ -344,7 +345,7 @@ async function handleQuickAccountSelection(
  await editMessageText(
  chatId,
  messageId,
- `<b>Saved!</b>\n\n₹${pending.amount.toFixed(2)} · ${account.name}`
+ `<b>Saved!</b>\n\n₹${pending.amount.toFixed(2)} · ${escapeHtml(account.name)}`
  );
  await answerCallbackQuery(callbackQueryId, "Saved!");
  } catch (error) {
@@ -408,7 +409,7 @@ async function handleAccountsCommand(chatId: number) {
  for (const account of typeAccounts) {
  const balance = Number(account.currentBalance);
  totalBalance += balance;
- message += `${icon} <b>${account.name}</b>: ${currencySymbol}${balance.toFixed(2)}\n`;
+ message += `${icon} <b>${escapeHtml(account.name)}</b>: ${currencySymbol}${balance.toFixed(2)}\n`;
  }
  }
 
@@ -721,8 +722,8 @@ async function handleExpenseMessage(chatId: number, text: string) {
 
  // Build confirmation message - ask for payment method first
  let confirmMsg = `<b>Select payment method:</b>\n\n`;
- if (merchant) confirmMsg += ` ${merchant}\n`;
- confirmMsg += ` ₹${amount.toFixed(2)}\n ${category}\n ${description}`;
+ if (merchant) confirmMsg += ` ${escapeHtml(merchant)}\n`;
+ confirmMsg += ` ₹${amount.toFixed(2)}\n ${escapeHtml(category)}\n ${escapeHtml(description)}`;
 
  if (isDuplicate) {
  confirmMsg += `\n\n <b>Warning:</b> Duplicate amount today.`;
@@ -827,8 +828,8 @@ async function handlePhotoMessage(chatId: number, photo: TelegramMessage["photo"
 
  // Build confirmation message - ask for payment method first
  let confirmMsg = `<b>Select payment method:</b>\n\n`;
- if (merchant) confirmMsg += ` ${merchant}\n`;
- confirmMsg += ` ₹${amount.toFixed(2)}\n ${category}\n ${description}`;
+ if (merchant) confirmMsg += ` ${escapeHtml(merchant)}\n`;
+ confirmMsg += ` ₹${amount.toFixed(2)}\n ${escapeHtml(category)}\n ${escapeHtml(description)}`;
  if (receiptUrl) confirmMsg += `\n Receipt attached`;
 
  if (isDuplicate) {
@@ -967,8 +968,8 @@ async function handleDocumentMessage(chatId: number, document: TelegramMessage["
 
  // Build confirmation message - ask for payment method first
  let confirmMsg = `<b>Select payment method:</b>\n\n`;
- if (merchant) confirmMsg += ` ${merchant}\n`;
- confirmMsg += ` ₹${amount.toFixed(2)}\n ${category}\n ${description}`;
+ if (merchant) confirmMsg += ` ${escapeHtml(merchant)}\n`;
+ confirmMsg += ` ₹${amount.toFixed(2)}\n ${escapeHtml(category)}\n ${escapeHtml(description)}`;
  confirmMsg += `\n ${isPdf ? "PDF" : "Image"} attached`;
 
  if (isDuplicate) {
@@ -1081,7 +1082,7 @@ export async function POST(request: NextRequest) {
 
  pendingExpenses.delete(chatId);
 
- await editMessageText(chatId, messageId, `<b>Saved!</b>\n\n ₹${pending.amount.toFixed(2)}\n ${pending.category}\n ${accountName}`);
+ await editMessageText(chatId, messageId, `<b>Saved!</b>\n\n ₹${pending.amount.toFixed(2)}\n ${escapeHtml(pending.category)}\n ${escapeHtml(accountName)}`);
  await answerCallbackQuery(callbackQuery.id, "Saved!");
  } else {
  await editMessageText(chatId, messageId, "⏰ Expired. Please send the expense again.");

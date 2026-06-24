@@ -29,15 +29,17 @@ const UpdateUserSettingsSchema = z.object({
 });
 
 // Free exchange rate API (no API key needed for basic usage)
+// Throws on failure to prevent silent data corruption.
 async function getExchangeRate(from: string, to: string): Promise<number> {
-  try {
-    const response = await fetch(`https://api.exchangerate-api.com/v4/latest/${from}`);
-    const data = await response.json();
-    return data.rates[to] || 1;
-  } catch (error) {
-    console.error("Failed to fetch exchange rate:", error);
-    return 1; // Fallback to 1:1 if API fails
+  const response = await fetch(`https://api.exchangerate-api.com/v4/latest/${from}`);
+  if (!response.ok) {
+    throw new Error(`Exchange rate API returned ${response.status}`);
   }
+  const data = await response.json();
+  if (!data.rates?.[to]) {
+    throw new Error(`No rate for ${from} → ${to}`);
+  }
+  return data.rates[to];
 }
 
 // Cached settings fetch
@@ -109,7 +111,16 @@ export async function updateUserSettings(input: {
 
   // If currency is changing, convert all expenses
   if (newCurrency && newCurrency !== oldCurrency) {
-    const exchangeRate = await getExchangeRate(oldCurrency, newCurrency);
+    let exchangeRate: number;
+    try {
+      exchangeRate = await getExchangeRate(oldCurrency, newCurrency);
+    } catch (error) {
+      console.error("Currency conversion failed:", error);
+      throw new Error(
+        `Failed to convert from ${oldCurrency} to ${newCurrency}. ` +
+        "Exchange rate API is unavailable. Please try again later."
+      );
+    }
 
     // Get all user's expenses
     const expenses = await db.expense.findMany({
@@ -213,9 +224,11 @@ export async function exportExpensesCSV() {
   const { userId } = await auth();
   if (!userId) throw new Error("Unauthorized");
 
+  // ponytail: cap at 10k rows to avoid OOM on large datasets
   const expenses = await db.expense.findMany({
     where: { userId },
     orderBy: { date: "desc" },
+    take: 10000,
   });
 
   const subscriptions = await db.subscription.findMany({

@@ -51,3 +51,15 @@ export function getEndOfMonthInTimezone(timezone: string): Date {
   const now = getNowInTimezone(timezone);
   return new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
 }
+
+// Escape HTML special chars for Telegram HTML parse_mode
+// Telegram supports <b>, <i>, <code>, <pre>, <a> but strips <script>.
+// To prevent XSS via AI-parsed text, escape all user-controlled values.
+export function escapeHtml(str: string | null | undefined): string {
+  if (!str) return "";
+  return str
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}

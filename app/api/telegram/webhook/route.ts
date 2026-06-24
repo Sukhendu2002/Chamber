@@ -5,6 +5,7 @@ import { notifyUser } from "@/app/api/events/route";
 import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 import { checkAndSendSubscriptionAlerts } from "@/lib/subscription-alerts";
 import { getAccountsByUserId } from "@/lib/actions/accounts";
+import { checkRateLimit } from "@/lib/rate-limit";
 
 const TELEGRAM_WEBHOOK_SECRET = process.env.TELEGRAM_WEBHOOK_SECRET;
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
@@ -70,7 +71,7 @@ type TelegramMessage = {
  };
 };
 
-// Store pending expenses awaiting confirmation (in-memory, resets on server restart)
+// ponytail: in-memory maps — reset on server restart. if memory becomes a concern, swap to Redis.
 const pendingExpenses = new Map<number, {
  userId: string;
  amount: number;
@@ -82,12 +83,22 @@ const pendingExpenses = new Map<number, {
  expiresAt: number;
 }>();
 
-// Store pending quick expenses awaiting account selection (in-memory, resets on server restart)
 const pendingQuickExpenses = new Map<number, {
  userId: string;
  amount: number;
  expiresAt: number;
 }>();
+
+// ponytail: periodic cleanup of expired entries to prevent memory leaks
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, val] of pendingExpenses) {
+    if (val.expiresAt <= now) pendingExpenses.delete(key);
+  }
+  for (const [key, val] of pendingQuickExpenses) {
+    if (val.expiresAt <= now) pendingQuickExpenses.delete(key);
+  }
+}, 60_000).unref();
 
 // Handle summary command - /summary [today|week|month]
 async function handleSummaryCommand(chatId: number, args: string) {
@@ -992,6 +1003,17 @@ export async function POST(request: NextRequest) {
  const secretToken = request.headers.get("x-telegram-bot-api-secret-token");
  if (TELEGRAM_WEBHOOK_SECRET && secretToken !== TELEGRAM_WEBHOOK_SECRET) {
  return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+ }
+
+ // Rate limit: per-chat 10 req/10s, global 100 req/10s
+ const ip = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown";
+ const chatLimit = checkRateLimit(`tg:chat:${ip}`, 10, 10_000);
+ if (!chatLimit.success) {
+ return NextResponse.json({ ok: true }, { status: 429 });
+ }
+ const globalLimit = checkRateLimit("tg:global", 100, 10_000);
+ if (!globalLimit.success) {
+ return NextResponse.json({ ok: true }, { status: 429 });
  }
 
  try {

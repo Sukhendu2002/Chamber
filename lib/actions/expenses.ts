@@ -8,22 +8,12 @@ import { z } from "zod";
 import { getUserSettings } from "@/lib/actions/settings";
 import { getNowInTimezone, getStartOfMonthInTimezone, getEndOfMonthInTimezone } from "@/lib/utils";
 
-const EXPENSE_CATEGORIES = [
-  "Food",
-  "Travel",
-  "Entertainment",
-  "Bills",
-  "Shopping",
-  "Health",
-  "Education",
-  "Investments",
-  "Subscription",
-  "General",
-] as const;
+// ponytail: categories are now user-defined via UserCategory model.
+// Zod validation accepts any string; UI enforces from user's categories.
 
 const CreateExpenseSchema = z.object({
   amount: z.number().positive("Amount must be greater than 0"),
-  category: z.enum(EXPENSE_CATEGORIES),
+  category: z.string().max(50).default("General"),
   merchant: z.string().max(200).optional(),
   description: z.string().max(500).optional(),
   date: z.date().optional(),
@@ -620,6 +610,21 @@ export async function getAnalyticsData() {
     color: categoryColors[name] || "#95A5A6",
   }));
 
+  // ponytail: single query for tag breakdown instead of N+1
+  const tagExpenses = await db.expense.findMany({
+    where: {
+      userId,
+      date: { gte: startOfMonth },
+    },
+    select: { amount: true, tags: { include: { tag: { select: { name: true } } } } },
+  });
+  const tagBreakdown: Record<string, number> = {};
+  for (const exp of tagExpenses) {
+    for (const et of exp.tags) {
+      tagBreakdown[et.tag.name] = (tagBreakdown[et.tag.name] || 0) + exp.amount;
+    }
+  }
+
   // Daily spending for current month (area chart)
   const dailySpendingMap: Record<string, number> = {};
   for (const exp of currentMonthExpenses) {
@@ -681,6 +686,11 @@ export async function getAnalyticsData() {
     previousMonthSpent,
     highestSpendingDay,
     transactionCount,
+    tagBreakdown,
+    tagData: Object.entries(tagBreakdown)
+      .map(([name, value]) => ({ name, value }))
+      .sort((a, b) => b.value - a.value)
+      .slice(0, 20),
   };
 }
 

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 import { db } from "@/lib/db";
+import { sanitizeExtension } from "@/lib/sanitize";
 
 function getR2Client() {
   const accountId = process.env.R2_ACCOUNT_ID;
@@ -47,7 +48,7 @@ export async function POST(request: NextRequest) {
     // Upload to R2
     const r2Client = getR2Client();
     const bucketName = process.env.R2_BUCKET_NAME;
-    const ext = file.name.split(".").pop() || "jpg";
+    const ext = sanitizeExtension(file.name);
     let key: string;
 
     if (uploadType === "loan" && loanId) {

@@ -4,6 +4,7 @@ import { parseExpenseWithAI, parseReceiptWithVision, parsePDFWithVision } from "
 import { db } from "@/lib/db";
 import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 
+
 function getR2Client() {
     const accountId = process.env.R2_ACCOUNT_ID;
     const accessKeyId = process.env.R2_ACCESS_KEY_ID;
@@ -52,7 +53,7 @@ export async function POST(request: NextRequest) {
                     const r2Client = getR2Client();
                     const bucketName = process.env.R2_BUCKET_NAME;
                     const buffer = Buffer.from(imageBase64, "base64");
-                    const ext = (mimeType || "image/jpeg").split("/")[1] || "jpg";
+                    const ext = (mimeType || "image/jpeg").split("/")[1]?.replace(/[^a-zA-Z0-9]/g, "").slice(0, 10) || "jpg";
                     const key = `receipts/${userId}/${Date.now()}.${ext}`;
 
                     await r2Client.send(

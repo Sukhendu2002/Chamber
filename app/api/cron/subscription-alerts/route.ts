@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { sanitizeTelegramHtml } from "@/lib/sanitize";
 
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 
@@ -84,10 +85,10 @@ export async function GET(request: NextRequest) {
  : `in ${daysUntilBilling} days`;
 
  const message = `<b>Subscription Reminder</b>\n\n` +
- `<b>${sub.name}</b>\n` +
+ `<b>${sanitizeTelegramHtml(sub.name)}</b>\n` +
  `Amount: ₹${sub.amount.toFixed(2)}\n` +
  `Due: ${daysText} (${billingDate.toLocaleDateString()})\n` +
- `${sub.paymentMethod ? `Account: ${sub.paymentMethod}\n` : ""}` +
+ `${sub.paymentMethod ? `Account: ${sanitizeTelegramHtml(sub.paymentMethod)}\n` : ""}` +
  `\n<i>Manage your subscriptions at Chamber</i>`;
 
  const sent = await sendTelegramMessage(userSettings.telegramChatId, message);
@@ -154,7 +155,7 @@ export async function GET(request: NextRequest) {
  : "";
 
  const message =
- `<b>${monthName} Summary</b>\n\n` +
+ `<b>${sanitizeTelegramHtml(monthName)} Summary</b>\n\n` +
  ` Total spent: ₹${totalSpent.toFixed(0)}\n` +
  budgetLine +
  ` Transactions: ${expenses.length}\n\n` +

@@ -47,6 +47,11 @@ type TopMerchant = {
   amount: number;
 };
 
+type TagData = {
+  name: string;
+  value: number;
+};
+
 type AnalyticsChartsProps = {
   totalSpent: number;
   budget: number;
@@ -60,6 +65,7 @@ type AnalyticsChartsProps = {
   highestSpendingDay: { date: string; amount: number };
   transactionCount: number;
   aiInsights: string[];
+  tagData?: TagData[];
 };
 
 export function AnalyticsCharts({
@@ -75,6 +81,7 @@ export function AnalyticsCharts({
   highestSpendingDay,
   transactionCount,
   aiInsights,
+  tagData,
 }: AnalyticsChartsProps) {
   const budgetPercentage = budget > 0 ? Math.round((totalSpent / budget) * 100) : 0;
 
@@ -355,6 +362,35 @@ export function AnalyticsCharts({
           </CardContent>
         </Card>
       </div>
+
+      {/* Tag Breakdown */}
+      {tagData && tagData.length > 0 && (
+        <div className="mt-6">
+          <Card className="border">
+            <CardHeader>
+              <CardTitle className="text-sm font-medium">
+                Spending by Tag
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                {tagData.slice(0, 15).map((tag) => {
+                  const pct = totalSpent > 0 ? Math.round((tag.value / totalSpent) * 100) : 0;
+                  return (
+                    <div key={tag.name} className="rounded-lg border p-2">
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="font-medium">#{tag.name}</span>
+                        <span className="text-muted-foreground">{formatCurrency(tag.value)}</span>
+                      </div>
+                      <Progress value={pct} className="mt-1 h-1.5" />
+                    </div>
+                  );
+                })}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
     </>
   );
 }

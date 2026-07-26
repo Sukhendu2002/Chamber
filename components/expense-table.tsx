@@ -50,6 +50,8 @@ import {
 } from "@tabler/icons-react";
 import { updateExpense, deleteExpense, getUserTags } from "@/lib/actions/expenses";
 import { TagInput } from "@/components/tag-input";
+import { BulkEditDialog } from "@/components/bulk-edit-dialog";
+import type { UserCategoryRecord } from "@/lib/actions/categories";
 
 type AccountOption = {
   id: string;
@@ -57,21 +59,12 @@ type AccountOption = {
   type: string;
 };
 
-const categories = [
-  "Food",
-  "Travel",
-  "Entertainment",
-  "Bills",
-  "Shopping",
-  "Health",
-  "Education",
-  "Investments",
-  "Subscription",
-  "Lent Money",
-  "General",
-] as const;
+const FALLBACK_CATEGORIES = [
+  "Food", "Travel", "Entertainment", "Bills", "Shopping",
+  "Health", "Education", "Investments", "Subscription", "Lent Money", "General",
+];
 
-type ExpenseCategory = (typeof categories)[number];
+type ExpenseCategory = string;
 
 const sourceColors: Record<string, string> = {
   TELEGRAM: "bg-blue-100 text-blue-800",
@@ -108,9 +101,11 @@ type ExpenseTableProps = {
   expenses: Expense[];
   currency: string;
   accounts?: AccountOption[];
+  categories?: UserCategoryRecord[];
+  allTags?: string[];
 };
 
-export function ExpenseTable({ expenses: initialExpenses, currency, accounts = [] }: ExpenseTableProps) {
+export function ExpenseTable({ expenses: initialExpenses, currency, accounts = [], categories = [], allTags = [] }: ExpenseTableProps) {
   const router = useRouter();
   const [expenses, setExpenses] = useState(initialExpenses);
   const [sortField, setSortField] = useState<SortField>("date");
@@ -138,6 +133,9 @@ export function ExpenseTable({ expenses: initialExpenses, currency, accounts = [
   const [deletingExpense, setDeletingExpense] = useState<Expense | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [reverseBalance, setReverseBalance] = useState(true);
+
+  // Bulk selection state
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   // Receipt state
   const [viewingReceipt, setViewingReceipt] = useState<string | null>(null);
@@ -298,8 +296,30 @@ export function ExpenseTable({ expenses: initialExpenses, currency, accounts = [
     );
   };
 
+  const selectableExpenses = sortedExpenses.filter(
+    (expense) => !expense.loanId && !expense.repaymentId,
+  );
+  const selectAll =
+    selectableExpenses.length > 0 &&
+    selectableExpenses.every((expense) => selectedIds.has(expense.id));
+  const toggleSelect = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+  const toggleSelectAll = () => {
+    if (selectAll) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(selectableExpenses.map((expense) => expense.id)));
+    }
+  };
+
   const renderActions = (expense: Expense) => {
-    const isLoanExpense = !!expense.loanId;
+    const isManagedExpense = !!expense.loanId || !!expense.repaymentId;
     return (
       <div className="flex gap-1">
         {(() => {
@@ -326,7 +346,7 @@ export function ExpenseTable({ expenses: initialExpenses, currency, accounts = [
                 <label className="cursor-pointer">
                   <input
                     type="file"
-                    accept="image/*,.pdf"
+                    accept="image/jpeg,image/png,image/webp,application/pdf"
                     className="hidden"
                     onChange={(e) => {
                       const file = e.target.files?.[0];
@@ -353,7 +373,7 @@ export function ExpenseTable({ expenses: initialExpenses, currency, accounts = [
             <label className="cursor-pointer">
               <input
                 type="file"
-                accept="image/*,.pdf"
+                accept="image/jpeg,image/png,image/webp,application/pdf"
                 className="hidden"
                 onChange={(e) => {
                   const file = e.target.files?.[0];
@@ -380,8 +400,8 @@ export function ExpenseTable({ expenses: initialExpenses, currency, accounts = [
           size="icon"
           className="h-8 w-8"
           onClick={() => openEditDialogSafe(expense)}
-          disabled={isLoanExpense}
-          title={isLoanExpense ? "Managed via loan record" : "Edit"}
+          disabled={isManagedExpense}
+          title={isManagedExpense ? "Managed via loan record" : "Edit"}
         >
           <IconEdit className="h-4 w-4" />
         </Button>
@@ -390,8 +410,8 @@ export function ExpenseTable({ expenses: initialExpenses, currency, accounts = [
           size="icon"
           className="h-8 w-8 text-destructive hover:text-destructive"
           onClick={() => setDeletingExpense(expense)}
-          disabled={isLoanExpense}
-          title={isLoanExpense ? "Managed via loan record" : "Delete"}
+          disabled={isManagedExpense}
+          title={isManagedExpense ? "Managed via loan record" : "Delete"}
         >
           <IconTrash className="h-4 w-4" />
         </Button>
@@ -477,11 +497,40 @@ export function ExpenseTable({ expenses: initialExpenses, currency, accounts = [
         ))}
       </div>
 
+      {/* Bulk action bar */}
+      {selectedIds.size > 0 && (
+        <div className="mb-3 flex items-center gap-2 rounded-lg border bg-muted/50 px-3 py-2">
+          <span className="text-sm font-medium">{selectedIds.size} selected</span>
+          <div className="flex-1" />
+          <BulkEditDialog
+            selectedIds={Array.from(selectedIds)}
+            categories={categories}
+            allTags={allTags}
+            onClose={() => setSelectedIds(new Set())}
+          />
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setSelectedIds(new Set())}
+          >
+            Clear
+          </Button>
+        </div>
+      )}
+
       {/* Desktop table layout */}
       <div className="hidden md:block">
         <Table>
           <TableHeader>
             <TableRow>
+              <TableHead className="w-8">
+                <input
+                  type="checkbox"
+                  checked={selectAll}
+                  onChange={toggleSelectAll}
+                  className="h-4 w-4 rounded border-gray-300 cursor-pointer"
+                />
+              </TableHead>
               <TableHead
                 className="cursor-pointer hover:bg-muted"
                 onClick={() => handleSort("date")}
@@ -509,7 +558,16 @@ export function ExpenseTable({ expenses: initialExpenses, currency, accounts = [
           </TableHeader>
           <TableBody>
             {sortedExpenses.map((expense) => (
-              <TableRow key={expense.id}>
+              <TableRow key={expense.id} className={selectedIds.has(expense.id) ? "bg-muted/30" : ""}>
+                <TableCell className="w-8">
+                  <input
+                  type="checkbox"
+                  checked={selectedIds.has(expense.id)}
+                  onChange={() => toggleSelect(expense.id)}
+                  disabled={!!expense.loanId || !!expense.repaymentId}
+                  className="h-4 w-4 rounded border-gray-300 cursor-pointer"
+                  />
+                </TableCell>
                 <TableCell className="text-muted-foreground">
                   {new Date(expense.date).toLocaleDateString("en-US", {
                     month: "short",
@@ -617,14 +675,14 @@ export function ExpenseTable({ expenses: initialExpenses, currency, accounts = [
               </div>
               <div className="space-y-2">
                 <Label htmlFor="edit-category">Category</Label>
-                <Select value={editCategory} onValueChange={(v) => setEditCategory(v as ExpenseCategory)}>
+                <Select value={editCategory} onValueChange={(v) => setEditCategory(v)}>
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {categories.map((cat) => (
-                      <SelectItem key={cat} value={cat}>
-                        {cat}
+                    {(categories.length > 0 ? categories : FALLBACK_CATEGORIES.map((name) => ({ id: name, name, icon: null, color: null, parentId: null, sortOrder: 0, userId: "", createdAt: new Date(), updatedAt: new Date() }))).map((cat) => (
+                      <SelectItem key={cat.id} value={cat.name}>
+                        {cat.icon || "📦"} {cat.name}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -721,7 +779,7 @@ export function ExpenseTable({ expenses: initialExpenses, currency, accounts = [
                           <span className="text-sm">{receipts.length > 0 ? 'Add More' : 'Upload'}</span>
                           <input
                             type="file"
-                            accept="image/*,.pdf"
+                            accept="image/jpeg,image/png,image/webp,application/pdf"
                             className="hidden"
                             onChange={(e) => setEditReceipt(e.target.files?.[0] || null)}
                           />
@@ -858,7 +916,7 @@ export function ExpenseTable({ expenses: initialExpenses, currency, accounts = [
                   <label className="cursor-pointer">
                     <input
                       type="file"
-                      accept="image/*,.pdf"
+                      accept="image/jpeg,image/png,image/webp,application/pdf"
                       className="hidden"
                       onChange={(e) => {
                         const file = e.target.files?.[0];

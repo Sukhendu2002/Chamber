@@ -507,7 +507,7 @@ export function ChatSidebar() {
                             type="file"
                             ref={fileInputRef}
                             className="hidden"
-                            accept="image/*,.pdf"
+                            accept="image/jpeg,image/png,image/webp,application/pdf"
                             onChange={(e) => {
                                 const file = e.target.files?.[0];
                                 if (file) handleFileUpload(file);

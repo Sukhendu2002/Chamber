@@ -546,11 +546,11 @@ export function LoanList({ loans, currency }: LoanListProps) {
               <label className="cursor-pointer">
                 <div className="flex items-center gap-2 border border-dashed rounded-md p-3 hover:bg-muted/50 transition-colors">
                   <IconUpload className="h-4 w-4 text-muted-foreground" />
-                  <span className="text-sm text-muted-foreground">Add receipt images</span>
+                  <span className="text-sm text-muted-foreground">Add receipt files</span>
                 </div>
                 <input
                   type="file"
-                  accept="image/*"
+                  accept="image/jpeg,image/png,image/webp,application/pdf"
                   multiple
                   className="hidden"
                   onChange={handleRepaymentFileChange}

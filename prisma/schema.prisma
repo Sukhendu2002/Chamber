@@ -27,6 +27,24 @@ model UserSettings {
   goals Goal[]
 }
 
+model UserCategory {
+  id        String          @id @default(uuid())
+  userId    String          // Clerk User ID
+  name      String
+  icon      String?         // emoji or icon identifier
+  color     String?         // hex color for UI
+  parentId  String?         // for hierarchical categories (e.g., Food > Restaurant)
+  parent    UserCategory?   @relation("CategoryHierarchy", fields: [parentId], references: [id], onDelete: SetNull)
+  children  UserCategory[]  @relation("CategoryHierarchy")
+  sortOrder Int             @default(0)
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+
+  @@unique([userId, name])
+  @@index([userId])
+  @@index([parentId])
+}
+
 model Expense {
   id            String         @id @default(uuid())
   userId        String         // Clerk User ID

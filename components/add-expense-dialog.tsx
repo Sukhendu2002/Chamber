@@ -25,6 +25,8 @@ import { IconPlus, IconUpload, IconX } from "@tabler/icons-react";
 import { createExpense } from "@/lib/actions/expenses";
 import { getUserTags } from "@/lib/actions/expenses";
 import { createSubscription } from "@/lib/actions/subscriptions";
+import { smartCategorize } from "@/lib/actions/categories";
+import type { UserCategoryRecord } from "@/lib/actions/categories";
 
 type AccountOption = {
   id: string;
@@ -34,21 +36,7 @@ type AccountOption = {
   creditLimit: number | null;
 };
 
-const categories = [
-  "Food",
-  "Travel",
-  "Entertainment",
-  "Bills",
-  "Shopping",
-  "Health",
-  "Education",
-  "Investments",
-  "Subscription",
-  "Lent Money",
-  "General",
-] as const;
-
-type ExpenseCategory = (typeof categories)[number];
+type ExpenseCategory = string;
 
 const billingCycles = [
   { value: "ONCE", label: "One-time (non-recurring)" },
@@ -60,11 +48,13 @@ const billingCycles = [
 
 type AddExpenseDialogProps = {
   accounts?: AccountOption[];
+  categories?: UserCategoryRecord[];
   currency?: string;
 };
 
 export function AddExpenseDialog({
   accounts = [],
+  categories = [],
   currency = "INR",
 }: AddExpenseDialogProps) {
   const router = useRouter();
@@ -72,6 +62,7 @@ export function AddExpenseDialog({
   const [loading, setLoading] = useState(false);
   const [amount, setAmount] = useState("");
   const [category, setCategory] = useState<ExpenseCategory>("General");
+  const [smartCategory, setSmartCategory] = useState<string | null>(null);
   const [description, setDescription] = useState("");
   const [merchant, setMerchant] = useState("");
   const [date, setDate] = useState(toLocalDateString());
@@ -104,6 +95,23 @@ export function AddExpenseDialog({
       getUserTags().then(setTagSuggestions);
     }
   }, [open]);
+
+  // Smart categorization: suggest category based on merchant/description
+  useEffect(() => {
+    if (!merchant && !description) {
+      setSmartCategory(null);
+      return;
+    }
+    const timer = setTimeout(async () => {
+      const result = await smartCategorize(merchant, description);
+      if (result.confidence !== "low") {
+        setSmartCategory(result.category);
+      } else {
+        setSmartCategory(null);
+      }
+    }, 800);
+    return () => clearTimeout(timer);
+  }, [merchant, description]);
   
   // Subscription-specific fields
   const [billingCycle, setBillingCycle] = useState<"ONCE" | "WEEKLY" | "MONTHLY" | "QUARTERLY" | "YEARLY">("MONTHLY");
@@ -217,18 +225,27 @@ export function AddExpenseDialog({
             </div>
             <div className="space-y-2">
               <Label htmlFor="category">Category</Label>
-              <Select value={category} onValueChange={(v) => setCategory(v as ExpenseCategory)}>
+              <Select value={category} onValueChange={(v) => setCategory(v)}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {categories.map((cat) => (
-                    <SelectItem key={cat} value={cat}>
-                      {cat}
+                  {(categories.length > 0 ? categories : [{ id: "general", name: "General", icon: "📦", color: null, parentId: null, sortOrder: 0, userId: "", createdAt: new Date(), updatedAt: new Date() }]).map((cat) => (
+                    <SelectItem key={cat.id} value={cat.name}>
+                      {cat.icon || "📦"} {cat.name}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
+              {smartCategory && smartCategory !== category && (
+                <button
+                  type="button"
+                  className="text-xs text-blue-500 hover:underline"
+                  onClick={() => setCategory(smartCategory!)}
+                >
+                  💡 Suggested: {smartCategory} (click to apply)
+                </button>
+              )}
             </div>
           </div>
           
@@ -372,7 +389,7 @@ export function AddExpenseDialog({
                   <span className="text-sm">Upload</span>
                   <input
                     type="file"
-                    accept="image/*,.pdf"
+                    accept="image/jpeg,image/png,image/webp,application/pdf"
                     className="hidden"
                     onChange={(e) => setReceipt(e.target.files?.[0] || null)}
                   />

@@ -48,7 +48,12 @@ describe("Forecasting", () => {
     vi.clearAllMocks();
 
     mockDb.account.findMany.mockResolvedValue([
-      { currentBalance: 100000, isActive: true, includeInNetWorth: true },
+      {
+        type: "BANK",
+        currentBalance: 100000,
+        isActive: true,
+        includeInNetWorth: true,
+      },
     ]);
     mockDb.expense.findMany.mockResolvedValue([]);
     mockDb.recurringPattern.findMany.mockResolvedValue([]);
@@ -78,6 +83,28 @@ describe("Forecasting", () => {
       // With no expenses, optimistic and pessimistic should equal projected
       expect(result.optimisticBalances[0]).toBe(result.projectedBalances[0]);
       expect(result.pessimisticBalances[0]).toBe(result.projectedBalances[0]);
+    });
+
+    it("should subtract credit card liabilities from the starting net worth", async () => {
+      mockDb.account.findMany.mockResolvedValue([
+        {
+          type: "BANK",
+          currentBalance: 100000,
+          isActive: true,
+          includeInNetWorth: true,
+        },
+        {
+          type: "CREDIT_CARD",
+          currentBalance: 10000,
+          isActive: true,
+          includeInNetWorth: true,
+        },
+      ]);
+
+      const { getForecastData } = await import("@/lib/actions/forecasting");
+      const result = await getForecastData();
+
+      expect(result.projectedBalances[0]).toBe(140000);
     });
 
     it("should offset expenses against income when expenses exist", async () => {

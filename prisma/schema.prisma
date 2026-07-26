@@ -38,6 +38,10 @@ model Expense {
   paymentMethod String?        // Account name label (for display)
   accountId     String?        // Linked account for balance tracking
   account       Account?       @relation(fields: [accountId], references: [id], onDelete: SetNull)
+  loanId        String?        // Linked loan (for loan expense AND repayment refund)
+  loan          Loan?          @relation(fields: [loanId], references: [id], onDelete: SetNull)
+  repaymentId   String?        // Linked repayment (for refund expenses)
+  repayment     Repayment?     @relation(fields: [repaymentId], references: [id], onDelete: SetNull)
   date          DateTime       @default(now())
   isVerified    Boolean        @default(false) // True if matched with Bank Statement
   metadata      Json?          // Stores raw OCR text or debug info
@@ -49,6 +53,8 @@ model Expense {
   @@index([userId])
   @@index([date])
   @@index([accountId])
+  @@index([loanId])
+  @@index([repaymentId])
 }
 
 model Tag {
@@ -136,12 +142,16 @@ model Loan {
   dueDate       DateTime?    // Optional due date
   description   String?      // Notes about the loan
   receiptUrls   String[]     @default([]) // Receipts/proof
+  accountId     String?      // Which account the money was lent from
+  account       Account?     @relation(fields: [accountId], references: [id], onDelete: SetNull)
   createdAt     DateTime     @default(now())
   updatedAt     DateTime     @updatedAt
   repayments    Repayment[]
+  expenses      Expense[]
 
   @@index([userId])
   @@index([borrowerName])
+  @@index([accountId])
 }
 
 model Repayment {
@@ -153,6 +163,7 @@ model Repayment {
   note        String?
   receiptUrls String[] @default([]) // Receipts for this repayment
   createdAt   DateTime @default(now())
+  expenses    Expense[]
 
   @@index([loanId])
 }
@@ -185,6 +196,7 @@ model Account {
   updatedAt     DateTime        @updatedAt
   balanceHistory BalanceHistory[]
   expenses      Expense[]
+  loans         Loan[]
   investmentProductsList InvestmentProduct[] // Investment products linked to this account
   transfersFrom Transfer[]      @relation("TransferFrom")
   transfersTo   Transfer[]      @relation("TransferTo")
@@ -194,21 +206,31 @@ model Account {
 }
 
 model Transfer {
-  id            String   @id @default(uuid())
-  userId        String   // Clerk User ID
-  fromAccountId String
-  toAccountId   String
-  amount        Float
-  note          String?
-  date          DateTime @default(now())
-  fromAccount   Account  @relation("TransferFrom", fields: [fromAccountId], references: [id], onDelete: Restrict)
-  toAccount     Account  @relation("TransferTo", fields: [toAccountId], references: [id], onDelete: Restrict)
-  createdAt     DateTime @default(now())
+  id             String       @id @default(uuid())
+  userId         String       // Clerk User ID
+  fromAccountId  String
+  toAccountId    String
+  amount         Float
+  kind           TransferKind @default(ACCOUNT_TRANSFER)
+  idempotencyKey String?
+  note           String?
+  date           DateTime     @default(now())
+  fromAccount    Account      @relation("TransferFrom", fields: [fromAccountId], references: [id], onDelete: Restrict)
+  toAccount      Account      @relation("TransferTo", fields: [toAccountId], references: [id], onDelete: Restrict)
+  createdAt      DateTime     @default(now())
 
   @@index([userId])
   @@index([fromAccountId])
   @@index([toAccountId])
   @@index([date])
+  @@index([kind])
+  @@unique([userId, idempotencyKey])
+}
+
+enum TransferKind {
+  ACCOUNT_TRANSFER
+  CREDIT_CARD_PAYMENT
+  CASH_ADVANCE
 }
 
 model BalanceHistory {

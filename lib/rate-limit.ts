@@ -9,7 +9,7 @@ export function checkRateLimit(
   const now = Date.now();
   const bucket = buckets.get(key);
 
-  if (!bucket || now > bucket.resetAt) {
+  if (!bucket || now >= bucket.resetAt) {
     buckets.set(key, { tokens: maxRequests - 1, resetAt: now + windowMs });
     return { success: true, retryAfter: 0 };
   }

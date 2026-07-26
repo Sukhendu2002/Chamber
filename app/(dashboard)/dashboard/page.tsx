@@ -10,6 +10,7 @@ import {
   IconTrendingUp,
   IconBuildingBank,
   IconChartLine,
+  IconCreditCard,
 } from "@tabler/icons-react";
 import { AddExpenseDialog } from "@/components/add-expense-dialog";
 import { getMonthlyStats } from "@/lib/actions/expenses";
@@ -136,7 +137,16 @@ export default async function DashboardPage() {
             Your financial overview for {monthYear}
           </p>
         </div>
-        <AddExpenseDialog accounts={accounts.map(a => ({ id: a.id, name: a.name, type: a.type }))} />
+        <AddExpenseDialog
+          currency={settings.currency}
+          accounts={accounts.map((account) => ({
+            id: account.id,
+            name: account.name,
+            type: account.type,
+            currentBalance: account.currentBalance,
+            creditLimit: account.creditLimit,
+          }))}
+        />
       </div>
 
       {/* Stats Grid - Always full width row */}
@@ -191,7 +201,7 @@ export default async function DashboardPage() {
                 <div className="text-3xl font-bold mb-4">
                   {formatCurrency(accountStats.totalNetWorth)}
                 </div>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-3 gap-3">
                   <div className="flex items-center gap-2">
                     <IconBuildingBank className="h-4 w-4 text-blue-500" />
                     <div>
@@ -204,6 +214,15 @@ export default async function DashboardPage() {
                     <div>
                       <div className="text-xs text-muted-foreground">Investments</div>
                       <div className="font-medium">{formatCurrency(accountStats.totalInvestments)}</div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <IconCreditCard className="h-4 w-4 text-red-500" />
+                    <div>
+                      <div className="text-xs text-muted-foreground">Card debt</div>
+                      <div className="font-medium text-red-600">
+                        {formatCurrency(accountStats.totalCreditCardOutstanding)}
+                      </div>
                     </div>
                   </div>
                 </div>

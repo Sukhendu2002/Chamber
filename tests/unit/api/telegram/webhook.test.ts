@@ -56,12 +56,47 @@ vi.mock("@/lib/subscription-alerts", () => ({
     checkAndSendSubscriptionAlerts: vi.fn().mockResolvedValue(undefined),
 }));
 
+vi.mock("@/lib/rate-limit", () => ({
+    checkRateLimit: vi.fn(() => ({ success: true, retryAfter: 0 })),
+}));
+
 describe("Telegram Webhook", () => {
     beforeEach(() => {
         vi.clearAllMocks();
         vi.mocked(fetch).mockClear();
         process.env.TELEGRAM_BOT_TOKEN = "test-bot-token";
         process.env.TELEGRAM_WEBHOOK_SECRET = "test-webhook-secret";
+    });
+
+    describe("Webhook Authentication", () => {
+        it("disables the webhook when its secret is missing", async () => {
+            delete process.env.TELEGRAM_WEBHOOK_SECRET;
+            const { POST } = await import("@/app/api/telegram/webhook/route");
+            const request = new Request("http://localhost/api/telegram/webhook", {
+                method: "POST",
+                body: JSON.stringify({ update_id: 1 }),
+            });
+
+            const response = await POST(request);
+
+            expect(response.status).toBe(500);
+        });
+
+        it("rejects an invalid webhook secret", async () => {
+            const { POST } = await import("@/app/api/telegram/webhook/route");
+            const request = new Request("http://localhost/api/telegram/webhook", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "x-telegram-bot-api-secret-token": "invalid",
+                },
+                body: JSON.stringify({ update_id: 1 }),
+            });
+
+            const response = await POST(request);
+
+            expect(response.status).toBe(401);
+        });
     });
 
     describe("Summary Command", () => {
@@ -528,6 +563,13 @@ describe("Telegram Webhook", () => {
                     currentBalance: 125000,
                     isActive: true,
                 },
+                {
+                    id: "acc-4",
+                    name: "Rewards Card",
+                    type: "CREDIT_CARD",
+                    currentBalance: 10000,
+                    isActive: true,
+                },
             ]);
 
             const { POST } = await import("@/app/api/telegram/webhook/route");
@@ -565,8 +607,10 @@ describe("Telegram Webhook", () => {
             expect(body.text).toContain("₹2150.00");
             expect(body.text).toContain("Investments");
             expect(body.text).toContain("₹125000.00");
-            expect(body.text).toContain("Total Balance");
-            expect(body.text).toContain("₹172380.00");
+            expect(body.text).toContain("Rewards Card");
+            expect(body.text).toContain("₹10000.00 outstanding");
+            expect(body.text).toContain("Net Worth");
+            expect(body.text).toContain("₹162380.00");
         });
 
         it("should use USD currency for accounts when set", async () => {

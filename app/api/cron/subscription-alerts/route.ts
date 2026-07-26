@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { sanitizeTelegramHtml } from "@/lib/sanitize";
 
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 
@@ -32,10 +33,14 @@ async function sendTelegramMessage(chatId: string, text: string) {
 
 export async function GET(request: NextRequest) {
  // Verify cron secret to prevent unauthorized access
- const authHeader = request.headers.get("authorization");
  const cronSecret = process.env.CRON_SECRET;
+ if (!cronSecret) {
+ console.error("CRON_SECRET not configured — cron endpoint disabled");
+ return NextResponse.json({ error: "Server misconfiguration" }, { status: 500 });
+ }
 
- if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
+ const authHeader = request.headers.get("authorization");
+ if (authHeader !== `Bearer ${cronSecret}`) {
  return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
  }
 
@@ -84,10 +89,10 @@ export async function GET(request: NextRequest) {
  : `in ${daysUntilBilling} days`;
 
  const message = `<b>Subscription Reminder</b>\n\n` +
- `<b>${sub.name}</b>\n` +
+ `<b>${sanitizeTelegramHtml(sub.name)}</b>\n` +
  `Amount: ₹${sub.amount.toFixed(2)}\n` +
  `Due: ${daysText} (${billingDate.toLocaleDateString()})\n` +
- `${sub.paymentMethod ? `Account: ${sub.paymentMethod}\n` : ""}` +
+ `${sub.paymentMethod ? `Account: ${sanitizeTelegramHtml(sub.paymentMethod)}\n` : ""}` +
  `\n<i>Manage your subscriptions at Chamber</i>`;
 
  const sent = await sendTelegramMessage(userSettings.telegramChatId, message);
@@ -145,7 +150,7 @@ export async function GET(request: NextRequest) {
  const topCats = Object.entries(categoryMap)
  .sort((a, b) => b[1] - a[1])
  .slice(0, 3)
- .map(([cat, amt]) => ` • ${cat}: ₹${amt.toFixed(0)}`)
+ .map(([cat, amt]) => ` • ${sanitizeTelegramHtml(cat)}: ₹${amt.toFixed(0)}`)
  .join("\n");
 
  const monthName = now.toLocaleDateString("en-US", { month: "long" });
@@ -154,7 +159,7 @@ export async function GET(request: NextRequest) {
  : "";
 
  const message =
- `<b>${monthName} Summary</b>\n\n` +
+ `<b>${sanitizeTelegramHtml(monthName)} Summary</b>\n\n` +
  ` Total spent: ₹${totalSpent.toFixed(0)}\n` +
  budgetLine +
  ` Transactions: ${expenses.length}\n\n` +

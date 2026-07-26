@@ -4,6 +4,7 @@ import { auth } from "@clerk/nextjs/server";
 import { db } from "@/lib/db";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
+import { getTransferBalanceAdjustment, isCreditCard } from "@/lib/accounting";
 
 const CreateTransferSchema = z.object({
   fromAccountId: z.string().uuid(),
@@ -22,30 +23,14 @@ const DeleteTransferSchema = z.string().uuid();
 
 export type CreateTransferInput = z.infer<typeof CreateTransferSchema>;
 
-// For credit cards, currentBalance represents outstanding debt.
-// Transferring FROM a credit card increases debt (cash advance).
-// Transferring TO a credit card decreases debt (payment).
-function getTransferAdjustment(
-  accountType: string,
-  direction: "from" | "to",
-  amount: number
-): number {
-  if (accountType === "CREDIT_CARD") {
-    // For credit cards, direction is reversed:
-    // from = money leaving card = debt increases = +amount
-    // to = money entering card = debt decreases = -amount
-    return direction === "from" ? amount : -amount;
-  }
-  // Regular accounts: from decreases balance, to increases balance
-  return direction === "from" ? -amount : amount;
-}
-
 export type TransferWithAccounts = {
   id: string;
   userId: string;
   fromAccountId: string;
   toAccountId: string;
   amount: number;
+  kind: string;
+  idempotencyKey: string | null;
   note: string | null;
   date: Date;
   createdAt: Date;
@@ -76,16 +61,12 @@ export async function createTransfer(input: CreateTransferInput) {
     if (!fromAccount) throw new Error("Source account not found");
     if (!toAccount) throw new Error("Destination account not found");
 
-    // Check sufficient funds / available credit
-    if (fromAccount.type === "CREDIT_CARD") {
-      const availableCredit = (fromAccount.creditLimit ?? 0) - fromAccount.currentBalance;
-      if (validated.amount > availableCredit) {
-        throw new Error("Insufficient credit limit");
-      }
-    } else {
-      if (fromAccount.currentBalance < validated.amount) {
-        throw new Error("Insufficient funds");
-      }
+    if (isCreditCard(fromAccount.type) || isCreditCard(toAccount.type)) {
+      throw new Error("Use the dedicated credit card payment flow for credit card transfers");
+    }
+
+    if (fromAccount.currentBalance < validated.amount) {
+      throw new Error("Insufficient funds");
     }
 
     const created = await tx.transfer.create({
@@ -94,12 +75,17 @@ export async function createTransfer(input: CreateTransferInput) {
         fromAccountId: validated.fromAccountId,
         toAccountId: validated.toAccountId,
         amount: validated.amount,
+        kind: "ACCOUNT_TRANSFER",
         note: validated.note,
         date: transferDate,
       },
     });
 
-    const fromAdjustment = getTransferAdjustment(fromAccount.type, "from", validated.amount);
+    const fromAdjustment = getTransferBalanceAdjustment(
+      fromAccount.type,
+      "from",
+      validated.amount,
+    );
     const updatedFrom = await tx.account.update({
       where: { id: validated.fromAccountId },
       data: { currentBalance: { increment: fromAdjustment } },
@@ -114,7 +100,11 @@ export async function createTransfer(input: CreateTransferInput) {
       },
     });
 
-    const toAdjustment = getTransferAdjustment(toAccount.type, "to", validated.amount);
+    const toAdjustment = getTransferBalanceAdjustment(
+      toAccount.type,
+      "to",
+      validated.amount,
+    );
     const updatedTo = await tx.account.update({
       where: { id: validated.toAccountId },
       data: { currentBalance: { increment: toAdjustment } },
@@ -191,7 +181,11 @@ export async function deleteTransfer(transferId: string) {
     await tx.transfer.delete({ where: { id: validatedId } });
 
     // Reversal uses the opposite direction adjustment
-    const fromReversal = getTransferAdjustment(transfer.fromAccount.type, "to", transfer.amount);
+    const fromReversal = getTransferBalanceAdjustment(
+      transfer.fromAccount.type,
+      "to",
+      transfer.amount,
+    );
     const updatedFrom = await tx.account.update({
       where: { id: transfer.fromAccountId },
       data: { currentBalance: { increment: fromReversal } },
@@ -206,7 +200,11 @@ export async function deleteTransfer(transferId: string) {
       },
     });
 
-    const toReversal = getTransferAdjustment(transfer.toAccount.type, "from", transfer.amount);
+    const toReversal = getTransferBalanceAdjustment(
+      transfer.toAccount.type,
+      "from",
+      transfer.amount,
+    );
     const updatedTo = await tx.account.update({
       where: { id: transfer.toAccountId },
       data: { currentBalance: { increment: toReversal } },

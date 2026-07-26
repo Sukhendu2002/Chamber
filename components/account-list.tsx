@@ -16,6 +16,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { CreditCardPaymentDialog } from "@/components/credit-card-payment-dialog";
 import {
   Select,
   SelectContent,
@@ -351,16 +352,28 @@ export function AccountList({ accounts, currency }: AccountListProps) {
   );
 
   const renderCreditCardBalance = (account: Account) => {
+    const outstanding = Math.max(account.currentBalance, 0);
+    const cardCredit = Math.max(-account.currentBalance, 0);
     const utilization = account.creditLimit
-      ? (account.currentBalance / account.creditLimit) * 100
+      ? (outstanding / account.creditLimit) * 100
       : 0;
     const utilizationColor =
       utilization > 60 ? "bg-red-500" :
       utilization > 30 ? "bg-yellow-500" :
       "bg-green-500";
     return (
-      <div className="space-y-1">
-        <div className="text-red-600 font-bold">{formatCurrency(account.currentBalance)} due</div>
+      <div className="space-y-2">
+        {outstanding > 0 ? (
+          <div className="font-bold text-red-600">
+            {formatCurrency(outstanding)} outstanding
+          </div>
+        ) : cardCredit > 0 ? (
+          <div className="font-bold text-green-600">
+            {formatCurrency(cardCredit)} card credit
+          </div>
+        ) : (
+          <div className="font-bold text-green-600">No outstanding balance</div>
+        )}
         {account.creditLimit && (
           <>
             <div className="text-xs text-muted-foreground">
@@ -379,10 +392,17 @@ export function AccountList({ accounts, currency }: AccountListProps) {
             </div>
             {utilization > 30 && (
               <div className="text-xs text-red-600 font-medium">
-                ⚠ Over 30% utilization
+                Over 30% utilization
               </div>
             )}
           </>
+        )}
+        {outstanding > 0 && (
+          <CreditCardPaymentDialog
+            accounts={accounts}
+            currency={currency}
+            cardAccountId={account.id}
+          />
         )}
       </div>
     );
@@ -500,9 +520,15 @@ export function AccountList({ accounts, currency }: AccountListProps) {
       <Dialog open={showUpdateDialog} onOpenChange={setShowUpdateDialog}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Update Balance</DialogTitle>
+            <DialogTitle>
+              {selectedAccount?.type === "CREDIT_CARD"
+                ? "Reconcile card outstanding"
+                : "Update Balance"}
+            </DialogTitle>
             <DialogDescription>
-              Update the current balance for {selectedAccount?.name}
+              {selectedAccount?.type === "CREDIT_CARD"
+                ? `Use this only to reconcile ${selectedAccount.name} with the issuer. Use Pay card to record a bill payment.`
+                : `Update the current balance for ${selectedAccount?.name}`}
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
@@ -513,7 +539,11 @@ export function AccountList({ accounts, currency }: AccountListProps) {
               </div>
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="newBalance">New Balance *</Label>
+              <Label htmlFor="newBalance">
+                {selectedAccount?.type === "CREDIT_CARD"
+                  ? "Current outstanding *"
+                  : "New Balance *"}
+              </Label>
               <div className="relative">
                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
                   {currencySymbol}

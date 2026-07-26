@@ -4,6 +4,11 @@ import { auth } from "@clerk/nextjs/server";
 import { db } from "@/lib/db";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
+import {
+  getCreditCardCredit,
+  getCreditCardOutstanding,
+  getNetWorthContribution,
+} from "@/lib/accounting";
 
 const ACCOUNT_TYPES = [
   "BANK",
@@ -387,9 +392,15 @@ export async function getAccountStats() {
   let totalWallet = 0;
   let totalCash = 0;
   let totalCards = 0;
+  let totalDebitCardBalance = 0;
+  let totalCreditCardOutstanding = 0;
+  let totalCardCredit = 0;
   let totalOther = 0;
+  let totalNetWorth = 0;
 
   for (const account of accounts) {
+    totalNetWorth += getNetWorthContribution(account.type, account.currentBalance);
+
     switch (account.type) {
       case "BANK":
         totalBankBalance += account.currentBalance;
@@ -404,8 +415,13 @@ export async function getAccountStats() {
         totalCash += account.currentBalance;
         break;
       case "CREDIT_CARD":
+        totalCards += account.currentBalance;
+        totalCreditCardOutstanding += getCreditCardOutstanding(account.currentBalance);
+        totalCardCredit += getCreditCardCredit(account.currentBalance);
+        break;
       case "DEBIT_CARD":
         totalCards += account.currentBalance;
+        totalDebitCardBalance += account.currentBalance;
         break;
       case "OTHER":
         totalOther += account.currentBalance;
@@ -419,8 +435,20 @@ export async function getAccountStats() {
     totalWallet,
     totalCash,
     totalCards,
+    totalDebitCardBalance,
+    totalCreditCardOutstanding,
+    totalCardCredit,
     totalOther,
-    totalNetWorth: totalBankBalance + totalInvestments + totalWallet + totalCash + totalOther, // Cards excluded from net worth
+    totalAssets:
+      totalBankBalance +
+      totalInvestments +
+      totalWallet +
+      totalCash +
+      totalDebitCardBalance +
+      totalOther +
+      totalCardCredit,
+    totalLiabilities: totalCreditCardOutstanding,
+    totalNetWorth,
     accountCount: accounts.length,
   };
 }

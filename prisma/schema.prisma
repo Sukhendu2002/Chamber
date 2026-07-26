@@ -206,21 +206,31 @@ model Account {
 }
 
 model Transfer {
-  id            String   @id @default(uuid())
-  userId        String   // Clerk User ID
-  fromAccountId String
-  toAccountId   String
-  amount        Float
-  note          String?
-  date          DateTime @default(now())
-  fromAccount   Account  @relation("TransferFrom", fields: [fromAccountId], references: [id], onDelete: Restrict)
-  toAccount     Account  @relation("TransferTo", fields: [toAccountId], references: [id], onDelete: Restrict)
-  createdAt     DateTime @default(now())
+  id             String       @id @default(uuid())
+  userId         String       // Clerk User ID
+  fromAccountId  String
+  toAccountId    String
+  amount         Float
+  kind           TransferKind @default(ACCOUNT_TRANSFER)
+  idempotencyKey String?
+  note           String?
+  date           DateTime     @default(now())
+  fromAccount    Account      @relation("TransferFrom", fields: [fromAccountId], references: [id], onDelete: Restrict)
+  toAccount      Account      @relation("TransferTo", fields: [toAccountId], references: [id], onDelete: Restrict)
+  createdAt      DateTime     @default(now())
 
   @@index([userId])
   @@index([fromAccountId])
   @@index([toAccountId])
   @@index([date])
+  @@index([kind])
+  @@unique([userId, idempotencyKey])
+}
+
+enum TransferKind {
+  ACCOUNT_TRANSFER
+  CREDIT_CARD_PAYMENT
+  CASH_ADVANCE
 }
 
 model BalanceHistory {

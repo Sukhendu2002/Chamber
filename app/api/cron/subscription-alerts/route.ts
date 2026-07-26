@@ -33,10 +33,14 @@ async function sendTelegramMessage(chatId: string, text: string) {
 
 export async function GET(request: NextRequest) {
  // Verify cron secret to prevent unauthorized access
- const authHeader = request.headers.get("authorization");
  const cronSecret = process.env.CRON_SECRET;
+ if (!cronSecret) {
+ console.error("CRON_SECRET not configured — cron endpoint disabled");
+ return NextResponse.json({ error: "Server misconfiguration" }, { status: 500 });
+ }
 
- if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
+ const authHeader = request.headers.get("authorization");
+ if (authHeader !== `Bearer ${cronSecret}`) {
  return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
  }
 
@@ -146,7 +150,7 @@ export async function GET(request: NextRequest) {
  const topCats = Object.entries(categoryMap)
  .sort((a, b) => b[1] - a[1])
  .slice(0, 3)
- .map(([cat, amt]) => ` • ${cat}: ₹${amt.toFixed(0)}`)
+ .map(([cat, amt]) => ` • ${sanitizeTelegramHtml(cat)}: ₹${amt.toFixed(0)}`)
  .join("\n");
 
  const monthName = now.toLocaleDateString("en-US", { month: "long" });

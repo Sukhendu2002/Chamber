@@ -29,15 +29,17 @@ const UpdateUserSettingsSchema = z.object({
 });
 
 // Free exchange rate API (no API key needed for basic usage)
+// Throws on failure to prevent silent data corruption.
 async function getExchangeRate(from: string, to: string): Promise<number> {
-  try {
-    const response = await fetch(`https://api.exchangerate-api.com/v4/latest/${from}`);
-    const data = await response.json();
-    return data.rates[to] || 1;
-  } catch (error) {
-    console.error("Failed to fetch exchange rate:", error);
-    return 1; // Fallback to 1:1 if API fails
+  const response = await fetch(`https://api.exchangerate-api.com/v4/latest/${from}`);
+  if (!response.ok) {
+    throw new Error(`Exchange rate API returned ${response.status}`);
   }
+  const data = await response.json();
+  if (!data.rates?.[to]) {
+    throw new Error(`No rate for ${from} → ${to}`);
+  }
+  return data.rates[to];
 }
 
 // Cached settings fetch
@@ -106,48 +108,61 @@ export async function updateUserSettings(input: {
 
   const oldCurrency = currentSettings?.currency || "INR";
   const newCurrency = validated.currency;
+  let exchangeRate: number | null = null;
 
   // If currency is changing, convert all expenses
   if (newCurrency && newCurrency !== oldCurrency) {
-    const exchangeRate = await getExchangeRate(oldCurrency, newCurrency);
-
-    // Get all user's expenses
-    const expenses = await db.expense.findMany({
-      where: { userId },
-    });
-
-    // Update each expense with converted amount
-    for (const expense of expenses) {
-      const convertedAmount = Math.round(expense.amount * exchangeRate * 100) / 100;
-      await db.expense.update({
-        where: { id: expense.id },
-        data: {
-          amount: convertedAmount,
-          metadata: {
-            ...((expense.metadata as object) || {}),
-            originalAmount: expense.amount,
-            originalCurrency: oldCurrency,
-            exchangeRate,
-            convertedAt: new Date().toISOString(),
-          },
-        },
-      });
+    try {
+      exchangeRate = await getExchangeRate(oldCurrency, newCurrency);
+    } catch (error) {
+      console.error("Currency conversion failed:", error);
+      throw new Error(
+        `Failed to convert from ${oldCurrency} to ${newCurrency}. ` +
+        "Exchange rate API is unavailable. Please try again later."
+      );
     }
+
   }
 
-  const settings = await db.userSettings.upsert({
-    where: { userId },
-    update: validated,
-    create: {
-      userId,
-      monthlyBudget: validated.monthlyBudget || 0,
-      currency: validated.currency || "INR",
-      timezone: validated.timezone || "Asia/Kolkata",
-      forecastHorizonMonths: validated.forecastHorizonMonths || 6,
-      savingsTargetPercent: validated.savingsTargetPercent || 20,
-      monthlyIncome: validated.monthlyIncome || 0,
-      salaryDay: validated.salaryDay || 1,
-    },
+  const settings = await db.$transaction(async (tx) => {
+    if (exchangeRate !== null) {
+      const expenses = await tx.expense.findMany({
+        where: { userId },
+      });
+      const convertedAt = new Date().toISOString();
+
+      for (const expense of expenses) {
+        const convertedAmount = Math.round(expense.amount * exchangeRate * 100) / 100;
+        await tx.expense.update({
+          where: { id: expense.id },
+          data: {
+            amount: convertedAmount,
+            metadata: {
+              ...((expense.metadata as object) || {}),
+              originalAmount: expense.amount,
+              originalCurrency: oldCurrency,
+              exchangeRate,
+              convertedAt,
+            },
+          },
+        });
+      }
+    }
+
+    return tx.userSettings.upsert({
+      where: { userId },
+      update: validated,
+      create: {
+        userId,
+        monthlyBudget: validated.monthlyBudget || 0,
+        currency: validated.currency || "INR",
+        timezone: validated.timezone || "Asia/Kolkata",
+        forecastHorizonMonths: validated.forecastHorizonMonths || 6,
+        savingsTargetPercent: validated.savingsTargetPercent || 20,
+        monthlyIncome: validated.monthlyIncome || 0,
+        salaryDay: validated.salaryDay || 1,
+      },
+    });
   });
 
   revalidateTag("user-settings", "max"); // Invalidate cached settings with SWR behavior
@@ -213,10 +228,13 @@ export async function exportExpensesCSV() {
   const { userId } = await auth();
   if (!userId) throw new Error("Unauthorized");
 
-  const expenses = await db.expense.findMany({
+  const expenseRecords = await db.expense.findMany({
     where: { userId },
     orderBy: { date: "desc" },
+    take: 10001,
   });
+  const expensesTruncated = expenseRecords.length > 10000;
+  const expenses = expenseRecords.slice(0, 10000);
 
   const subscriptions = await db.subscription.findMany({
     where: { userId },
@@ -225,7 +243,7 @@ export async function exportExpensesCSV() {
 
   // Create CSV for expenses
   const expenseHeaders = ["Date", "Description", "Merchant", "Category", "Amount", "Payment Method", "Source", "Receipt URLs"];
-  const expenseRows: string[][] = [];
+  const csvExpenseRows: string[][] = [];
   for (const e of expenses) {
     // Combine legacy receiptUrl and new receiptUrls array
     const receipts: string[] = [...(e.receiptUrls || [])];
@@ -235,7 +253,7 @@ export async function exportExpensesCSV() {
     // Generate full URLs for receipts (they need to be accessed via the API)
     const receiptLinks = receipts.map((_: string, idx: number) => `/api/receipt/${e.id}?index=${idx}`).join("; ");
 
-    expenseRows.push([
+    csvExpenseRows.push([
       new Date(e.date).toISOString().split("T")[0],
       e.description || "",
       e.merchant || "",
@@ -249,7 +267,7 @@ export async function exportExpensesCSV() {
 
   const expenseCSV = [
     expenseHeaders.join(","),
-    ...expenseRows.map((row: string[]) => row.map((cell: string) => `"${cell.replace(/"/g, '""')}"`).join(",")),
+    ...csvExpenseRows.map((row: string[]) => row.map((cell: string) => `"${cell.replace(/"/g, '""')}"`).join(",")),
   ].join("\n");
 
   // Create CSV for subscriptions
@@ -275,6 +293,8 @@ export async function exportExpensesCSV() {
   return {
     expenses: expenseCSV,
     subscriptions: subscriptionCSV,
+    expensesTruncated,
+    exportedExpenseCount: expenses.length,
   };
 }
 

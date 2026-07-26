@@ -9,16 +9,9 @@ const nextConfig: NextConfig = {
           {
             key: "Content-Security-Policy",
             value:
-              "default-src 'self'; " +
-              "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://chamber.vercel.app; " +
-              "style-src 'self' 'unsafe-inline'; " +
-              "img-src 'self' data: blob: https:; " +
-              "font-src 'self' data:; " +
-              "connect-src 'self' https://api.telegram.org https://openrouter.ai https://api.exchangerate-api.com wss://chamber.vercel.app; " +
-              "frame-src 'self' https://chamber.vercel.app; " +
               "object-src 'none'; " +
               "base-uri 'self'; " +
-              "form-action 'self';",
+              "frame-ancestors 'self';",
           },
           {
             key: "X-Content-Type-Options",
@@ -34,8 +27,7 @@ const nextConfig: NextConfig = {
           },
           {
             key: "Permissions-Policy",
-            value:
-              "camera=(), microphone=(), geolocation=(), payment=(), usb=()",
+            value: "geolocation=(), payment=(), usb=()",
           },
         ],
       },

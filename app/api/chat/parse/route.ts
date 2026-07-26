@@ -3,6 +3,10 @@ import { auth } from "@clerk/nextjs/server";
 import { parseExpenseWithAI, parseReceiptWithVision, parsePDFWithVision } from "@/lib/ai";
 import { db } from "@/lib/db";
 import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
+import {
+    getSafeUploadExtension,
+    MAX_UPLOAD_SIZE_BYTES,
+} from "@/lib/sanitize";
 
 
 function getR2Client() {
@@ -43,8 +47,25 @@ export async function POST(request: NextRequest) {
         }
 
         if (type === "image" && imageBase64) {
+            const imageMimeType = typeof mimeType === "string" ? mimeType : "image/jpeg";
+            const extension = getSafeUploadExtension(imageMimeType);
+            if (!extension || extension === "pdf") {
+                return NextResponse.json(
+                    { error: "Only JPEG, PNG, and WebP images are supported" },
+                    { status: 400 }
+                );
+            }
+
+            const buffer = Buffer.from(imageBase64, "base64");
+            if (buffer.length > MAX_UPLOAD_SIZE_BYTES) {
+                return NextResponse.json(
+                    { error: "File exceeds the 10 MB limit" },
+                    { status: 413 }
+                );
+            }
+
             // Parse image receipt — uses GPT-4.1 Nano vision
-            const result = await parseReceiptWithVision(imageBase64, mimeType || "image/jpeg", caption, currency);
+            const result = await parseReceiptWithVision(imageBase64, imageMimeType, caption, currency);
 
             // Upload image to R2 if parsing succeeded
             let receiptUrl: string | undefined;
@@ -52,16 +73,15 @@ export async function POST(request: NextRequest) {
                 try {
                     const r2Client = getR2Client();
                     const bucketName = process.env.R2_BUCKET_NAME;
-                    const buffer = Buffer.from(imageBase64, "base64");
-                    const ext = (mimeType || "image/jpeg").split("/")[1]?.replace(/[^a-zA-Z0-9]/g, "").slice(0, 10) || "jpg";
-                    const key = `receipts/${userId}/${Date.now()}.${ext}`;
+                    if (!bucketName) throw new Error("R2 bucket not configured");
+                    const key = `receipts/${userId}/${Date.now()}.${extension}`;
 
                     await r2Client.send(
                         new PutObjectCommand({
                             Bucket: bucketName,
                             Key: key,
                             Body: buffer,
-                            ContentType: mimeType || "image/jpeg",
+                            ContentType: imageMimeType,
                         })
                     );
                     receiptUrl = key;
@@ -74,6 +94,14 @@ export async function POST(request: NextRequest) {
         }
 
         if (type === "pdf" && imageBase64) {
+            const buffer = Buffer.from(imageBase64, "base64");
+            if (buffer.length > MAX_UPLOAD_SIZE_BYTES) {
+                return NextResponse.json(
+                    { error: "File exceeds the 10 MB limit" },
+                    { status: 413 }
+                );
+            }
+
             // Parse PDF — uses GPT-4.1 Nano with file-parser plugin
             const result = await parsePDFWithVision(imageBase64, caption, currency);
 
@@ -83,7 +111,7 @@ export async function POST(request: NextRequest) {
                 try {
                     const r2Client = getR2Client();
                     const bucketName = process.env.R2_BUCKET_NAME;
-                    const buffer = Buffer.from(imageBase64, "base64");
+                    if (!bucketName) throw new Error("R2 bucket not configured");
                     const key = `receipts/${userId}/${Date.now()}.pdf`;
 
                     await r2Client.send(

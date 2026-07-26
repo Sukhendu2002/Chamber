@@ -30,6 +30,8 @@ type AccountOption = {
   id: string;
   name: string;
   type: string;
+  currentBalance: number;
+  creditLimit: number | null;
 };
 
 const categories = [
@@ -42,6 +44,7 @@ const categories = [
   "Education",
   "Investments",
   "Subscription",
+  "Lent Money",
   "General",
 ] as const;
 
@@ -57,9 +60,13 @@ const billingCycles = [
 
 type AddExpenseDialogProps = {
   accounts?: AccountOption[];
+  currency?: string;
 };
 
-export function AddExpenseDialog({ accounts = [] }: AddExpenseDialogProps) {
+export function AddExpenseDialog({
+  accounts = [],
+  currency = "INR",
+}: AddExpenseDialogProps) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -70,8 +77,23 @@ export function AddExpenseDialog({ accounts = [] }: AddExpenseDialogProps) {
   const [date, setDate] = useState(toLocalDateString());
   const [selectedAccountId, setSelectedAccountId] = useState<string>("");
 
-  // Derive account name for display/label
-  const selectedAccountName = accounts.find(a => a.id === selectedAccountId)?.name;
+  const selectedAccount = accounts.find((account) => account.id === selectedAccountId);
+  const selectedAccountName = selectedAccount?.name;
+  const parsedAmount = Number(amount);
+  const availableCredit =
+    selectedAccount?.type === "CREDIT_CARD" && selectedAccount.creditLimit !== null
+      ? selectedAccount.creditLimit - selectedAccount.currentBalance
+      : null;
+  const exceedsAvailableCredit =
+    availableCredit !== null &&
+    Number.isFinite(parsedAmount) &&
+    parsedAmount > availableCredit;
+  const formatCurrency = (value: number) =>
+    new Intl.NumberFormat("en-IN", {
+      style: "currency",
+      currency,
+      maximumFractionDigits: 2,
+    }).format(value);
   const [receipt, setReceipt] = useState<File | null>(null);
   const [tags, setTags] = useState<string[]>([]);
   const [tagSuggestions, setTagSuggestions] = useState<string[]>([]);
@@ -93,6 +115,7 @@ export function AddExpenseDialog({ accounts = [] }: AddExpenseDialogProps) {
     e.preventDefault();
     if (!amount || parseFloat(amount) <= 0) return;
     if (isSubscription && !merchant) return; // Subscription needs a name
+    if (exceedsAvailableCredit) return;
 
     setLoading(true);
     try {
@@ -257,21 +280,46 @@ export function AddExpenseDialog({ accounts = [] }: AddExpenseDialogProps) {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="paymentMethod">Payment Method</Label>
+              <Label htmlFor="paymentMethod">Paid with</Label>
               <Select value={selectedAccountId} onValueChange={setSelectedAccountId}>
-                <SelectTrigger>
+                <SelectTrigger id="paymentMethod">
                   <SelectValue placeholder="Select account" />
                 </SelectTrigger>
                 <SelectContent>
                   {accounts.map((account) => (
                     <SelectItem key={account.id} value={account.id}>
                       {account.name}
+                      {account.type === "CREDIT_CARD" ? " · Credit card" : ""}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
           </div>
+
+          {selectedAccount?.type === "CREDIT_CARD" && (
+            <div
+              className={`rounded-md border p-3 text-sm ${
+                exceedsAvailableCredit
+                  ? "border-destructive/40 bg-destructive/10 text-destructive"
+                  : "border-blue-500/30 bg-blue-500/10 text-blue-700 dark:text-blue-300"
+              }`}
+            >
+              <p>
+                This purchase increases your card outstanding. Your bank balance changes
+                only when you pay the card.
+              </p>
+              {availableCredit !== null && (
+                <p className="mt-1 font-medium">
+                  Available after purchase:{" "}
+                  {formatCurrency(
+                    availableCredit - (Number.isFinite(parsedAmount) ? parsedAmount : 0),
+                  )}
+                  {exceedsAvailableCredit ? " — expense exceeds the card limit" : ""}
+                </p>
+              )}
+            </div>
+          )}
           
           {isSubscription ? (
             <div className="grid grid-cols-2 gap-4">
@@ -341,7 +389,10 @@ export function AddExpenseDialog({ accounts = [] }: AddExpenseDialogProps) {
             >
               Cancel
             </Button>
-            <Button type="submit" disabled={loading || (isSubscription && !merchant)}>
+            <Button
+              type="submit"
+              disabled={loading || (isSubscription && !merchant) || exceedsAvailableCredit}
+            >
               {loading ? "Adding..." : isSubscription ? "Add Subscription" : "Add Expense"}
             </Button>
           </div>

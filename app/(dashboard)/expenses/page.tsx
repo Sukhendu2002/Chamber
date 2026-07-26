@@ -73,7 +73,16 @@ export default async function ExpensesPage({
             Manage and track all your expenses
           </p>
         </div>
-        <AddExpenseDialog accounts={accounts.map(a => ({ id: a.id, name: a.name, type: a.type }))} />
+        <AddExpenseDialog
+          currency={settings.currency}
+          accounts={accounts.map((account) => ({
+            id: account.id,
+            name: account.name,
+            type: account.type,
+            currentBalance: account.currentBalance,
+            creditLimit: account.creditLimit,
+          }))}
+        />
       </div>
 
       {/* Filters */}

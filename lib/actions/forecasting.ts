@@ -3,6 +3,7 @@
 import { auth } from "@clerk/nextjs/server";
 import { db } from "@/lib/db";
 import { getUserSettings } from "@/lib/actions/settings";
+import { getNetWorthContribution } from "@/lib/accounting";
 
 export type ForecastData = {
   months: string[];
@@ -78,7 +79,11 @@ async function getForecastInputs(userId: string): Promise<ForecastInputs> {
   const accounts = await db.account.findMany({
     where: { userId, isActive: true, includeInNetWorth: true },
   });
-  const currentTotalBalance = accounts.reduce((sum, a) => sum + a.currentBalance, 0);
+  const currentTotalBalance = accounts.reduce(
+    (sum, account) =>
+      sum + getNetWorthContribution(account.type, account.currentBalance),
+    0,
+  );
 
   // Get last 6 months of expense data for trend analysis
   const now = new Date();

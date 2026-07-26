@@ -108,10 +108,10 @@ export async function updateUserSettings(input: {
 
   const oldCurrency = currentSettings?.currency || "INR";
   const newCurrency = validated.currency;
+  let exchangeRate: number | null = null;
 
   // If currency is changing, convert all expenses
   if (newCurrency && newCurrency !== oldCurrency) {
-    let exchangeRate: number;
     try {
       exchangeRate = await getExchangeRate(oldCurrency, newCurrency);
     } catch (error) {
@@ -122,43 +122,47 @@ export async function updateUserSettings(input: {
       );
     }
 
-    // Get all user's expenses
-    const expenses = await db.expense.findMany({
-      where: { userId },
-    });
-
-    // Update each expense with converted amount
-    for (const expense of expenses) {
-      const convertedAmount = Math.round(expense.amount * exchangeRate * 100) / 100;
-      await db.expense.update({
-        where: { id: expense.id },
-        data: {
-          amount: convertedAmount,
-          metadata: {
-            ...((expense.metadata as object) || {}),
-            originalAmount: expense.amount,
-            originalCurrency: oldCurrency,
-            exchangeRate,
-            convertedAt: new Date().toISOString(),
-          },
-        },
-      });
-    }
   }
 
-  const settings = await db.userSettings.upsert({
-    where: { userId },
-    update: validated,
-    create: {
-      userId,
-      monthlyBudget: validated.monthlyBudget || 0,
-      currency: validated.currency || "INR",
-      timezone: validated.timezone || "Asia/Kolkata",
-      forecastHorizonMonths: validated.forecastHorizonMonths || 6,
-      savingsTargetPercent: validated.savingsTargetPercent || 20,
-      monthlyIncome: validated.monthlyIncome || 0,
-      salaryDay: validated.salaryDay || 1,
-    },
+  const settings = await db.$transaction(async (tx) => {
+    if (exchangeRate !== null) {
+      const expenses = await tx.expense.findMany({
+        where: { userId },
+      });
+      const convertedAt = new Date().toISOString();
+
+      for (const expense of expenses) {
+        const convertedAmount = Math.round(expense.amount * exchangeRate * 100) / 100;
+        await tx.expense.update({
+          where: { id: expense.id },
+          data: {
+            amount: convertedAmount,
+            metadata: {
+              ...((expense.metadata as object) || {}),
+              originalAmount: expense.amount,
+              originalCurrency: oldCurrency,
+              exchangeRate,
+              convertedAt,
+            },
+          },
+        });
+      }
+    }
+
+    return tx.userSettings.upsert({
+      where: { userId },
+      update: validated,
+      create: {
+        userId,
+        monthlyBudget: validated.monthlyBudget || 0,
+        currency: validated.currency || "INR",
+        timezone: validated.timezone || "Asia/Kolkata",
+        forecastHorizonMonths: validated.forecastHorizonMonths || 6,
+        savingsTargetPercent: validated.savingsTargetPercent || 20,
+        monthlyIncome: validated.monthlyIncome || 0,
+        salaryDay: validated.salaryDay || 1,
+      },
+    });
   });
 
   revalidateTag("user-settings", "max"); // Invalidate cached settings with SWR behavior
@@ -224,12 +228,13 @@ export async function exportExpensesCSV() {
   const { userId } = await auth();
   if (!userId) throw new Error("Unauthorized");
 
-  // ponytail: cap at 10k rows to avoid OOM on large datasets
-  const expenses = await db.expense.findMany({
+  const expenseRecords = await db.expense.findMany({
     where: { userId },
     orderBy: { date: "desc" },
-    take: 10000,
+    take: 10001,
   });
+  const expensesTruncated = expenseRecords.length > 10000;
+  const expenses = expenseRecords.slice(0, 10000);
 
   const subscriptions = await db.subscription.findMany({
     where: { userId },
@@ -238,7 +243,7 @@ export async function exportExpensesCSV() {
 
   // Create CSV for expenses
   const expenseHeaders = ["Date", "Description", "Merchant", "Category", "Amount", "Payment Method", "Source", "Receipt URLs"];
-  const expenseRows: string[][] = [];
+  const csvExpenseRows: string[][] = [];
   for (const e of expenses) {
     // Combine legacy receiptUrl and new receiptUrls array
     const receipts: string[] = [...(e.receiptUrls || [])];
@@ -248,7 +253,7 @@ export async function exportExpensesCSV() {
     // Generate full URLs for receipts (they need to be accessed via the API)
     const receiptLinks = receipts.map((_: string, idx: number) => `/api/receipt/${e.id}?index=${idx}`).join("; ");
 
-    expenseRows.push([
+    csvExpenseRows.push([
       new Date(e.date).toISOString().split("T")[0],
       e.description || "",
       e.merchant || "",
@@ -262,7 +267,7 @@ export async function exportExpensesCSV() {
 
   const expenseCSV = [
     expenseHeaders.join(","),
-    ...expenseRows.map((row: string[]) => row.map((cell: string) => `"${cell.replace(/"/g, '""')}"`).join(",")),
+    ...csvExpenseRows.map((row: string[]) => row.map((cell: string) => `"${cell.replace(/"/g, '""')}"`).join(",")),
   ].join("\n");
 
   // Create CSV for subscriptions
@@ -288,6 +293,8 @@ export async function exportExpensesCSV() {
   return {
     expenses: expenseCSV,
     subscriptions: subscriptionCSV,
+    expensesTruncated,
+    exportedExpenseCount: expenses.length,
   };
 }
 

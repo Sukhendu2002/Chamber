@@ -43,6 +43,7 @@ const CATEGORIES = [
     "Education",
     "Investments",
     "Subscription",
+    "Lent Money",
     "General",
 ];
 

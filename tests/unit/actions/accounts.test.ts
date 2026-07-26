@@ -168,6 +168,7 @@ describe("Account Actions", () => {
                 { type: "INVESTMENT", currentBalance: 50000, isActive: true },
                 { type: "WALLET", currentBalance: 5000, isActive: true },
                 { type: "CASH", currentBalance: 2000, isActive: true },
+                { type: "CREDIT_CARD", currentBalance: 7000, isActive: true },
             ];
 
             mockDb.account.findMany.mockResolvedValue(mockAccounts);
@@ -176,7 +177,10 @@ describe("Account Actions", () => {
             const { getAccountStats } = await import("@/lib/actions/accounts");
             const result = await getAccountStats();
 
-            expect(result.totalNetWorth).toBe(87000);
+            expect(result.totalNetWorth).toBe(80000);
+            expect(result.totalAssets).toBe(87000);
+            expect(result.totalLiabilities).toBe(7000);
+            expect(result.totalCreditCardOutstanding).toBe(7000);
             expect(result.totalBankBalance).toBe(30000);
             expect(result.totalInvestments).toBe(50000);
         });

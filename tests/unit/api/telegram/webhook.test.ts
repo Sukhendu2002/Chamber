@@ -528,6 +528,13 @@ describe("Telegram Webhook", () => {
                     currentBalance: 125000,
                     isActive: true,
                 },
+                {
+                    id: "acc-4",
+                    name: "Rewards Card",
+                    type: "CREDIT_CARD",
+                    currentBalance: 10000,
+                    isActive: true,
+                },
             ]);
 
             const { POST } = await import("@/app/api/telegram/webhook/route");
@@ -565,8 +572,10 @@ describe("Telegram Webhook", () => {
             expect(body.text).toContain("₹2150.00");
             expect(body.text).toContain("Investments");
             expect(body.text).toContain("₹125000.00");
-            expect(body.text).toContain("Total Balance");
-            expect(body.text).toContain("₹172380.00");
+            expect(body.text).toContain("Rewards Card");
+            expect(body.text).toContain("₹10000.00 outstanding");
+            expect(body.text).toContain("Net Worth");
+            expect(body.text).toContain("₹162380.00");
         });
 
         it("should use USD currency for accounts when set", async () => {

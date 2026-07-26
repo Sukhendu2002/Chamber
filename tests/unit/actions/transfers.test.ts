@@ -112,6 +112,7 @@ describe("Transfer Actions", () => {
                         fromAccountId: UUIDS.account1,
                         toAccountId: UUIDS.account2,
                         amount: 2000,
+                        kind: "ACCOUNT_TRANSFER",
                     }),
                 })
             );
@@ -194,6 +195,32 @@ describe("Transfer Actions", () => {
             await expect(
                 createTransfer({ fromAccountId: UUIDS.account1, toAccountId: UUIDS.account2, amount: 500 })
             ).rejects.toThrow("Insufficient funds");
+
+            expect(txMock.transfer.create).not.toHaveBeenCalled();
+        });
+
+        it("should reject credit cards in the generic transfer flow", async () => {
+            txMock.account.findFirst
+                .mockResolvedValueOnce(mockFromAccount)
+                .mockResolvedValueOnce({
+                    ...mockToAccount,
+                    type: "CREDIT_CARD",
+                    currentBalance: 2000,
+                    creditLimit: 50000,
+                });
+
+            vi.resetModules();
+            const { createTransfer } = await import("@/lib/actions/transfers");
+
+            await expect(
+                createTransfer({
+                    fromAccountId: UUIDS.account1,
+                    toAccountId: UUIDS.account2,
+                    amount: 500,
+                })
+            ).rejects.toThrow(
+                "Use the dedicated credit card payment flow for credit card transfers"
+            );
 
             expect(txMock.transfer.create).not.toHaveBeenCalled();
         });

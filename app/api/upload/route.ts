@@ -2,6 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 import { db } from "@/lib/db";
+import {
+  getSafeUploadExtension,
+  MAX_UPLOAD_SIZE_BYTES,
+} from "@/lib/sanitize";
 
 function getR2Client() {
   const accountId = process.env.R2_ACCOUNT_ID;
@@ -30,14 +34,29 @@ export async function POST(request: NextRequest) {
 
   try {
     const formData = await request.formData();
-    const file = formData.get("file") as File;
+    const file = formData.get("file");
     const uploadType = formData.get("type") as string || "expense";
     const expenseId = formData.get("expenseId") as string;
     const loanId = formData.get("loanId") as string;
     const repaymentId = formData.get("repaymentId") as string;
 
-    if (!file) {
+    if (!(file instanceof File)) {
       return NextResponse.json({ error: "No file provided" }, { status: 400 });
+    }
+
+    if (file.size > MAX_UPLOAD_SIZE_BYTES) {
+      return NextResponse.json(
+        { error: "File exceeds the 10 MB limit" },
+        { status: 413 }
+      );
+    }
+
+    const ext = getSafeUploadExtension(file.type);
+    if (!ext) {
+      return NextResponse.json(
+        { error: "Only JPEG, PNG, WebP, and PDF files are supported" },
+        { status: 400 }
+      );
     }
 
     // Convert file to buffer
@@ -47,7 +66,10 @@ export async function POST(request: NextRequest) {
     // Upload to R2
     const r2Client = getR2Client();
     const bucketName = process.env.R2_BUCKET_NAME;
-    const ext = file.name.split(".").pop() || "jpg";
+    if (!bucketName) {
+      throw new Error("R2 bucket not configured");
+    }
+
     let key: string;
 
     if (uploadType === "loan" && loanId) {
@@ -132,9 +154,8 @@ export async function POST(request: NextRequest) {
     }
   } catch (error) {
     console.error("Upload error:", error);
-    const errorMessage = error instanceof Error ? error.message : "Unknown error";
     return NextResponse.json(
-      { error: "Failed to upload file", details: errorMessage },
+      { error: "Failed to upload file" },
       { status: 500 }
     );
   }

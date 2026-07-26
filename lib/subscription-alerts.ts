@@ -1,5 +1,5 @@
 import { db } from "@/lib/db";
-import { escapeHtml } from "@/lib/utils";
+import { sanitizeTelegramHtml } from "@/lib/sanitize";
 
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 
@@ -94,10 +94,10 @@ export async function checkAndSendSubscriptionAlerts(userId: string) {
  // Send alert
  const message =
  `<b>Subscription Reminder</b>\n\n` +
- `<b>${escapeHtml(sub.name)}</b>\n` +
+ `<b>${sanitizeTelegramHtml(sub.name)}</b>\n` +
  `Amount: ₹${sub.amount.toFixed(2)}\n` +
  `Due: ${daysText} (${billingDate.toLocaleDateString("en-IN")})\n` +
- `${sub.paymentMethod ? `Account: ${escapeHtml(sub.paymentMethod)}\n` : ""}` +
+ `${sub.paymentMethod ? `Account: ${sanitizeTelegramHtml(sub.paymentMethod)}\n` : ""}` +
  `\n<i>Manage at Chamber → Subscriptions</i>`;
 
  const sent = await sendTelegramMessage(userSettings.telegramChatId, message);

@@ -1,15 +1,17 @@
 import { getLoans, getLoanStats } from "@/lib/actions/loans";
 import { getUserSettings } from "@/lib/actions/settings";
+import { getAccounts } from "@/lib/actions/accounts";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { IconCash, IconCashOff, IconUsers, IconCheck } from "@tabler/icons-react";
 import { LoanList } from "@/components/loan-list";
 import { AddLoanDialog } from "@/components/add-loan-dialog";
 
 export default async function LoansPage() {
-  const [loans, stats, settings] = await Promise.all([
+  const [loans, stats, settings, accounts] = await Promise.all([
     getLoans(),
     getLoanStats(),
     getUserSettings(),
+    getAccounts(),
   ]);
 
   const formatCurrency = (amount: number) => {
@@ -29,7 +31,15 @@ export default async function LoansPage() {
             Track money you&apos;ve lent to others
           </p>
         </div>
-        <AddLoanDialog currency={settings.currency} />
+        <AddLoanDialog
+          currency={settings.currency}
+          accounts={accounts.map((a) => ({
+            id: a.id,
+            name: a.name,
+            type: a.type,
+            currentBalance: a.currentBalance,
+          }))}
+        />
       </div>
 
       {/* Stats Cards */}

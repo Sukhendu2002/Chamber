@@ -19,6 +19,7 @@ const EXPENSE_CATEGORIES = [
   "Education",
   "Investments",
   "Subscription",
+  "Lent Money",
   "General",
 ] as const;
 
@@ -308,7 +309,15 @@ export async function getExpenses(options?: z.infer<typeof GetExpensesOptionsSch
 
   const expenses = await db.expense.findMany({
     where,
-    include: { tags: { include: { tag: true } } },
+    include: {
+      tags: { include: { tag: true } },
+      loan: {
+        select: {
+          id: true,
+          borrowerName: true,
+        },
+      },
+    },
     orderBy: [
       { createdAt: "desc" },
       { id: "desc" },
@@ -410,6 +419,9 @@ export async function updateExpense(
     // Get existing expense to reverse old balance effect
     const existing = await tx.expense.findFirst({ where: { id: validatedId, userId } });
     if (!existing) throw new Error("Expense not found");
+    if (existing.loanId || existing.repaymentId) {
+      throw new Error("Loan-linked expenses must be managed from the loan");
+    }
 
     // Reverse old balance effect if expense was linked to an account
     if (existing.accountId) {
@@ -512,6 +524,9 @@ export async function deleteExpense(id: string, reverseBalance: boolean = true) 
     // Get expense to reverse balance effect
     const existing = await tx.expense.findFirst({ where: { id: validated.id, userId } });
     if (!existing) throw new Error("Expense not found");
+    if (existing.loanId || existing.repaymentId) {
+      throw new Error("Loan-linked expenses must be managed from the loan");
+    }
 
     // Reverse balance effect if linked to an account (only if requested)
     if (validated.reverseBalance && existing.accountId) {

@@ -44,6 +44,7 @@ const categories = [
   "Education",
   "Investments",
   "Subscription",
+  "Lent Money",
   "General",
 ] as const;
 

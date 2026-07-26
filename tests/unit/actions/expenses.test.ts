@@ -827,6 +827,7 @@ describe("Expense Validation", () => {
             "Education",
             "Investments",
             "Subscription",
+            "Lent Money",
             "General",
         ];
 

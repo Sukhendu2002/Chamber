@@ -18,8 +18,10 @@ const buildModelMock = () => ({
     create: vi.fn(),
     findMany: vi.fn(),
     findUnique: vi.fn(),
+    findUniqueOrThrow: vi.fn(),
     findFirst: vi.fn(),
     update: vi.fn(),
+    updateMany: vi.fn(),
     delete: vi.fn(),
     deleteMany: vi.fn(),
     aggregate: vi.fn(),
@@ -63,6 +65,7 @@ describe("Loan Actions", () => {
     beforeEach(() => {
         vi.clearAllMocks();
         setupTransactionMock();
+        mockDb.loan.updateMany.mockResolvedValue({ count: 1 });
     });
 
     describe("createLoan", () => {
@@ -124,7 +127,7 @@ describe("Loan Actions", () => {
             };
 
             mockDb.loan.create.mockResolvedValue(mockLoan);
-            mockDb.account.findUnique.mockResolvedValue(mockAccount);
+            mockDb.account.findFirst.mockResolvedValue(mockAccount);
             mockDb.expense.create.mockResolvedValue({ id: UUIDS.expense1, amount: 5000 });
             mockDb.account.update.mockResolvedValue({ ...mockAccount, currentBalance: 5000 });
             mockDb.balanceHistory.create.mockResolvedValue({ id: UUIDS.history1 });
@@ -181,7 +184,7 @@ describe("Loan Actions", () => {
             };
 
             mockDb.loan.create.mockResolvedValue(mockLoan);
-            mockDb.account.findUnique.mockResolvedValue(mockAccount);
+            mockDb.account.findFirst.mockResolvedValue(mockAccount);
             mockDb.expense.create.mockResolvedValue({ id: UUIDS.expense1, amount: 5000 });
             mockDb.account.update.mockResolvedValue({ ...mockAccount, currentBalance: 5000 });
             mockDb.balanceHistory.create.mockResolvedValue({ id: UUIDS.history1 });
@@ -202,6 +205,31 @@ describe("Loan Actions", () => {
                     data: { currentBalance: { increment: 5000 } },
                 })
             );
+        });
+
+        it("should reject an account that does not belong to the user", async () => {
+            mockDb.account.findFirst.mockResolvedValue(null);
+
+            vi.resetModules();
+            const { createLoan } = await import("@/lib/actions/loans");
+
+            await expect(
+                createLoan({
+                    borrowerName: "John Doe",
+                    amount: 5000,
+                    lendDate: new Date(),
+                    accountId: UUIDS.accountBank,
+                })
+            ).rejects.toThrow("Account not found");
+
+            expect(mockDb.loan.create).not.toHaveBeenCalled();
+            expect(mockDb.account.findFirst).toHaveBeenCalledWith({
+                where: {
+                    id: UUIDS.accountBank,
+                    userId: "test-user-id",
+                    isActive: true,
+                },
+            });
         });
     });
 
@@ -228,12 +256,6 @@ describe("Loan Actions", () => {
 
             mockDb.loan.findFirst.mockResolvedValue(mockLoan);
             mockDb.repayment.create.mockResolvedValue(mockRepayment);
-            mockDb.loan.update.mockResolvedValue({
-                ...mockLoan,
-                amountRepaid: 2000,
-                status: "PARTIAL",
-            });
-
             vi.resetModules();
             const { addRepayment } = await import("@/lib/actions/loans");
 
@@ -280,11 +302,10 @@ describe("Loan Actions", () => {
 
             mockDb.loan.findFirst.mockResolvedValue(mockLoan);
             mockDb.repayment.create.mockResolvedValue(mockRepayment);
-            mockDb.account.findUnique.mockResolvedValue(mockAccount);
+            mockDb.account.findFirst.mockResolvedValue(mockAccount);
             mockDb.expense.create.mockResolvedValue({ id: UUIDS.expense1, amount: -2000 });
             mockDb.account.update.mockResolvedValue({ ...mockAccount, currentBalance: 7000 });
             mockDb.balanceHistory.create.mockResolvedValue({ id: UUIDS.history1 });
-            mockDb.loan.update.mockResolvedValue({ ...mockLoan, amountRepaid: 2000, status: "PARTIAL" });
 
             vi.resetModules();
             const { addRepayment } = await import("@/lib/actions/loans");
@@ -344,11 +365,10 @@ describe("Loan Actions", () => {
 
             mockDb.loan.findFirst.mockResolvedValue(mockLoan);
             mockDb.repayment.create.mockResolvedValue(mockRepayment);
-            mockDb.account.findUnique.mockResolvedValue(mockAccount);
+            mockDb.account.findFirst.mockResolvedValue(mockAccount);
             mockDb.expense.create.mockResolvedValue({ id: UUIDS.expense1, amount: -2000 });
             mockDb.account.update.mockResolvedValue({ ...mockAccount, currentBalance: 3000 });
             mockDb.balanceHistory.create.mockResolvedValue({ id: UUIDS.history1 });
-            mockDb.loan.update.mockResolvedValue({ ...mockLoan, amountRepaid: 2000, status: "PARTIAL" });
 
             vi.resetModules();
             const { addRepayment } = await import("@/lib/actions/loans");
@@ -387,12 +407,6 @@ describe("Loan Actions", () => {
                 receiptUrls: [],
                 createdAt: new Date(),
             });
-            mockDb.loan.update.mockResolvedValue({
-                ...mockLoan,
-                amountRepaid: 5000,
-                status: "COMPLETED",
-            });
-
             vi.resetModules();
             const { addRepayment } = await import("@/lib/actions/loans");
 
@@ -402,13 +416,37 @@ describe("Loan Actions", () => {
                 date: new Date(),
             });
 
-            expect(mockDb.loan.update).toHaveBeenCalledWith(
+            expect(mockDb.loan.updateMany).toHaveBeenCalledWith(
                 expect.objectContaining({
                     data: expect.objectContaining({
                         status: "COMPLETED",
                     }),
                 })
             );
+        });
+
+        it("should reject a repayment above the outstanding balance", async () => {
+            mockDb.loan.findFirst.mockResolvedValue({
+                id: UUIDS.loan1,
+                userId: "test-user-id",
+                amount: 5000,
+                amountRepaid: 4500,
+                status: "PARTIAL",
+                accountId: null,
+            });
+
+            vi.resetModules();
+            const { addRepayment } = await import("@/lib/actions/loans");
+
+            await expect(
+                addRepayment({
+                    loanId: UUIDS.loan1,
+                    amount: 1000,
+                    date: new Date(),
+                })
+            ).rejects.toThrow("outstanding loan balance");
+
+            expect(mockDb.repayment.create).not.toHaveBeenCalled();
         });
     });
 
@@ -443,7 +481,7 @@ describe("Loan Actions", () => {
             mockDb.expense.findMany.mockResolvedValue([
                 { id: UUIDS.expense1, accountId: UUIDS.accountBank, amount: 5000, date: new Date() },
             ]);
-            mockDb.account.findUnique.mockResolvedValue({
+            mockDb.account.findFirst.mockResolvedValue({
                 id: UUIDS.accountBank,
                 type: "BANK",
                 currentBalance: 0,
@@ -475,7 +513,7 @@ describe("Loan Actions", () => {
                 { id: UUIDS.expense1, accountId: UUIDS.accountBank, amount: 5000, date: new Date() },
                 { id: UUIDS.expense2, accountId: UUIDS.accountBank, amount: -2000, date: new Date() },
             ]);
-            mockDb.account.findUnique.mockResolvedValue({
+            mockDb.account.findFirst.mockResolvedValue({
                 id: UUIDS.accountBank,
                 type: "BANK",
                 currentBalance: 3000,
@@ -526,13 +564,17 @@ describe("Loan Actions", () => {
                 amount: -2000,
                 date: new Date(),
             });
-            mockDb.account.findUnique.mockResolvedValue({
+            mockDb.account.findFirst.mockResolvedValue({
                 id: UUIDS.accountBank,
                 type: "BANK",
                 currentBalance: 7000,
             });
             mockDb.account.update.mockResolvedValue({ currentBalance: 5000 });
             mockDb.balanceHistory.create.mockResolvedValue({});
+            mockDb.loan.update.mockResolvedValue({
+                ...mockRepayment.loan,
+                amountRepaid: 0,
+            });
 
             vi.resetModules();
             const { deleteRepayment } = await import("@/lib/actions/loans");
@@ -573,6 +615,10 @@ describe("Loan Actions", () => {
 
             mockDb.repayment.findUnique.mockResolvedValue(mockRepayment);
             mockDb.expense.findFirst.mockResolvedValue(null);
+            mockDb.loan.update.mockResolvedValue({
+                ...mockRepayment.loan,
+                amountRepaid: 0,
+            });
 
             vi.resetModules();
             const { deleteRepayment } = await import("@/lib/actions/loans");

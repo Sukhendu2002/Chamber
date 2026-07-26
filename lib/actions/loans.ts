@@ -4,6 +4,7 @@ import { auth } from "@clerk/nextjs/server";
 import { db } from "@/lib/db";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
+import { getExpenseBalanceAdjustment, isCreditCard } from "@/lib/accounting";
 
 const LOAN_STATUSES = ["PENDING", "PARTIAL", "COMPLETED"] as const;
 
@@ -38,14 +39,52 @@ export type AddRepaymentInput = z.infer<typeof AddRepaymentSchema>;
 
 type TxClient = Parameters<Parameters<typeof db.$transaction>[0]>[0];
 
-// For credit cards, spending increases the outstanding balance.
-// For all other account types, spending decreases the balance.
-// Negative amounts (e.g., refunds) reverse the effect naturally.
-function getBalanceAdjustment(accountType: string, amount: number): number {
-  if (accountType === "CREDIT_CARD") {
-    return amount;
+interface LoanAccount {
+  id: string;
+  name: string;
+  type: string;
+  currentBalance: number;
+  creditLimit: number | null;
+}
+
+async function applyLoanExpenseToAccount(
+  tx: TxClient,
+  userId: string,
+  account: LoanAccount,
+  amount: number,
+) {
+  const adjustment = getExpenseBalanceAdjustment(account.type, amount);
+
+  if (
+    amount > 0 &&
+    isCreditCard(account.type) &&
+    typeof account.creditLimit === "number"
+  ) {
+    const result = await tx.account.updateMany({
+      where: {
+        id: account.id,
+        userId,
+        isActive: true,
+        currentBalance: {
+          lte: account.creditLimit - amount,
+        },
+      },
+      data: {
+        currentBalance: { increment: adjustment },
+      },
+    });
+
+    if (result.count !== 1) {
+      throw new Error("Loan exceeds the credit card's available credit");
+    }
+
+    return tx.account.findUniqueOrThrow({ where: { id: account.id } });
   }
-  return -amount;
+
+  return tx.account.update({
+    where: { id: account.id },
+    data: { currentBalance: { increment: adjustment } },
+  });
 }
 
 async function recordBalanceHistory(
@@ -72,6 +111,20 @@ export async function createLoan(input: CreateLoanInput) {
   const validated = CreateLoanSchema.parse(input);
 
   const loan = await db.$transaction(async (tx) => {
+    const account = validated.accountId
+      ? await tx.account.findFirst({
+          where: {
+            id: validated.accountId,
+            userId,
+            isActive: true,
+          },
+        })
+      : null;
+
+    if (validated.accountId && !account) {
+      throw new Error("Account not found");
+    }
+
     const created = await tx.loan.create({
       data: {
         userId,
@@ -85,35 +138,33 @@ export async function createLoan(input: CreateLoanInput) {
       },
     });
 
-    if (validated.accountId) {
-      const account = await tx.account.findUnique({ where: { id: validated.accountId } });
-      if (account) {
-        await tx.expense.create({
-          data: {
-            userId,
-            amount: validated.amount,
-            category: "Lent Money",
-            description: `Lent to ${validated.borrowerName}${validated.description ? ` — ${validated.description}` : ""}`,
-            date: validated.lendDate,
-            accountId: validated.accountId,
-            loanId: created.id,
-            paymentMethod: account.name,
-          },
-        });
+    if (validated.accountId && account) {
+      await tx.expense.create({
+        data: {
+          userId,
+          amount: validated.amount,
+          category: "Lent Money",
+          description: `Lent to ${validated.borrowerName}${validated.description ? ` — ${validated.description}` : ""}`,
+          date: validated.lendDate,
+          accountId: validated.accountId,
+          loanId: created.id,
+          paymentMethod: account.name,
+        },
+      });
 
-        const adjustment = getBalanceAdjustment(account.type, validated.amount);
-        const updatedAccount = await tx.account.update({
-          where: { id: validated.accountId },
-          data: { currentBalance: { increment: adjustment } },
-        });
-        await recordBalanceHistory(
-          tx,
-          validated.accountId,
-          updatedAccount.currentBalance,
-          `Loan given to ${validated.borrowerName} (₹${validated.amount})`,
-          validated.lendDate
-        );
-      }
+      const updatedAccount = await applyLoanExpenseToAccount(
+        tx,
+        userId,
+        account,
+        validated.amount,
+      );
+      await recordBalanceHistory(
+        tx,
+        validated.accountId,
+        updatedAccount.currentBalance,
+        `Loan given to ${validated.borrowerName} (₹${validated.amount})`,
+        validated.lendDate
+      );
     }
 
     return created;
@@ -213,6 +264,25 @@ export async function updateLoan(
   });
 
   if (!existing) throw new Error("Loan not found");
+  if (
+    existing.accountId &&
+    validated.amount !== undefined &&
+    validated.amount !== existing.amount
+  ) {
+    throw new Error("Amount cannot be changed for an account-linked loan");
+  }
+  if (
+    validated.accountId !== undefined &&
+    validated.accountId !== existing.accountId
+  ) {
+    throw new Error("The linked account cannot be changed after loan creation");
+  }
+  if (
+    validated.amount !== undefined &&
+    validated.amount < existing.amountRepaid
+  ) {
+    throw new Error("Loan amount cannot be less than the amount already repaid");
+  }
 
   const loan = await db.loan.update({
     where: { id: validatedId },
@@ -237,7 +307,7 @@ export async function deleteLoan(id: string) {
   const validatedId = IdSchema.parse(id);
 
   await db.$transaction(async (tx) => {
-    const existing = await db.loan.findFirst({ where: { id: validatedId, userId } });
+    const existing = await tx.loan.findFirst({ where: { id: validatedId, userId } });
     if (!existing) throw new Error("Loan not found");
 
     const linkedExpenses = await tx.expense.findMany({
@@ -246,9 +316,11 @@ export async function deleteLoan(id: string) {
 
     for (const expense of linkedExpenses) {
       if (expense.accountId) {
-        const account = await tx.account.findUnique({ where: { id: expense.accountId } });
+        const account = await tx.account.findFirst({
+          where: { id: expense.accountId, userId },
+        });
         if (account) {
-          const reversal = -getBalanceAdjustment(account.type, expense.amount);
+          const reversal = -getExpenseBalanceAdjustment(account.type, expense.amount);
           const updatedAccount = await tx.account.update({
             where: { id: expense.accountId },
             data: { currentBalance: { increment: reversal } },
@@ -286,6 +358,27 @@ export async function addRepayment(input: AddRepaymentInput) {
   const repayment = await db.$transaction(async (tx) => {
     const loan = await tx.loan.findFirst({ where: { id: validated.loanId, userId } });
     if (!loan) throw new Error("Loan not found");
+    if (validated.amount > loan.amount - loan.amountRepaid) {
+      throw new Error("Repayment exceeds the outstanding loan balance");
+    }
+
+    const newAmountRepaid = loan.amountRepaid + validated.amount;
+    const newStatus = newAmountRepaid >= loan.amount ? "COMPLETED" : "PARTIAL";
+    const loanUpdate = await tx.loan.updateMany({
+      where: {
+        id: validated.loanId,
+        userId,
+        amountRepaid: loan.amountRepaid,
+      },
+      data: {
+        amountRepaid: { increment: validated.amount },
+        status: newStatus,
+      },
+    });
+
+    if (loanUpdate.count !== 1) {
+      throw new Error("Loan changed while recording repayment; please retry");
+    }
 
     const created = await tx.repayment.create({
       data: {
@@ -296,25 +389,14 @@ export async function addRepayment(input: AddRepaymentInput) {
       },
     });
 
-    const newAmountRepaid = loan.amountRepaid + validated.amount;
-    let newStatus: "PENDING" | "PARTIAL" | "COMPLETED" = "PENDING";
-
-    if (newAmountRepaid >= loan.amount) {
-      newStatus = "COMPLETED";
-    } else if (newAmountRepaid > 0) {
-      newStatus = "PARTIAL";
-    }
-
-    await tx.loan.update({
-      where: { id: validated.loanId },
-      data: {
-        amountRepaid: newAmountRepaid,
-        status: newStatus,
-      },
-    });
-
     if (loan.accountId) {
-      const account = await tx.account.findUnique({ where: { id: loan.accountId } });
+      const account = await tx.account.findFirst({
+        where: {
+          id: loan.accountId,
+          userId,
+          isActive: true,
+        },
+      });
       if (account) {
         await tx.expense.create({
           data: {
@@ -330,11 +412,12 @@ export async function addRepayment(input: AddRepaymentInput) {
           },
         });
 
-        const adjustment = getBalanceAdjustment(account.type, -validated.amount);
-        const updatedAccount = await tx.account.update({
-          where: { id: loan.accountId },
-          data: { currentBalance: { increment: adjustment } },
-        });
+        const updatedAccount = await applyLoanExpenseToAccount(
+          tx,
+          userId,
+          account,
+          -validated.amount,
+        );
         await recordBalanceHistory(
           tx,
           loan.accountId,
@@ -370,11 +453,15 @@ export async function deleteRepayment(repaymentId: string) {
     if (!repayment) throw new Error("Repayment not found");
     if (repayment.loan.userId !== userId) throw new Error("Unauthorized");
 
-    const refundExpense = await tx.expense.findFirst({ where: { repaymentId: validatedId } });
+    const refundExpense = await tx.expense.findFirst({
+      where: { repaymentId: validatedId, userId },
+    });
     if (refundExpense?.accountId) {
-      const account = await tx.account.findUnique({ where: { id: refundExpense.accountId } });
+      const account = await tx.account.findFirst({
+        where: { id: refundExpense.accountId, userId },
+      });
       if (account) {
-        const reversal = -getBalanceAdjustment(account.type, refundExpense.amount);
+        const reversal = -getExpenseBalanceAdjustment(account.type, refundExpense.amount);
         const updatedAccount = await tx.account.update({
           where: { id: refundExpense.accountId },
           data: { currentBalance: { increment: reversal } },
@@ -394,10 +481,17 @@ export async function deleteRepayment(repaymentId: string) {
 
     await tx.repayment.delete({ where: { id: validatedId } });
 
-    const newAmountRepaid = Math.max(0, repayment.loan.amountRepaid - repayment.amount);
+    const updatedLoan = await tx.loan.update({
+      where: { id: repayment.loanId },
+      data: {
+        amountRepaid: { decrement: repayment.amount },
+      },
+    });
+
+    const newAmountRepaid = Math.max(0, updatedLoan.amountRepaid);
     let newStatus: "PENDING" | "PARTIAL" | "COMPLETED" = "PENDING";
 
-    if (newAmountRepaid >= repayment.loan.amount) {
+    if (newAmountRepaid >= updatedLoan.amount) {
       newStatus = "COMPLETED";
     } else if (newAmountRepaid > 0) {
       newStatus = "PARTIAL";
@@ -406,7 +500,6 @@ export async function deleteRepayment(repaymentId: string) {
     await tx.loan.update({
       where: { id: repayment.loanId },
       data: {
-        amountRepaid: newAmountRepaid,
         status: newStatus,
       },
     });

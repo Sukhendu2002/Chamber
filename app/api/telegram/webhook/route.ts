@@ -5,9 +5,50 @@ import { notifyUser } from "@/app/api/events/route";
 import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 import { checkAndSendSubscriptionAlerts } from "@/lib/subscription-alerts";
 import { getAccountsByUserId } from "@/lib/actions/accounts";
+import { getExpenseBalanceAdjustment, getNetWorthContribution } from "@/lib/accounting";
 
 const TELEGRAM_WEBHOOK_SECRET = process.env.TELEGRAM_WEBHOOK_SECRET;
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
+
+type TransactionClient = Parameters<Parameters<typeof db.$transaction>[0]>[0];
+
+interface TelegramExpenseAccount {
+ id: string;
+ type: string;
+ creditLimit: number | null;
+}
+
+async function applyTelegramExpenseBalance(
+ tx: TransactionClient,
+ userId: string,
+ account: TelegramExpenseAccount,
+ amount: number
+) {
+ const adjustment = getExpenseBalanceAdjustment(account.type, amount);
+
+ if (account.type === "CREDIT_CARD" && account.creditLimit !== null) {
+ const updateResult = await tx.account.updateMany({
+ where: {
+ id: account.id,
+ userId,
+ isActive: true,
+ currentBalance: { lte: account.creditLimit - amount },
+ },
+ data: { currentBalance: { increment: adjustment } },
+ });
+
+ if (updateResult.count !== 1) {
+ throw new Error("Expense exceeds the credit card's available credit");
+ }
+
+ return tx.account.findUniqueOrThrow({ where: { id: account.id } });
+ }
+
+ return tx.account.update({
+ where: { id: account.id },
+ data: { currentBalance: { increment: adjustment } },
+ });
+}
 
 // R2 upload helper
 async function uploadImageToR2(base64Data: string, userId: string): Promise<string> {
@@ -298,7 +339,7 @@ async function handleQuickAccountSelection(
  }
 
  const account = await db.account.findFirst({
- where: { id: accountId, userId: pending.userId },
+ where: { id: accountId, userId: pending.userId, isActive: true },
  });
 
  if (!account) {
@@ -322,11 +363,12 @@ async function handleQuickAccountSelection(
  },
  });
 
- const adjustment = getTelegramBalanceAdjustment(account.type, pending.amount);
- const updatedAccount = await tx.account.update({
- where: { id: account.id },
- data: { currentBalance: { increment: adjustment } },
- });
+ const updatedAccount = await applyTelegramExpenseBalance(
+ tx,
+ pending.userId,
+ account,
+ pending.amount
+ );
  await tx.balanceHistory.create({
  data: {
  accountId: account.id,
@@ -407,12 +449,19 @@ async function handleAccountsCommand(chatId: number) {
 
  for (const account of typeAccounts) {
  const balance = Number(account.currentBalance);
- totalBalance += balance;
+ totalBalance += getNetWorthContribution(account.type, balance);
+ if (account.type === "CREDIT_CARD") {
+ const cardLabel = balance >= 0
+ ? `${currencySymbol}${balance.toFixed(2)} outstanding`
+ : `${currencySymbol}${Math.abs(balance).toFixed(2)} credit`;
+ message += `${icon} <b>${account.name}</b>: ${cardLabel}\n`;
+ } else {
  message += `${icon} <b>${account.name}</b>: ${currencySymbol}${balance.toFixed(2)}\n`;
  }
  }
+ }
 
- message += `\n <b>Total Balance:</b> ${currencySymbol}${totalBalance.toFixed(2)}`;
+ message += `\n <b>Net Worth:</b> ${currencySymbol}${totalBalance.toFixed(2)}`;
 
  await sendTelegramMessage(chatId, message);
 }
@@ -481,12 +530,6 @@ function buildAccountKeyboard(
  }
  rows.push([{ text: "\u274C Cancel", callback_data: "confirm_no" }]);
  return { inline_keyboard: rows };
-}
-
-// Balance adjustment helper for Telegram expense creation
-function getTelegramBalanceAdjustment(accountType: string, amount: number): number {
- if (accountType === "CREDIT_CARD") return amount;
- return -amount;
 }
 
 type TelegramUpdate = {
@@ -1025,7 +1068,7 @@ export async function POST(request: NextRequest) {
  const pending = pendingExpenses.get(chatId);
  if (pending && pending.expiresAt > Date.now()) {
  const account = await db.account.findFirst({
- where: { id: accountId, userId: pending.userId },
+ where: { id: accountId, userId: pending.userId, isActive: true },
  });
 
  if (!account) {
@@ -1057,11 +1100,12 @@ export async function POST(request: NextRequest) {
  });
 
  // Adjust account balance and record history
- const adjustment = getTelegramBalanceAdjustment(account.type, pending.amount);
- const updatedAccount = await tx.account.update({
- where: { id: accountId },
- data: { currentBalance: { increment: adjustment } },
- });
+ const updatedAccount = await applyTelegramExpenseBalance(
+ tx,
+ pending.userId,
+ account,
+ pending.amount
+ );
  const label = pending.description || pending.category || "Expense";
  await tx.balanceHistory.create({
  data: {

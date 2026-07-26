@@ -138,6 +138,13 @@ export function SettingsForm({ initialSettings }: SettingsFormProps) {
       subLink.download = `subscriptions_${new Date().toISOString().split("T")[0]}.csv`;
       subLink.click();
       URL.revokeObjectURL(subUrl);
+
+      if (data.expensesTruncated) {
+        window.alert(
+          `The export contains the newest ${data.exportedExpenseCount.toLocaleString()} expenses. ` +
+          "Use a filtered export for older records."
+        );
+      }
     } catch (error) {
       console.error("Failed to export data:", error);
     } finally {
@@ -431,7 +438,7 @@ export function SettingsForm({ initialSettings }: SettingsFormProps) {
             <div>
               <p className="font-medium">Export Data</p>
               <p className="text-sm text-muted-foreground">
-                Download all your expenses and subscriptions as CSV
+                Download subscriptions and up to 10,000 recent expenses as CSV
               </p>
             </div>
             <Button variant="outline" size="sm" className="self-start sm:self-auto" onClick={handleExport} disabled={exporting}>

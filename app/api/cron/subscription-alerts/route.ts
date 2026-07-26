@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { escapeHtml } from "@/lib/utils";
 
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 
@@ -88,10 +89,10 @@ export async function GET(request: NextRequest) {
  : `in ${daysUntilBilling} days`;
 
  const message = `<b>Subscription Reminder</b>\n\n` +
- `<b>${sub.name}</b>\n` +
+ `<b>${escapeHtml(sub.name)}</b>\n` +
  `Amount: ₹${sub.amount.toFixed(2)}\n` +
  `Due: ${daysText} (${billingDate.toLocaleDateString()})\n` +
- `${sub.paymentMethod ? `Account: ${sub.paymentMethod}\n` : ""}` +
+ `${sub.paymentMethod ? `Account: ${escapeHtml(sub.paymentMethod)}\n` : ""}` +
  `\n<i>Manage your subscriptions at Chamber</i>`;
 
  const sent = await sendTelegramMessage(userSettings.telegramChatId, message);
@@ -149,7 +150,7 @@ export async function GET(request: NextRequest) {
  const topCats = Object.entries(categoryMap)
  .sort((a, b) => b[1] - a[1])
  .slice(0, 3)
- .map(([cat, amt]) => ` • ${cat}: ₹${amt.toFixed(0)}`)
+ .map(([cat, amt]) => ` • ${escapeHtml(cat)}: ₹${amt.toFixed(0)}`)
  .join("\n");
 
  const monthName = now.toLocaleDateString("en-US", { month: "long" });

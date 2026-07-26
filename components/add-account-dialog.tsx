@@ -95,7 +95,7 @@ export function AddAccountDialog({ currency }: AddAccountDialogProps) {
         <DialogHeader>
           <DialogTitle>Add Account</DialogTitle>
           <DialogDescription>
-            Add a bank account or investment to track.
+            Add an asset account or credit-card liability to track.
           </DialogDescription>
         </DialogHeader>
         <div className="grid gap-4 py-4">
@@ -126,7 +126,9 @@ export function AddAccountDialog({ currency }: AddAccountDialogProps) {
           </div>
 
           <div className="grid gap-2">
-            <Label htmlFor="initialBalance">Current Balance *</Label>
+            <Label htmlFor="initialBalance">
+              {type === "CREDIT_CARD" ? "Current Outstanding *" : "Current Balance *"}
+            </Label>
             <div className="relative">
               <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground">
                 {currencySymbol}
@@ -140,6 +142,11 @@ export function AddAccountDialog({ currency }: AddAccountDialogProps) {
                 onChange={(e) => setInitialBalance(e.target.value)}
               />
             </div>
+            {type === "CREDIT_CARD" && (
+              <p className="text-xs text-muted-foreground">
+                Enter the amount currently owed, or 0 if the card is fully paid.
+              </p>
+            )}
           </div>
 
           {type === "CREDIT_CARD" && (

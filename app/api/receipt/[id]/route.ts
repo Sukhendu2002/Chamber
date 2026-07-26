@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { S3Client, GetObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
 import { db } from "@/lib/db";
+import { getSafeReceiptHeaders } from "@/lib/sanitize";
 
 function getR2Client() {
   const accountId = process.env.R2_ACCOUNT_ID;
@@ -103,10 +104,13 @@ export async function GET(
     }
 
     const buffer = Buffer.concat(chunks);
+    const receiptHeaders = getSafeReceiptHeaders(response.ContentType);
 
     return new NextResponse(buffer, {
       headers: {
-        "Content-Type": response.ContentType || "image/jpeg",
+        "Content-Type": receiptHeaders.contentType,
+        "Content-Disposition": receiptHeaders.contentDisposition,
+        "X-Content-Type-Options": "nosniff",
         "Cache-Control": "private, no-store, must-revalidate",
       },
     });

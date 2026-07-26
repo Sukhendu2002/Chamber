@@ -16,14 +16,29 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { IconPlus, IconUpload, IconX } from "@tabler/icons-react";
 import { createLoan, addLoanReceipt } from "@/lib/actions/loans";
 
-type AddLoanDialogProps = {
-  currency: string;
+type AccountOption = {
+  id: string;
+  name: string;
+  type: string;
+  currentBalance: number;
 };
 
-export function AddLoanDialog({ currency }: AddLoanDialogProps) {
+type AddLoanDialogProps = {
+  currency: string;
+  accounts?: AccountOption[];
+};
+
+export function AddLoanDialog({ currency, accounts = [] }: AddLoanDialogProps) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -34,6 +49,7 @@ export function AddLoanDialog({ currency }: AddLoanDialogProps) {
   const [lendDate, setLendDate] = useState(toLocalDateString());
   const [dueDate, setDueDate] = useState("");
   const [description, setDescription] = useState("");
+  const [accountId, setAccountId] = useState<string>("none");
   const [receiptFiles, setReceiptFiles] = useState<File[]>([]);
   const [uploading, setUploading] = useState(false);
 
@@ -44,6 +60,7 @@ export function AddLoanDialog({ currency }: AddLoanDialogProps) {
     setLendDate(toLocalDateString());
     setDueDate("");
     setDescription("");
+    setAccountId("none");
     setReceiptFiles([]);
   };
 
@@ -69,9 +86,9 @@ export function AddLoanDialog({ currency }: AddLoanDialogProps) {
         lendDate: new Date(lendDate),
         dueDate: dueDate ? new Date(dueDate) : undefined,
         description: description || undefined,
+        accountId: accountId !== "none" ? accountId : undefined,
       });
 
-      // Upload receipts if any
       if (receiptFiles.length > 0 && loan) {
         setUploading(true);
         for (const file of receiptFiles) {
@@ -104,6 +121,15 @@ export function AddLoanDialog({ currency }: AddLoanDialogProps) {
   };
 
   const currencySymbol = currency === "INR" ? "₹" : currency === "USD" ? "$" : currency === "EUR" ? "€" : "£";
+
+  const formatBalance = (balance: number) => {
+    return new Intl.NumberFormat("en-IN", {
+      style: "currency",
+      currency: currency,
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    }).format(balance);
+  };
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -180,6 +206,28 @@ export function AddLoanDialog({ currency }: AddLoanDialogProps) {
           </div>
 
           <div className="grid gap-2">
+            <Label htmlFor="accountId">From Account (optional)</Label>
+            <Select value={accountId} onValueChange={setAccountId}>
+              <SelectTrigger id="accountId">
+                <SelectValue placeholder="Select account" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">None (no balance tracking)</SelectItem>
+                {accounts.map((account) => (
+                  <SelectItem key={account.id} value={account.id}>
+                    {account.name} ({formatBalance(account.currentBalance)})
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {accountId !== "none" && (
+              <p className="text-xs text-muted-foreground">
+                Balance will be deducted and an expense will be recorded.
+              </p>
+            )}
+          </div>
+
+          <div className="grid gap-2">
             <Label htmlFor="description">Notes (optional)</Label>
             <Textarea
               id="description"
@@ -212,11 +260,11 @@ export function AddLoanDialog({ currency }: AddLoanDialogProps) {
             <label className="cursor-pointer">
               <div className="flex items-center gap-2 border border-dashed rounded-md p-3 hover:bg-muted/50 transition-colors">
                 <IconUpload className="h-4 w-4 text-muted-foreground" />
-                <span className="text-sm text-muted-foreground">Add receipt images</span>
+                <span className="text-sm text-muted-foreground">Add receipt files</span>
               </div>
               <input
                 type="file"
-                accept="image/*"
+                accept="image/jpeg,image/png,image/webp,application/pdf"
                 multiple
                 className="hidden"
                 onChange={handleFileChange}

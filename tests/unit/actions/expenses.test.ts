@@ -26,8 +26,11 @@ const mockDb = {
         groupBy: vi.fn(),
     },
     account: {
+        findFirst: vi.fn(),
         findUnique: vi.fn(),
+        findUniqueOrThrow: vi.fn(),
         update: vi.fn(),
+        updateMany: vi.fn(),
     },
     balanceHistory: {
         create: vi.fn(),
@@ -152,7 +155,7 @@ describe("Expense Actions", () => {
             };
 
             mockDb.expense.create.mockResolvedValue(mockExpense);
-            mockDb.account.findUnique.mockResolvedValue(mockAccount);
+            mockDb.account.findFirst.mockResolvedValue(mockAccount);
             mockDb.account.update.mockResolvedValue({ ...mockAccount, currentBalance: 9500 });
             mockDb.balanceHistory.create.mockResolvedValue({});
 
@@ -190,11 +193,16 @@ describe("Expense Actions", () => {
                 id: UUIDS.cc1,
                 type: "CREDIT_CARD",
                 currentBalance: 1000,
+                creditLimit: 5000,
             };
 
             mockDb.expense.create.mockResolvedValue(mockExpense);
-            mockDb.account.findUnique.mockResolvedValue(mockAccount);
-            mockDb.account.update.mockResolvedValue({ ...mockAccount, currentBalance: 1300 });
+            mockDb.account.findFirst.mockResolvedValue(mockAccount);
+            mockDb.account.updateMany.mockResolvedValue({ count: 1 });
+            mockDb.account.findUniqueOrThrow.mockResolvedValue({
+                ...mockAccount,
+                currentBalance: 1300,
+            });
             mockDb.balanceHistory.create.mockResolvedValue({});
 
             vi.resetModules();
@@ -208,10 +216,66 @@ describe("Expense Actions", () => {
             });
 
             // Credit card: spending increases outstanding (positive adjustment)
-            expect(mockDb.account.update).toHaveBeenCalledWith({
-                where: { id: UUIDS.cc1 },
+            expect(mockDb.account.updateMany).toHaveBeenCalledWith({
+                where: {
+                    id: UUIDS.cc1,
+                    userId: "test-user-id",
+                    isActive: true,
+                    currentBalance: { lte: 4700 },
+                },
                 data: { currentBalance: { increment: 300 } },
             });
+        });
+
+        it("should reject an account that does not belong to the authenticated user", async () => {
+            mockDb.account.findFirst.mockResolvedValue(null);
+
+            vi.resetModules();
+            const { createExpense } = await import("@/lib/actions/expenses");
+
+            await expect(
+                createExpense({
+                    amount: 300,
+                    category: "Shopping",
+                    accountId: UUIDS.cc1,
+                })
+            ).rejects.toThrow("Account not found");
+
+            expect(mockDb.account.findFirst).toHaveBeenCalledWith({
+                where: {
+                    id: UUIDS.cc1,
+                    userId: "test-user-id",
+                    isActive: true,
+                },
+            });
+            expect(mockDb.expense.create).not.toHaveBeenCalled();
+        });
+
+        it("should reject a card purchase when the atomic credit-limit update loses a race", async () => {
+            const mockAccount = {
+                id: UUIDS.cc1,
+                type: "CREDIT_CARD",
+                currentBalance: 1000,
+                creditLimit: 5000,
+            };
+
+            mockDb.account.findFirst.mockResolvedValue(mockAccount);
+            mockDb.account.updateMany.mockResolvedValue({ count: 0 });
+            mockDb.expense.create.mockResolvedValue({
+                id: UUIDS.expense4,
+                userId: "test-user-id",
+            });
+
+            vi.resetModules();
+            const { createExpense } = await import("@/lib/actions/expenses");
+
+            await expect(
+                createExpense({
+                    amount: 300,
+                    category: "Shopping",
+                    accountId: UUIDS.cc1,
+                })
+            ).rejects.toThrow("Expense exceeds the credit card's available credit");
         });
 
         it("should not adjust balance when no accountId is provided", async () => {
@@ -225,7 +289,7 @@ describe("Expense Actions", () => {
                 category: "Food",
             });
 
-            expect(mockDb.account.findUnique).not.toHaveBeenCalled();
+            expect(mockDb.account.findFirst).not.toHaveBeenCalled();
             expect(mockDb.account.update).not.toHaveBeenCalled();
         });
     });
@@ -349,7 +413,7 @@ describe("Expense Actions", () => {
             };
 
             mockDb.expense.findFirst.mockResolvedValue(existingExpense);
-            mockDb.account.findUnique.mockResolvedValue(mockAccount);
+            mockDb.account.findFirst.mockResolvedValue(mockAccount);
             mockDb.account.update.mockResolvedValue({ ...mockAccount, currentBalance: 10000 });
             mockDb.balanceHistory.create.mockResolvedValue({});
             mockDb.expense.delete.mockResolvedValue(existingExpense);
@@ -391,7 +455,7 @@ describe("Expense Actions", () => {
 
             await deleteExpense(UUIDS.expense2);
 
-            expect(mockDb.account.findUnique).not.toHaveBeenCalled();
+            expect(mockDb.account.findFirst).not.toHaveBeenCalled();
             expect(mockDb.account.update).not.toHaveBeenCalled();
             expect(mockDb.expense.delete).toHaveBeenCalledWith({
                 where: { id: UUIDS.expense2 },
@@ -415,7 +479,7 @@ describe("Expense Actions", () => {
             };
 
             mockDb.expense.findFirst.mockResolvedValue(existingExpense);
-            mockDb.account.findUnique.mockResolvedValue(mockAccount);
+            mockDb.account.findFirst.mockResolvedValue(mockAccount);
             mockDb.account.update.mockResolvedValue({ ...mockAccount, currentBalance: 1000 });
             mockDb.balanceHistory.create.mockResolvedValue({});
             mockDb.expense.delete.mockResolvedValue(existingExpense);
@@ -451,7 +515,7 @@ describe("Expense Actions", () => {
             };
 
             mockDb.expense.findFirst.mockResolvedValue(existingExpense);
-            mockDb.account.findUnique.mockResolvedValue(mockAccount);
+            mockDb.account.findFirst.mockResolvedValue(mockAccount);
             // First call: reverse old (add back 200), second call: apply new (deduct 300)
             mockDb.account.update
                 .mockResolvedValueOnce({ ...mockAccount, currentBalance: 10000 })
@@ -763,6 +827,7 @@ describe("Expense Validation", () => {
             "Education",
             "Investments",
             "Subscription",
+            "Lent Money",
             "General",
         ];
 

@@ -9,6 +9,7 @@ const mockDb = {
         findFirst: vi.fn(),
         findUnique: vi.fn(),
         update: vi.fn(),
+        delete: vi.fn(),
         deleteMany: vi.fn(),
     },
     expense: {
@@ -31,6 +32,28 @@ const mockDb = {
     }),
 };
 
+const EXPENSE_IDS = [
+    "11111111-1111-4111-8111-111111111111",
+    "22222222-2222-4222-8222-222222222222",
+    "33333333-3333-4333-8333-333333333333",
+    "44444444-4444-4444-8444-444444444444",
+    "55555555-5555-4555-8555-555555555555",
+];
+
+const DEFAULT_CATEGORY_RECORDS = [
+    "Food",
+    "Travel",
+    "Entertainment",
+    "Bills",
+    "Shopping",
+    "Health",
+    "Education",
+    "Investments",
+    "Subscription",
+    "Lent Money",
+    "General",
+].map((name) => ({ name }));
+
 vi.mock("@/lib/db", () => ({
     db: mockDb,
 }));
@@ -45,31 +68,35 @@ describe("Category Actions", () => {
         mockDb.$transaction.mockImplementation(async (fn: (tx: typeof mockDb) => Promise<unknown>) => {
             return fn(mockDb);
         });
+        mockDb.userCategory.count.mockResolvedValue(1);
+        mockDb.userCategory.findMany.mockResolvedValue(DEFAULT_CATEGORY_RECORDS);
     });
 
-    describe("seedDefaultCategoriesIfNeeded", () => {
+    describe("default category seeding", () => {
         it("should seed default categories when none exist", async () => {
             mockDb.userCategory.count.mockResolvedValue(0);
-            mockDb.userCategory.createMany.mockResolvedValue({ count: 10 });
+            mockDb.userCategory.createMany.mockResolvedValue({ count: 11 });
 
             vi.resetModules();
-            const { seedDefaultCategoriesIfNeeded } = await import("@/lib/actions/categories");
+            const { getUserCategories } = await import("@/lib/actions/categories");
 
-            await seedDefaultCategoriesIfNeeded("test-user");
+            await getUserCategories();
 
             expect(mockDb.userCategory.count).toHaveBeenCalledWith({
-                where: { userId: "test-user" },
+                where: { userId: "test-user-id" },
             });
-            expect(mockDb.userCategory.createMany).toHaveBeenCalledTimes(1);
+            expect(mockDb.userCategory.createMany).toHaveBeenCalledWith(
+                expect.objectContaining({ skipDuplicates: true }),
+            );
         });
 
         it("should not seed when categories already exist", async () => {
             mockDb.userCategory.count.mockResolvedValue(3);
 
             vi.resetModules();
-            const { seedDefaultCategoriesIfNeeded } = await import("@/lib/actions/categories");
+            const { getUserCategories } = await import("@/lib/actions/categories");
 
-            await seedDefaultCategoriesIfNeeded("test-user");
+            await getUserCategories();
 
             expect(mockDb.userCategory.createMany).not.toHaveBeenCalled();
         });
@@ -144,6 +171,10 @@ describe("Category Actions", () => {
                 where: { id: "cat-1" },
                 data: { name: "Animals", icon: "🐶" },
             });
+            expect(mockDb.expense.updateMany).toHaveBeenCalledWith({
+                where: { userId: "test-user-id", category: "Pets" },
+                data: { category: "Animals" },
+            });
         });
 
         it("should reject renaming to an existing name", async () => {
@@ -156,11 +187,29 @@ describe("Category Actions", () => {
 
             await expect(updateCategory("cat-1", { name: "Animals" })).rejects.toThrow("already exists");
         });
+
+        it("should preserve names used by built-in workflows", async () => {
+            mockDb.userCategory.findFirst.mockResolvedValue({
+                id: "cat-food",
+                userId: "test-user-id",
+                name: "Food",
+            });
+
+            vi.resetModules();
+            const { updateCategory } = await import("@/lib/actions/categories");
+
+            await expect(
+                updateCategory("cat-food", { name: "Dining" }),
+            ).rejects.toThrow("Default category names cannot be changed");
+            expect(mockDb.userCategory.update).not.toHaveBeenCalled();
+        });
     });
 
     describe("deleteCategory", () => {
         it("should delete a category and reassign expenses", async () => {
-            mockDb.userCategory.findFirst.mockResolvedValue({ id: "cat-1", userId: "test-user-id", name: "Pets" });
+            mockDb.userCategory.findFirst
+                .mockResolvedValueOnce({ id: "cat-1", userId: "test-user-id", name: "Pets" })
+                .mockResolvedValueOnce({ id: "cat-general", userId: "test-user-id", name: "General" });
 
             vi.resetModules();
             const { deleteCategory } = await import("@/lib/actions/categories");
@@ -168,6 +217,10 @@ describe("Category Actions", () => {
             await deleteCategory("cat-1", "General");
 
             expect(mockDb.$transaction).toHaveBeenCalled();
+            expect(mockDb.userCategory.delete).toHaveBeenCalledWith({
+                where: { id: "cat-1" },
+            });
+            expect(mockDb.userCategory.deleteMany).not.toHaveBeenCalled();
         });
     });
 
@@ -220,9 +273,10 @@ describe("Category Actions", () => {
     describe("bulkTagExpenses", () => {
         it("should add tags to multiple expenses", async () => {
             mockDb.$transaction.mockImplementation(async (fn) => fn(mockDb));
-            mockDb.expense.findFirst
-                .mockResolvedValueOnce({ id: "exp-1", userId: "test-user-id" })
-                .mockResolvedValueOnce({ id: "exp-2", userId: "test-user-id" });
+            mockDb.expense.findMany.mockResolvedValue([
+                { id: EXPENSE_IDS[0] },
+                { id: EXPENSE_IDS[1] },
+            ]);
             mockDb.tag.upsert
                 .mockResolvedValue({ id: "tag-new", name: "groceries" });
             mockDb.expenseTag.upsert.mockResolvedValue({});
@@ -230,7 +284,7 @@ describe("Category Actions", () => {
             vi.resetModules();
             const { bulkTagExpenses } = await import("@/lib/actions/categories");
 
-            const result = await bulkTagExpenses(["exp-1", "exp-2"], ["groceries"]);
+            const result = await bulkTagExpenses(EXPENSE_IDS.slice(0, 2), ["groceries"]);
 
             expect(result.tagged).toBe(2);
             expect(result.tags).toBe(1);
@@ -242,17 +296,39 @@ describe("Category Actions", () => {
     describe("bulkCategorizeExpenses", () => {
         it("should categorize multiple expenses", async () => {
             mockDb.expense.updateMany.mockResolvedValue({ count: 5 });
+            mockDb.userCategory.findFirst.mockResolvedValue({
+                id: "cat-food",
+                userId: "test-user-id",
+                name: "Food",
+            });
 
             vi.resetModules();
             const { bulkCategorizeExpenses } = await import("@/lib/actions/categories");
 
-            const result = await bulkCategorizeExpenses(["e1", "e2", "e3", "e4", "e5"], "Food");
+            const result = await bulkCategorizeExpenses(EXPENSE_IDS, "Food");
 
             expect(result.updated).toBe(5);
             expect(mockDb.expense.updateMany).toHaveBeenCalledWith({
-                where: { id: { in: ["e1", "e2", "e3", "e4", "e5"] }, userId: "test-user-id" },
+                where: {
+                    id: { in: EXPENSE_IDS },
+                    userId: "test-user-id",
+                    loanId: null,
+                    repaymentId: null,
+                },
                 data: { category: "Food" },
             });
+        });
+
+        it("should reject a category that is not owned by the user", async () => {
+            mockDb.userCategory.findFirst.mockResolvedValue(null);
+
+            vi.resetModules();
+            const { bulkCategorizeExpenses } = await import("@/lib/actions/categories");
+
+            await expect(
+                bulkCategorizeExpenses(EXPENSE_IDS.slice(0, 1), "Private"),
+            ).rejects.toThrow("Category not found");
+            expect(mockDb.expense.updateMany).not.toHaveBeenCalled();
         });
     });
 });

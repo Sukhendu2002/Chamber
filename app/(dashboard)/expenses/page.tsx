@@ -78,7 +78,17 @@ export default async function ExpensesPage({
         </div>
         <div className="flex items-center gap-2">
           <CategoryManager categories={userCategories} />
-          <AddExpenseDialog accounts={accounts.map(a => ({ id: a.id, name: a.name, type: a.type }))} categories={userCategories} />
+          <AddExpenseDialog
+            currency={settings.currency}
+            accounts={accounts.map((account) => ({
+              id: account.id,
+              name: account.name,
+              type: account.type,
+              currentBalance: account.currentBalance,
+              creditLimit: account.creditLimit,
+            }))}
+            categories={userCategories}
+          />
         </div>
       </div>
 
@@ -90,6 +100,7 @@ export default async function ExpensesPage({
         currentTags={tags}
         currentDateRange={dateRange}
         allTags={allTags}
+        categories={userCategories.map((userCategory) => userCategory.name)}
       />
 
       {/* Expenses Table */}

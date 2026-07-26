@@ -6,7 +6,8 @@ import {
   IconChartLine, 
   IconWallet, 
   IconCash,
-  IconCoin
+  IconCoin,
+  IconCreditCard,
 } from "@tabler/icons-react";
 import { AccountList } from "@/components/account-list";
 import { AddAccountDialog } from "@/components/add-account-dialog";
@@ -35,17 +36,19 @@ export default async function AccountsPage() {
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Accounts</h1>
           <p className="text-muted-foreground">
-            Track your bank balances and investments
+            Track assets, card liabilities, and net worth
           </p>
         </div>
         <div className="flex items-center gap-2">
           <BankTransferDialog
-            accounts={accounts.map((a) => ({
-              id: a.id,
-              name: a.name,
-              type: a.type,
-              currentBalance: a.currentBalance,
-            }))}
+            accounts={accounts
+              .filter((account) => account.type !== "CREDIT_CARD")
+              .map((account) => ({
+                id: account.id,
+                name: account.name,
+                type: account.type,
+                currentBalance: account.currentBalance,
+              }))}
             currency={settings.currency}
           />
           <AddAccountDialog currency={settings.currency} />
@@ -53,7 +56,7 @@ export default async function AccountsPage() {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3 lg:grid-cols-5">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3 xl:grid-cols-6">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Net Worth</CardTitle>
@@ -64,6 +67,24 @@ export default async function AccountsPage() {
             <p className="text-xs text-muted-foreground">
               {stats.accountCount} accounts
             </p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Card Debt</CardTitle>
+            <IconCreditCard className="h-4 w-4 text-red-500" />
+          </CardHeader>
+          <CardContent>
+            <HiddenAmount
+              amount={formatCurrency(stats.totalCreditCardOutstanding)}
+              className="text-2xl font-bold text-red-600"
+            />
+            {stats.totalCardCredit > 0 && (
+              <p className="text-xs text-green-600">
+                {formatCurrency(stats.totalCardCredit)} card credit
+              </p>
+            )}
           </CardContent>
         </Card>
 

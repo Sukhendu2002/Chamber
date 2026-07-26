@@ -59,10 +59,9 @@ type AccountOption = {
   type: string;
 };
 
-// ponytail: categories from UserCategory prop, fallback to hardcoded defaults
 const FALLBACK_CATEGORIES = [
   "Food", "Travel", "Entertainment", "Bills", "Shopping",
-  "Health", "Education", "Investments", "Subscription", "General",
+  "Health", "Education", "Investments", "Subscription", "Lent Money", "General",
 ];
 
 type ExpenseCategory = string;
@@ -82,11 +81,17 @@ type Expense = {
   source: string;
   paymentMethod: string | null;
   accountId: string | null;
+  loanId: string | null;
+  repaymentId: string | null;
   date: Date;
   isVerified: boolean;
   receiptUrl: string | null;
   receiptUrls: string[];
   tags: string[];
+  loan?: {
+    id: string;
+    borrowerName: string;
+  } | null;
 };
 
 type SortField = "date" | "amount" | "category";
@@ -291,7 +296,12 @@ export function ExpenseTable({ expenses: initialExpenses, currency, accounts = [
     );
   };
 
-  const selectAll = selectedIds.size === sortedExpenses.length && sortedExpenses.length > 0;
+  const selectableExpenses = sortedExpenses.filter(
+    (expense) => !expense.loanId && !expense.repaymentId,
+  );
+  const selectAll =
+    selectableExpenses.length > 0 &&
+    selectableExpenses.every((expense) => selectedIds.has(expense.id));
   const toggleSelect = (id: string) => {
     setSelectedIds((prev) => {
       const next = new Set(prev);
@@ -304,103 +314,110 @@ export function ExpenseTable({ expenses: initialExpenses, currency, accounts = [
     if (selectAll) {
       setSelectedIds(new Set());
     } else {
-      setSelectedIds(new Set(sortedExpenses.map((e) => e.id)));
+      setSelectedIds(new Set(selectableExpenses.map((expense) => expense.id)));
     }
   };
 
-  const renderActions = (expense: Expense) => (
-    <div className="flex gap-1">
-      {(() => {
-        const receipts = getReceipts(expense);
-        if (receipts.length > 0) {
-          return (
-            <>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8 text-blue-600 hover:text-blue-700"
-                onClick={() => openReceiptViewer(expense.id)}
-                title={`View ${receipts.length} receipt(s)`}
-              >
-                <span className="relative">
-                  <IconPhoto className="h-4 w-4" />
-                  {receipts.length > 1 && (
-                    <span className="absolute -right-1 -top-1 flex h-3 w-3 items-center justify-center rounded-full bg-blue-600 text-[8px] text-white">
-                      {receipts.length}
-                    </span>
-                  )}
-                </span>
-              </Button>
-              <label className="cursor-pointer">
-                <input
-                  type="file"
-                  accept="image/*,.pdf"
-                  className="hidden"
-                  onChange={(e) => {
-                    const file = e.target.files?.[0];
-                    if (file) handleReceiptUpload(expense.id, file);
-                  }}
-                  disabled={uploadingExpenseId === expense.id}
-                />
+  const renderActions = (expense: Expense) => {
+    const isManagedExpense = !!expense.loanId || !!expense.repaymentId;
+    return (
+      <div className="flex gap-1">
+        {(() => {
+          const receipts = getReceipts(expense);
+          if (receipts.length > 0) {
+            return (
+              <>
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="h-8 w-8"
-                  disabled={uploadingExpenseId === expense.id}
-                  asChild
+                  className="h-8 w-8 text-blue-600 hover:text-blue-700"
+                  onClick={() => openReceiptViewer(expense.id)}
+                  title={`View ${receipts.length} receipt(s)`}
                 >
-                  <span title="Add Receipt">
-                    <IconUpload className="h-4 w-4" />
+                  <span className="relative">
+                    <IconPhoto className="h-4 w-4" />
+                    {receipts.length > 1 && (
+                      <span className="absolute -right-1 -top-1 flex h-3 w-3 items-center justify-center rounded-full bg-blue-600 text-[8px] text-white">
+                        {receipts.length}
+                      </span>
+                    )}
                   </span>
                 </Button>
-              </label>
-            </>
+                <label className="cursor-pointer">
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp,application/pdf"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) handleReceiptUpload(expense.id, file);
+                    }}
+                    disabled={uploadingExpenseId === expense.id}
+                  />
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8"
+                    disabled={uploadingExpenseId === expense.id}
+                    asChild
+                  >
+                    <span title="Add Receipt">
+                      <IconUpload className="h-4 w-4" />
+                    </span>
+                  </Button>
+                </label>
+              </>
+            );
+          }
+          return (
+            <label className="cursor-pointer">
+              <input
+                type="file"
+                accept="image/jpeg,image/png,image/webp,application/pdf"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) handleReceiptUpload(expense.id, file);
+                }}
+                disabled={uploadingExpenseId === expense.id}
+              />
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8"
+                disabled={uploadingExpenseId === expense.id}
+                asChild
+              >
+                <span title="Upload Receipt">
+                  <IconUpload className="h-4 w-4" />
+                </span>
+              </Button>
+            </label>
           );
-        }
-        return (
-          <label className="cursor-pointer">
-            <input
-              type="file"
-              accept="image/*,.pdf"
-              className="hidden"
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (file) handleReceiptUpload(expense.id, file);
-              }}
-              disabled={uploadingExpenseId === expense.id}
-            />
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8"
-              disabled={uploadingExpenseId === expense.id}
-              asChild
-            >
-              <span title="Upload Receipt">
-                <IconUpload className="h-4 w-4" />
-              </span>
-            </Button>
-          </label>
-        );
-      })()}
-      <Button
-        variant="ghost"
-        size="icon"
-        className="h-8 w-8"
-        onClick={() => openEditDialogSafe(expense)}
-      >
-        <IconEdit className="h-4 w-4" />
-      </Button>
-      <Button
-        variant="ghost"
-        size="icon"
-        className="h-8 w-8 text-destructive hover:text-destructive"
-        onClick={() => setDeletingExpense(expense)}
-      >
-        <IconTrash className="h-4 w-4" />
-      </Button>
-    </div>
-  );
+        })()}
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-8 w-8"
+          onClick={() => openEditDialogSafe(expense)}
+          disabled={isManagedExpense}
+          title={isManagedExpense ? "Managed via loan record" : "Edit"}
+        >
+          <IconEdit className="h-4 w-4" />
+        </Button>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-8 w-8 text-destructive hover:text-destructive"
+          onClick={() => setDeletingExpense(expense)}
+          disabled={isManagedExpense}
+          title={isManagedExpense ? "Managed via loan record" : "Delete"}
+        >
+          <IconTrash className="h-4 w-4" />
+        </Button>
+      </div>
+    );
+  };
 
   return (
     <>
@@ -421,6 +438,22 @@ export function ExpenseTable({ expenses: initialExpenses, currency, accounts = [
                     })}
                   </span>
                   <Badge variant="secondary" className="text-xs">{expense.category}</Badge>
+                  {expense.loanId && expense.loan && (
+                    <Badge
+                      variant="outline"
+                      className="text-[10px] px-1.5 py-0 border-blue-300 text-blue-700 dark:border-blue-700 dark:text-blue-400"
+                    >
+                      Loan: {expense.loan.borrowerName}
+                    </Badge>
+                  )}
+                  {expense.amount < 0 && (
+                    <Badge
+                      variant="outline"
+                      className="text-[10px] px-1.5 py-0 border-green-300 text-green-700 dark:border-green-700 dark:text-green-400"
+                    >
+                      Refund
+                    </Badge>
+                  )}
                   <span
                     className={`inline-flex items-center rounded-full px-1.5 py-0.5 text-xs font-medium ${
                       sourceColors[expense.source] || "bg-gray-100 text-gray-800"
@@ -449,7 +482,11 @@ export function ExpenseTable({ expenses: initialExpenses, currency, accounts = [
                   </div>
                 )}
               </div>
-              <p className="text-sm font-bold whitespace-nowrap">
+              <p
+                className={`text-sm font-bold whitespace-nowrap ${
+                  expense.amount < 0 ? "text-green-600" : ""
+                }`}
+              >
                 {formatCurrency(expense.amount)}
               </p>
             </div>
@@ -524,10 +561,11 @@ export function ExpenseTable({ expenses: initialExpenses, currency, accounts = [
               <TableRow key={expense.id} className={selectedIds.has(expense.id) ? "bg-muted/30" : ""}>
                 <TableCell className="w-8">
                   <input
-                    type="checkbox"
-                    checked={selectedIds.has(expense.id)}
-                    onChange={() => toggleSelect(expense.id)}
-                    className="h-4 w-4 rounded border-gray-300 cursor-pointer"
+                  type="checkbox"
+                  checked={selectedIds.has(expense.id)}
+                  onChange={() => toggleSelect(expense.id)}
+                  disabled={!!expense.loanId || !!expense.repaymentId}
+                  className="h-4 w-4 rounded border-gray-300 cursor-pointer"
                   />
                 </TableCell>
                 <TableCell className="text-muted-foreground">
@@ -537,10 +575,30 @@ export function ExpenseTable({ expenses: initialExpenses, currency, accounts = [
                   })}
                 </TableCell>
                 <TableCell className="font-medium">
-                  {expense.description || expense.merchant || "-"}
+                  <div className="flex flex-col gap-1">
+                    <span>{expense.description || expense.merchant || "-"}</span>
+                    {expense.loanId && expense.loan && (
+                      <Badge
+                        variant="outline"
+                        className="w-fit text-[10px] px-1.5 py-0 border-blue-300 text-blue-700 dark:border-blue-700 dark:text-blue-400"
+                      >
+                        Loan: {expense.loan.borrowerName}
+                      </Badge>
+                    )}
+                  </div>
                 </TableCell>
                 <TableCell>
-                  <Badge variant="secondary">{expense.category}</Badge>
+                  <div className="flex flex-wrap items-center gap-1">
+                    <Badge variant="secondary">{expense.category}</Badge>
+                    {expense.amount < 0 && (
+                      <Badge
+                        variant="outline"
+                        className="text-[10px] px-1.5 py-0 border-green-300 text-green-700 dark:border-green-700 dark:text-green-400"
+                      >
+                        Refund
+                      </Badge>
+                    )}
+                  </div>
                 </TableCell>
                 <TableCell>
                   {expense.tags && expense.tags.length > 0 ? (
@@ -578,7 +636,11 @@ export function ExpenseTable({ expenses: initialExpenses, currency, accounts = [
                     <span className="text-muted-foreground">-</span>
                   )}
                 </TableCell>
-                <TableCell className="text-right font-medium">
+                <TableCell
+                  className={`text-right font-medium ${
+                    expense.amount < 0 ? "text-green-600" : ""
+                  }`}
+                >
                   {formatCurrency(expense.amount)}
                 </TableCell>
                 <TableCell className="text-right">
@@ -717,7 +779,7 @@ export function ExpenseTable({ expenses: initialExpenses, currency, accounts = [
                           <span className="text-sm">{receipts.length > 0 ? 'Add More' : 'Upload'}</span>
                           <input
                             type="file"
-                            accept="image/*,.pdf"
+                            accept="image/jpeg,image/png,image/webp,application/pdf"
                             className="hidden"
                             onChange={(e) => setEditReceipt(e.target.files?.[0] || null)}
                           />
@@ -854,7 +916,7 @@ export function ExpenseTable({ expenses: initialExpenses, currency, accounts = [
                   <label className="cursor-pointer">
                     <input
                       type="file"
-                      accept="image/*,.pdf"
+                      accept="image/jpeg,image/png,image/webp,application/pdf"
                       className="hidden"
                       onChange={(e) => {
                         const file = e.target.files?.[0];

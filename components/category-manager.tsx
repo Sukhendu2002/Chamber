@@ -34,6 +34,19 @@ const PRESET_COLORS = [
 ];
 
 const PRESET_ICONS = ["🍔", "✈️", "🎬", "📄", "🛍️", "🏥", "📚", "📈", "🔄", "📦", "☕", "🏠", "🚗", "🎮", "👕", "💡", "🎁", "🏋️", "💊", "🎓"];
+const DEFAULT_CATEGORY_NAMES = new Set([
+  "Food",
+  "Travel",
+  "Entertainment",
+  "Bills",
+  "Shopping",
+  "Health",
+  "Education",
+  "Investments",
+  "Subscription",
+  "Lent Money",
+  "General",
+]);
 
 type CategoryManagerProps = {
   categories: UserCategoryRecord[];
@@ -49,6 +62,7 @@ export function CategoryManager({ categories }: CategoryManagerProps) {
   const [loading, setLoading] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   const [reassignTo, setReassignTo] = useState("General");
+  const [error, setError] = useState<string | null>(null);
 
   const startEdit = (cat: UserCategoryRecord) => {
     setEditingId(cat.id);
@@ -60,6 +74,7 @@ export function CategoryManager({ categories }: CategoryManagerProps) {
   const handleSave = async () => {
     if (!editName.trim()) return;
     setLoading(true);
+    setError(null);
     try {
       if (editingId) {
         await updateCategory(editingId, {
@@ -77,6 +92,7 @@ export function CategoryManager({ categories }: CategoryManagerProps) {
       router.refresh();
     } catch (e) {
       console.error(e);
+      setError(e instanceof Error ? e.message : "Failed to save category");
     } finally {
       setLoading(false);
     }
@@ -84,13 +100,23 @@ export function CategoryManager({ categories }: CategoryManagerProps) {
 
   const handleDelete = async () => {
     if (!deleteTarget) return;
+    setError(null);
     try {
       await deleteCategory(deleteTarget, reassignTo);
       setDeleteTarget(null);
       router.refresh();
     } catch (e) {
       console.error(e);
+      setError(e instanceof Error ? e.message : "Failed to delete category");
     }
+  };
+
+  const openDeleteDialog = (categoryId: string) => {
+    const replacement = categories.find((category) => category.id !== categoryId);
+    if (!replacement) return;
+    setDeleteTarget(categoryId);
+    setReassignTo(replacement.name);
+    setError(null);
   };
 
   return (
@@ -119,7 +145,15 @@ export function CategoryManager({ categories }: CategoryManagerProps) {
                 <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => startEdit(cat)}>
                   <IconEdit className="h-3.5 w-3.5" />
                 </Button>
-                <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => { setDeleteTarget(cat.id); setReassignTo("General"); }}>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-7 w-7 text-destructive"
+                  onClick={() => openDeleteDialog(cat.id)}
+                  disabled={
+                    categories.length < 2 || DEFAULT_CATEGORY_NAMES.has(cat.name)
+                  }
+                >
                   <IconTrash className="h-3.5 w-3.5" />
                 </Button>
               </div>
@@ -129,6 +163,7 @@ export function CategoryManager({ categories }: CategoryManagerProps) {
 
         {/* Add/Edit form */}
         <div className="rounded-lg border p-3 space-y-3">
+          {error && <p className="text-sm text-destructive">{error}</p>}
           <p className="text-xs font-medium text-muted-foreground">
             {editingId ? "Edit Category" : "Add New Category"}
           </p>
@@ -139,6 +174,12 @@ export function CategoryManager({ categories }: CategoryManagerProps) {
               onChange={(e) => setEditName(e.target.value)}
               placeholder="Category name"
               className="h-8 text-sm"
+              disabled={
+                !!editingId &&
+                DEFAULT_CATEGORY_NAMES.has(
+                  categories.find((category) => category.id === editingId)?.name || "",
+                )
+              }
             />
           </div>
           <div className="grid grid-cols-2 gap-3">

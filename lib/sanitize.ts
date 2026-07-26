@@ -44,4 +44,3 @@ export function getSafeReceiptHeaders(contentType: string | undefined): {
     contentDisposition: "attachment",
   };
 }
-

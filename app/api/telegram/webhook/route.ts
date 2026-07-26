@@ -5,10 +5,10 @@ import { notifyUser } from "@/app/api/events/route";
 import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 import { checkAndSendSubscriptionAlerts } from "@/lib/subscription-alerts";
 import { getAccountsByUserId } from "@/lib/actions/accounts";
+import { checkRateLimit } from "@/lib/rate-limit";
 import { sanitizeTelegramHtml } from "@/lib/sanitize";
 import { getExpenseBalanceAdjustment, getNetWorthContribution } from "@/lib/accounting";
 
-const TELEGRAM_WEBHOOK_SECRET = process.env.TELEGRAM_WEBHOOK_SECRET;
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 
 type TransactionClient = Parameters<Parameters<typeof db.$transaction>[0]>[0];
@@ -112,7 +112,7 @@ type TelegramMessage = {
  };
 };
 
-// Store pending expenses awaiting confirmation (in-memory, resets on server restart)
+// ponytail: in-memory maps — reset on server restart. if memory becomes a concern, swap to Redis.
 const pendingExpenses = new Map<number, {
  userId: string;
  amount: number;
@@ -124,12 +124,22 @@ const pendingExpenses = new Map<number, {
  expiresAt: number;
 }>();
 
-// Store pending quick expenses awaiting account selection (in-memory, resets on server restart)
 const pendingQuickExpenses = new Map<number, {
  userId: string;
  amount: number;
  expiresAt: number;
 }>();
+
+// ponytail: periodic cleanup of expired entries to prevent memory leaks
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, val] of pendingExpenses) {
+    if (val.expiresAt <= now) pendingExpenses.delete(key);
+  }
+  for (const [key, val] of pendingQuickExpenses) {
+    if (val.expiresAt <= now) pendingQuickExpenses.delete(key);
+  }
+}, 60_000).unref();
 
 // Handle summary command - /summary [today|week|month]
 async function handleSummaryCommand(chatId: number, args: string) {
@@ -1033,13 +1043,28 @@ async function handleDocumentMessage(chatId: number, document: TelegramMessage["
 
 export async function POST(request: NextRequest) {
  // Verify webhook secret
+ const webhookSecret = process.env.TELEGRAM_WEBHOOK_SECRET;
+ if (!webhookSecret) {
+ console.error("TELEGRAM_WEBHOOK_SECRET not configured — webhook disabled");
+ return NextResponse.json({ error: "Server misconfiguration" }, { status: 500 });
+ }
+
  const secretToken = request.headers.get("x-telegram-bot-api-secret-token");
- if (TELEGRAM_WEBHOOK_SECRET && secretToken !== TELEGRAM_WEBHOOK_SECRET) {
+ if (secretToken !== webhookSecret) {
  return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
  }
 
  try {
  const update: TelegramUpdate = await request.json();
+
+ // Telegram calls originate from shared infrastructure, so isolate users by chat ID.
+ // Acknowledge throttled updates to prevent Telegram from retrying them.
+ const rateLimitChatId = update.callback_query?.message?.chat.id ?? update.message?.chat.id;
+ const globalLimit = checkRateLimit("tg:global", 100, 10_000);
+ const chatLimit = checkRateLimit(`tg:chat:${rateLimitChatId ?? "unknown"}`, 10, 10_000);
+ if (!globalLimit.success || !chatLimit.success) {
+ return NextResponse.json({ ok: true });
+ }
 
  // Handle callback queries (inline button clicks)
  if (update.callback_query) {

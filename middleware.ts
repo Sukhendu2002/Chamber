@@ -6,6 +6,7 @@ const isPublicRoute = createRouteMatcher([
   "/docs/(.*)",
   "/sign-in(.*)",
   "/sign-up(.*)",
+  "/offline",
   "/api/telegram/webhook",
   "/api/cron(.*)",
 ]);

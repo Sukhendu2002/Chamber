@@ -16,7 +16,7 @@ import { IconSearch, IconX, IconCalendar } from "@tabler/icons-react";
 import { cn } from "@/lib/utils";
 import type { DateRangePreset } from "@/lib/actions/expenses";
 
-const categories = [
+const FALLBACK_CATEGORIES = [
   "All",
   "Food",
   "Travel",
@@ -27,6 +27,7 @@ const categories = [
   "Education",
   "Investments",
   "Subscription",
+  "Lent Money",
   "General",
 ];
 
@@ -45,6 +46,7 @@ type ExpenseFiltersProps = {
   currentTags?: string[];
   currentDateRange?: DateRangePreset;
   allTags?: string[];
+  categories?: string[];
 };
 
 export function ExpenseFilters({
@@ -54,6 +56,7 @@ export function ExpenseFilters({
   currentTags = [],
   currentDateRange,
   allTags = [],
+  categories = FALLBACK_CATEGORIES,
 }: ExpenseFiltersProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -140,7 +143,7 @@ export function ExpenseFilters({
             <SelectValue placeholder="Category" />
           </SelectTrigger>
           <SelectContent>
-            {categories.map((cat) => (
+            {["All", ...categories.filter((category) => category !== "All")].map((cat) => (
               <SelectItem key={cat} value={cat}>
                 {cat}
               </SelectItem>

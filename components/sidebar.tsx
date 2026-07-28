@@ -38,6 +38,7 @@ import {
   IconPhoto,
   IconReportAnalytics,
   IconCrystalBall,
+  IconCamera,
 } from "@tabler/icons-react";
 
 const navItems = [
@@ -50,6 +51,11 @@ const navItems = [
     title: "Expenses",
     href: "/expenses",
     icon: IconReceipt,
+  },
+  {
+    title: "Quick Capture",
+    href: "/capture",
+    icon: IconCamera,
   },
   {
     title: "Subscriptions",

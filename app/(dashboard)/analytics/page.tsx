@@ -33,6 +33,7 @@ export default async function AnalyticsPage() {
         highestSpendingDay={analytics.highestSpendingDay}
         transactionCount={analytics.transactionCount}
         aiInsights={aiInsights}
+        tagData={analytics.tagData}
       />
     </div>
   );

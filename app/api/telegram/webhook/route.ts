@@ -5,9 +5,51 @@ import { notifyUser } from "@/app/api/events/route";
 import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 import { checkAndSendSubscriptionAlerts } from "@/lib/subscription-alerts";
 import { getAccountsByUserId } from "@/lib/actions/accounts";
+import { checkRateLimit } from "@/lib/rate-limit";
+import { sanitizeTelegramHtml } from "@/lib/sanitize";
+import { getExpenseBalanceAdjustment, getNetWorthContribution } from "@/lib/accounting";
 
-const TELEGRAM_WEBHOOK_SECRET = process.env.TELEGRAM_WEBHOOK_SECRET;
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
+
+type TransactionClient = Parameters<Parameters<typeof db.$transaction>[0]>[0];
+
+interface TelegramExpenseAccount {
+ id: string;
+ type: string;
+ creditLimit: number | null;
+}
+
+async function applyTelegramExpenseBalance(
+ tx: TransactionClient,
+ userId: string,
+ account: TelegramExpenseAccount,
+ amount: number
+) {
+ const adjustment = getExpenseBalanceAdjustment(account.type, amount);
+
+ if (account.type === "CREDIT_CARD" && account.creditLimit !== null) {
+ const updateResult = await tx.account.updateMany({
+ where: {
+ id: account.id,
+ userId,
+ isActive: true,
+ currentBalance: { lte: account.creditLimit - amount },
+ },
+ data: { currentBalance: { increment: adjustment } },
+ });
+
+ if (updateResult.count !== 1) {
+ throw new Error("Expense exceeds the credit card's available credit");
+ }
+
+ return tx.account.findUniqueOrThrow({ where: { id: account.id } });
+ }
+
+ return tx.account.update({
+ where: { id: account.id },
+ data: { currentBalance: { increment: adjustment } },
+ });
+}
 
 // R2 upload helper
 async function uploadImageToR2(base64Data: string, userId: string): Promise<string> {
@@ -70,7 +112,7 @@ type TelegramMessage = {
  };
 };
 
-// Store pending expenses awaiting confirmation (in-memory, resets on server restart)
+// ponytail: in-memory maps — reset on server restart. if memory becomes a concern, swap to Redis.
 const pendingExpenses = new Map<number, {
  userId: string;
  amount: number;
@@ -82,12 +124,22 @@ const pendingExpenses = new Map<number, {
  expiresAt: number;
 }>();
 
-// Store pending quick expenses awaiting account selection (in-memory, resets on server restart)
 const pendingQuickExpenses = new Map<number, {
  userId: string;
  amount: number;
  expiresAt: number;
 }>();
+
+// ponytail: periodic cleanup of expired entries to prevent memory leaks
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, val] of pendingExpenses) {
+    if (val.expiresAt <= now) pendingExpenses.delete(key);
+  }
+  for (const [key, val] of pendingQuickExpenses) {
+    if (val.expiresAt <= now) pendingQuickExpenses.delete(key);
+  }
+}, 60_000).unref();
 
 // Handle summary command - /summary [today|week|month]
 async function handleSummaryCommand(chatId: number, args: string) {
@@ -166,14 +218,14 @@ async function handleSummaryCommand(chatId: number, args: string) {
  .slice(0, 5);
 
  message += `\n<b>By Category:</b>\n`;
- for (const [category, amount] of sortedCategories) {
+ for (const [catName, amount] of sortedCategories) {
  const percentage = ((amount / totalSpent) * 100).toFixed(0);
- message += `• ${category}: ${currencySymbol}${amount.toFixed(2)} (${percentage}%)\n`;
+ message += `• ${sanitizeTelegramHtml(catName)}: ${currencySymbol}${amount.toFixed(2)} (${percentage}%)\n`;
  }
 
  message += `\n<b>Recent Transactions:</b>\n`;
  for (const exp of recentExpenses) {
- const label = exp.merchant || exp.description || exp.category;
+ const label = sanitizeTelegramHtml(exp.merchant || exp.description || exp.category);
  const date = new Date(exp.date).toLocaleDateString("en-US", { month: "short", day: "numeric" });
  message += `• ${label}: ${currencySymbol}${exp.amount.toFixed(2)} (${date})\n`;
  }
@@ -298,7 +350,7 @@ async function handleQuickAccountSelection(
  }
 
  const account = await db.account.findFirst({
- where: { id: accountId, userId: pending.userId },
+ where: { id: accountId, userId: pending.userId, isActive: true },
  });
 
  if (!account) {
@@ -322,11 +374,12 @@ async function handleQuickAccountSelection(
  },
  });
 
- const adjustment = getTelegramBalanceAdjustment(account.type, pending.amount);
- const updatedAccount = await tx.account.update({
- where: { id: account.id },
- data: { currentBalance: { increment: adjustment } },
- });
+ const updatedAccount = await applyTelegramExpenseBalance(
+ tx,
+ pending.userId,
+ account,
+ pending.amount
+ );
  await tx.balanceHistory.create({
  data: {
  accountId: account.id,
@@ -344,7 +397,7 @@ async function handleQuickAccountSelection(
  await editMessageText(
  chatId,
  messageId,
- `<b>Saved!</b>\n\n₹${pending.amount.toFixed(2)} · ${account.name}`
+ `<b>Saved!</b>\n\n₹${pending.amount.toFixed(2)} · ${sanitizeTelegramHtml(account.name)}`
  );
  await answerCallbackQuery(callbackQueryId, "Saved!");
  } catch (error) {
@@ -407,12 +460,19 @@ async function handleAccountsCommand(chatId: number) {
 
  for (const account of typeAccounts) {
  const balance = Number(account.currentBalance);
- totalBalance += balance;
- message += `${icon} <b>${account.name}</b>: ${currencySymbol}${balance.toFixed(2)}\n`;
+ totalBalance += getNetWorthContribution(account.type, balance);
+ if (account.type === "CREDIT_CARD") {
+ const cardLabel = balance >= 0
+ ? `${currencySymbol}${balance.toFixed(2)} outstanding`
+ : `${currencySymbol}${Math.abs(balance).toFixed(2)} credit`;
+ message += `${icon} <b>${sanitizeTelegramHtml(account.name)}</b>: ${cardLabel}\n`;
+ } else {
+ message += `${icon} <b>${sanitizeTelegramHtml(account.name)}</b>: ${currencySymbol}${balance.toFixed(2)}\n`;
+ }
  }
  }
 
- message += `\n <b>Total Balance:</b> ${currencySymbol}${totalBalance.toFixed(2)}`;
+ message += `\n <b>Net Worth:</b> ${currencySymbol}${totalBalance.toFixed(2)}`;
 
  await sendTelegramMessage(chatId, message);
 }
@@ -481,12 +541,6 @@ function buildAccountKeyboard(
  }
  rows.push([{ text: "\u274C Cancel", callback_data: "confirm_no" }]);
  return { inline_keyboard: rows };
-}
-
-// Balance adjustment helper for Telegram expense creation
-function getTelegramBalanceAdjustment(accountType: string, amount: number): number {
- if (accountType === "CREDIT_CARD") return amount;
- return -amount;
 }
 
 type TelegramUpdate = {
@@ -721,8 +775,8 @@ async function handleExpenseMessage(chatId: number, text: string) {
 
  // Build confirmation message - ask for payment method first
  let confirmMsg = `<b>Select payment method:</b>\n\n`;
- if (merchant) confirmMsg += ` ${merchant}\n`;
- confirmMsg += ` ₹${amount.toFixed(2)}\n ${category}\n ${description}`;
+ if (merchant) confirmMsg += ` ${sanitizeTelegramHtml(merchant)}\n`;
+ confirmMsg += ` ₹${amount.toFixed(2)}\n ${sanitizeTelegramHtml(category)}\n ${sanitizeTelegramHtml(description)}`;
 
  if (isDuplicate) {
  confirmMsg += `\n\n <b>Warning:</b> Duplicate amount today.`;
@@ -827,8 +881,8 @@ async function handlePhotoMessage(chatId: number, photo: TelegramMessage["photo"
 
  // Build confirmation message - ask for payment method first
  let confirmMsg = `<b>Select payment method:</b>\n\n`;
- if (merchant) confirmMsg += ` ${merchant}\n`;
- confirmMsg += ` ₹${amount.toFixed(2)}\n ${category}\n ${description}`;
+ if (merchant) confirmMsg += ` ${sanitizeTelegramHtml(merchant)}\n`;
+ confirmMsg += ` ₹${amount.toFixed(2)}\n ${sanitizeTelegramHtml(category)}\n ${sanitizeTelegramHtml(description)}`;
  if (receiptUrl) confirmMsg += `\n Receipt attached`;
 
  if (isDuplicate) {
@@ -932,7 +986,7 @@ async function handleDocumentMessage(chatId: number, document: TelegramMessage["
  credentials: { accessKeyId, secretAccessKey },
  });
 
- const ext = isPdf ? "pdf" : (mimeType.split("/")[1] || "jpg");
+ const ext = isPdf ? "pdf" : ((mimeType?.split("/")[1] || "jpg").replace(/[^a-zA-Z0-9]/g, "").slice(0, 10) || "jpg");
  const key = `receipts/${userSettings.userId}/${Date.now()}.${ext}`;
  await r2Client.send(
  new PutObjectCommand({
@@ -967,8 +1021,8 @@ async function handleDocumentMessage(chatId: number, document: TelegramMessage["
 
  // Build confirmation message - ask for payment method first
  let confirmMsg = `<b>Select payment method:</b>\n\n`;
- if (merchant) confirmMsg += ` ${merchant}\n`;
- confirmMsg += ` ₹${amount.toFixed(2)}\n ${category}\n ${description}`;
+ if (merchant) confirmMsg += ` ${sanitizeTelegramHtml(merchant)}\n`;
+ confirmMsg += ` ₹${amount.toFixed(2)}\n ${sanitizeTelegramHtml(category)}\n ${sanitizeTelegramHtml(description)}`;
  confirmMsg += `\n ${isPdf ? "PDF" : "Image"} attached`;
 
  if (isDuplicate) {
@@ -989,13 +1043,28 @@ async function handleDocumentMessage(chatId: number, document: TelegramMessage["
 
 export async function POST(request: NextRequest) {
  // Verify webhook secret
+ const webhookSecret = process.env.TELEGRAM_WEBHOOK_SECRET;
+ if (!webhookSecret) {
+ console.error("TELEGRAM_WEBHOOK_SECRET not configured — webhook disabled");
+ return NextResponse.json({ error: "Server misconfiguration" }, { status: 500 });
+ }
+
  const secretToken = request.headers.get("x-telegram-bot-api-secret-token");
- if (TELEGRAM_WEBHOOK_SECRET && secretToken !== TELEGRAM_WEBHOOK_SECRET) {
+ if (secretToken !== webhookSecret) {
  return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
  }
 
  try {
  const update: TelegramUpdate = await request.json();
+
+ // Telegram calls originate from shared infrastructure, so isolate users by chat ID.
+ // Acknowledge throttled updates to prevent Telegram from retrying them.
+ const rateLimitChatId = update.callback_query?.message?.chat.id ?? update.message?.chat.id;
+ const globalLimit = checkRateLimit("tg:global", 100, 10_000);
+ const chatLimit = checkRateLimit(`tg:chat:${rateLimitChatId ?? "unknown"}`, 10, 10_000);
+ if (!globalLimit.success || !chatLimit.success) {
+ return NextResponse.json({ ok: true });
+ }
 
  // Handle callback queries (inline button clicks)
  if (update.callback_query) {
@@ -1025,7 +1094,7 @@ export async function POST(request: NextRequest) {
  const pending = pendingExpenses.get(chatId);
  if (pending && pending.expiresAt > Date.now()) {
  const account = await db.account.findFirst({
- where: { id: accountId, userId: pending.userId },
+ where: { id: accountId, userId: pending.userId, isActive: true },
  });
 
  if (!account) {
@@ -1057,11 +1126,12 @@ export async function POST(request: NextRequest) {
  });
 
  // Adjust account balance and record history
- const adjustment = getTelegramBalanceAdjustment(account.type, pending.amount);
- const updatedAccount = await tx.account.update({
- where: { id: accountId },
- data: { currentBalance: { increment: adjustment } },
- });
+ const updatedAccount = await applyTelegramExpenseBalance(
+ tx,
+ pending.userId,
+ account,
+ pending.amount
+ );
  const label = pending.description || pending.category || "Expense";
  await tx.balanceHistory.create({
  data: {
@@ -1081,7 +1151,7 @@ export async function POST(request: NextRequest) {
 
  pendingExpenses.delete(chatId);
 
- await editMessageText(chatId, messageId, `<b>Saved!</b>\n\n ₹${pending.amount.toFixed(2)}\n ${pending.category}\n ${accountName}`);
+ await editMessageText(chatId, messageId, `<b>Saved!</b>\n\n ₹${pending.amount.toFixed(2)}\n ${sanitizeTelegramHtml(pending.category)}\n ${sanitizeTelegramHtml(accountName)}`);
  await answerCallbackQuery(callbackQuery.id, "Saved!");
  } else {
  await editMessageText(chatId, messageId, "⏰ Expired. Please send the expense again.");

@@ -1,5 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { AddExpenseDialog } from "@/components/add-expense-dialog";
+import { CategoryManager } from "@/components/category-manager";
 import { ExpenseTable } from "@/components/expense-table";
 import { ExpenseFilters } from "@/components/expense-filters";
 import { Pagination } from "@/components/pagination";
@@ -7,6 +8,7 @@ import { getExpenses, getExpensesCount, getUserTags } from "@/lib/actions/expens
 import type { DateRangePreset } from "@/lib/actions/expenses";
 import { getUserSettings } from "@/lib/actions/settings";
 import { getAccounts } from "@/lib/actions/accounts";
+import { getUserCategories } from "@/lib/actions/categories";
 
 const ITEMS_PER_PAGE = 10;
 
@@ -29,7 +31,7 @@ export default async function ExpensesPage({
     : undefined;
   const offset = (page - 1) * ITEMS_PER_PAGE;
 
-  const [expenses, { count: totalCount, totalAmount }, settings, accounts, allTags] = await Promise.all([
+  const [expenses, { count: totalCount, totalAmount }, settings, accounts, allTags, userCategories] = await Promise.all([
     getExpenses({
       limit: ITEMS_PER_PAGE,
       offset,
@@ -49,6 +51,7 @@ export default async function ExpensesPage({
     getUserSettings(),
     getAccounts(),
     getUserTags(),
+    getUserCategories(),
   ]);
 
   const totalPages = Math.ceil(totalCount / ITEMS_PER_PAGE);
@@ -73,7 +76,20 @@ export default async function ExpensesPage({
             Manage and track all your expenses
           </p>
         </div>
-        <AddExpenseDialog accounts={accounts.map(a => ({ id: a.id, name: a.name, type: a.type }))} />
+        <div className="flex items-center gap-2">
+          <CategoryManager categories={userCategories} />
+          <AddExpenseDialog
+            currency={settings.currency}
+            accounts={accounts.map((account) => ({
+              id: account.id,
+              name: account.name,
+              type: account.type,
+              currentBalance: account.currentBalance,
+              creditLimit: account.creditLimit,
+            }))}
+            categories={userCategories}
+          />
+        </div>
       </div>
 
       {/* Filters */}
@@ -84,6 +100,7 @@ export default async function ExpensesPage({
         currentTags={tags}
         currentDateRange={dateRange}
         allTags={allTags}
+        categories={userCategories.map((userCategory) => userCategory.name)}
       />
 
       {/* Expenses Table */}
@@ -98,7 +115,13 @@ export default async function ExpensesPage({
         <CardContent>
           {expenses.length > 0 ? (
             <>
-              <ExpenseTable expenses={expenses} currency={settings.currency} accounts={accounts.map(a => ({ id: a.id, name: a.name, type: a.type }))} />
+              <ExpenseTable
+                expenses={expenses}
+                currency={settings.currency}
+                accounts={accounts.map(a => ({ id: a.id, name: a.name, type: a.type }))}
+                categories={userCategories}
+                allTags={allTags}
+              />
               {totalPages > 1 && (
                 <Pagination
                   currentPage={page}

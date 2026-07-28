@@ -52,6 +52,8 @@ import {
   IconUpload,
   IconX,
   IconPhoto,
+  IconWallet,
+  IconArrowBackUp,
 } from "@tabler/icons-react";
 import { addRepayment, deleteLoan, deleteRepayment, updateLoan, addRepaymentReceipt } from "@/lib/actions/loans";
 
@@ -61,6 +63,12 @@ type Repayment = {
   date: Date;
   note: string | null;
   receiptUrls: string[];
+};
+
+type AccountRef = {
+  id: string;
+  name: string;
+  type: string;
 };
 
 type Loan = {
@@ -75,6 +83,7 @@ type Loan = {
   description: string | null;
   receiptUrls: string[];
   repayments: Repayment[];
+  account?: AccountRef | null;
 };
 
 type LoanListProps = {
@@ -340,6 +349,12 @@ export function LoanList({ loans, currency }: LoanListProps) {
                       {loan.borrowerPhone}
                     </div>
                   )}
+                  {loan.account && (
+                    <div className="mt-0.5 text-xs text-muted-foreground flex items-center gap-1">
+                      <IconWallet className="h-3 w-3" />
+                      {loan.account.name}
+                    </div>
+                  )}
                 </div>
                 <div onClick={(e) => e.stopPropagation()}>
                   {renderLoanMenu(loan)}
@@ -380,6 +395,7 @@ export function LoanList({ loans, currency }: LoanListProps) {
               <TableHead>Repaid</TableHead>
               <TableHead>Progress</TableHead>
               <TableHead>Status</TableHead>
+              <TableHead>Account</TableHead>
               <TableHead>Lend Date</TableHead>
               <TableHead>Due Date</TableHead>
               <TableHead className="w-[50px]"></TableHead>
@@ -416,6 +432,16 @@ export function LoanList({ loans, currency }: LoanListProps) {
                     </div>
                   </TableCell>
                   <TableCell>{getStatusBadge(loan.status)}</TableCell>
+                  <TableCell>
+                    {loan.account ? (
+                      <div className="flex items-center gap-1 text-sm">
+                        <IconWallet className="h-3 w-3 text-muted-foreground" />
+                        {loan.account.name}
+                      </div>
+                    ) : (
+                      <span className="text-muted-foreground">-</span>
+                    )}
+                  </TableCell>
                   <TableCell>{formatDate(loan.lendDate)}</TableCell>
                   <TableCell>
                     {loan.dueDate ? (
@@ -453,6 +479,16 @@ export function LoanList({ loans, currency }: LoanListProps) {
                 {selectedLoan && formatCurrency(selectedLoan.amount - selectedLoan.amountRepaid)}
               </div>
             </div>
+            {selectedLoan?.account && (
+              <div className="rounded-md border border-green-200 bg-green-50 p-3 text-sm text-green-800 dark:border-green-800 dark:bg-green-900/20 dark:text-green-300">
+                <div className="flex items-center gap-2">
+                  <IconArrowBackUp className="h-4 w-4" />
+                  <span>
+                    Repayment will be credited to <strong>{selectedLoan.account.name}</strong>
+                  </span>
+                </div>
+              </div>
+            )}
             <div className="grid gap-2">
               <Label htmlFor="repaymentAmount">Repayment Amount *</Label>
               <div className="relative">
@@ -510,11 +546,11 @@ export function LoanList({ loans, currency }: LoanListProps) {
               <label className="cursor-pointer">
                 <div className="flex items-center gap-2 border border-dashed rounded-md p-3 hover:bg-muted/50 transition-colors">
                   <IconUpload className="h-4 w-4 text-muted-foreground" />
-                  <span className="text-sm text-muted-foreground">Add receipt images</span>
+                  <span className="text-sm text-muted-foreground">Add receipt files</span>
                 </div>
                 <input
                   type="file"
-                  accept="image/*"
+                  accept="image/jpeg,image/png,image/webp,application/pdf"
                   multiple
                   className="hidden"
                   onChange={handleRepaymentFileChange}
@@ -622,7 +658,10 @@ export function LoanList({ loans, currency }: LoanListProps) {
             <DialogTitle>Delete Record?</DialogTitle>
             <AlertDialogDescription>
               This will permanently delete the lent money record to {selectedLoan?.borrowerName} and all its repayment records.
-              This action cannot be undone.
+              {selectedLoan?.account && (
+                <> Any associated balance changes on <strong>{selectedLoan.account.name}</strong> will be reversed.</>
+              )}
+              {" "}This action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -686,6 +725,12 @@ export function LoanList({ loans, currency }: LoanListProps) {
                   <div className="flex items-center gap-2">
                     <IconPhone className="h-4 w-4 text-muted-foreground" />
                     <span>{selectedLoan.borrowerPhone}</span>
+                  </div>
+                )}
+                {selectedLoan.account && (
+                  <div className="flex items-center gap-2">
+                    <IconWallet className="h-4 w-4 text-muted-foreground" />
+                    <span>From: {selectedLoan.account.name}</span>
                   </div>
                 )}
               </div>

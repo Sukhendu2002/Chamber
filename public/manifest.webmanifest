@@ -1,0 +1,76 @@
+{
+  "id": "/",
+  "name": "Chamber Expense Tracker",
+  "short_name": "Chamber",
+  "description": "Capture payment screenshots and add expenses with AI.",
+  "start_url": "/capture?source=launcher",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#171717",
+  "theme_color": "#171717",
+  "categories": ["finance", "productivity"],
+  "icons": [
+    {
+      "src": "/icons/chamber-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/chamber-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/chamber-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Add expense",
+      "short_name": "Add expense",
+      "description": "Open a compact manual expense form.",
+      "url": "/capture?mode=manual&source=shortcut",
+      "icons": [
+        {
+          "src": "/icons/chamber-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
+      "name": "Import payment screenshot",
+      "short_name": "Import screenshot",
+      "description": "Choose a payment screenshot for AI extraction.",
+      "url": "/capture?mode=screenshot&source=shortcut",
+      "icons": [
+        {
+          "src": "/icons/chamber-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    }
+  ],
+  "share_target": {
+    "action": "/capture/share",
+    "method": "POST",
+    "enctype": "multipart/form-data",
+    "params": {
+      "title": "title",
+      "text": "text",
+      "files": [
+        {
+          "name": "receipt",
+          "accept": ["image/jpeg", "image/png", "image/webp"]
+        }
+      ]
+    }
+  }
+}

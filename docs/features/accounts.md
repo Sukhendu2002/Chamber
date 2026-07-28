@@ -145,7 +145,8 @@ The Accounts page displays summary cards:
 
 | Card | Description |
 |------|-------------|
-| **Net Worth** | Total of all account balances |
+| **Net Worth** | Assets minus credit-card liabilities |
+| **Card Debt** | Total current credit-card outstanding |
 | **Bank Balance** | Sum of all Bank-type accounts |
 | **Investments** | Sum of all Investment-type accounts |
 | **Wallet** | Sum of all Wallet-type accounts |
@@ -164,7 +165,7 @@ Shows all your accounts with:
 Your net worth is calculated as:
 
 ```
-Net Worth = Sum of all account balances
+Net Worth = Total assets - Credit-card outstanding
 ```
 
 This includes:
@@ -173,6 +174,8 @@ This includes:
 - ✅ Digital wallets
 - ✅ Cash
 - ✅ Other accounts
+- ➖ Credit-card outstanding as a liability
+- ➕ Credit-card overpayments/refunds as card credit
 
 ### Net Worth Dashboard Widget
 
@@ -187,8 +190,10 @@ Your net worth changes when:
 - You update any account balance
 - You add or delete accounts
 - Investment values fluctuate (update manually)
+- You record an expense against an account
 
-**Note:** Expenses don't directly reduce net worth in Chamber - they reduce the account balance when you update it.
+Paying a credit-card bill does not change net worth: the source account and the
+card liability decrease by the same amount.
 
 ## Best Practices
 
@@ -204,9 +209,25 @@ Your net worth changes when:
 ### Expense Tracking
 
 When adding expenses:
-- Select the account used as the "Payment Method"
-- This helps track spending by account
-- Note: You must update account balances manually after expenses
+- Select the account under **Paid with**
+- Bank, wallet, and cash expenses reduce that asset balance immediately
+- Credit-card expenses increase current card outstanding without changing a bank balance
+- Use **Pay card** on the Accounts page when money leaves your bank account
+- A card payment is a transfer and is not counted as a second expense
+
+### Credit-card example
+
+For a ₹10,000 credit-card purchase:
+
+1. Chamber records ₹10,000 of spending on the purchase date.
+2. Card outstanding increases by ₹10,000.
+3. The bank account remains unchanged.
+4. When **Pay card** is used, the bank balance and card outstanding both decrease.
+5. Spending remains ₹10,000; the payment is not counted again.
+
+`Current outstanding` includes all posted card purchases. Statement balances,
+minimum payments, and due dates will be tracked separately in a future statement
+workflow.
 
 ### Loan Tracking
 

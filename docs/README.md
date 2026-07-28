@@ -9,6 +9,7 @@ Welcome to Chamber's user documentation. Chamber is an AI-powered financial trac
 
 ### Feature Documentation
 - [Expense Tracking](./features/expenses.md) - Managing your expenses
+- [Android PWA Quick Capture](./features/pwa-quick-capture.md) - Installing Chamber and sharing payment screenshots
 - [Account Management](./features/accounts.md) - Tracking bank accounts and investments
 - [Loan Tracking](./features/loans.md) - Monitoring money you've lent
 - [Subscription Management](./features/subscriptions.md) - Managing recurring payments

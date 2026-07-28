@@ -7,23 +7,11 @@ import { checkAndSendSubscriptionAlerts } from "@/lib/subscription-alerts";
 import { z } from "zod";
 import { getUserSettings } from "@/lib/actions/settings";
 import { getNowInTimezone, getStartOfMonthInTimezone, getEndOfMonthInTimezone } from "@/lib/utils";
-
-const EXPENSE_CATEGORIES = [
-  "Food",
-  "Travel",
-  "Entertainment",
-  "Bills",
-  "Shopping",
-  "Health",
-  "Education",
-  "Investments",
-  "Subscription",
-  "General",
-] as const;
+import { getExpenseBalanceAdjustment, isCreditCard } from "@/lib/accounting";
 
 const CreateExpenseSchema = z.object({
   amount: z.number().positive("Amount must be greater than 0"),
-  category: z.enum(EXPENSE_CATEGORIES),
+  category: z.string().trim().min(1).max(50).default("General"),
   merchant: z.string().max(200).optional(),
   description: z.string().max(500).optional(),
   date: z.date().optional(),
@@ -87,18 +75,66 @@ const DeleteExpenseSchema = z.object({
   reverseBalance: z.boolean().default(true),
 });
 
-// For credit cards, spending increases the outstanding balance.
-// For all other account types, spending decreases the balance.
-function getBalanceAdjustment(accountType: string, expenseAmount: number): number {
-  if (accountType === "CREDIT_CARD") {
-    return expenseAmount; // increase outstanding
+interface ExpenseAccount {
+  id: string;
+  type: string;
+  currentBalance: number;
+  creditLimit: number | null;
+}
+
+function assertAvailableCredit(account: ExpenseAccount, amount: number) {
+  if (
+    isCreditCard(account.type) &&
+    account.creditLimit !== null &&
+    account.currentBalance + amount > account.creditLimit
+  ) {
+    throw new Error("Expense exceeds the credit card's available credit");
   }
-  return -expenseAmount; // decrease balance
+}
+
+type TransactionClient = Parameters<Parameters<typeof db.$transaction>[0]>[0];
+
+async function applyExpenseToAccount(
+  tx: TransactionClient,
+  userId: string,
+  account: ExpenseAccount,
+  amount: number,
+) {
+  const adjustment = getExpenseBalanceAdjustment(account.type, amount);
+
+  if (isCreditCard(account.type) && account.creditLimit !== null) {
+    const updateResult = await tx.account.updateMany({
+      where: {
+        id: account.id,
+        userId,
+        isActive: true,
+        currentBalance: {
+          lte: account.creditLimit - amount,
+        },
+      },
+      data: {
+        currentBalance: { increment: adjustment },
+      },
+    });
+
+    if (updateResult.count !== 1) {
+      throw new Error("Expense exceeds the credit card's available credit");
+    }
+
+    return tx.account.findUniqueOrThrow({
+      where: { id: account.id },
+    });
+  }
+
+  return tx.account.update({
+    where: { id: account.id },
+    data: { currentBalance: { increment: adjustment } },
+  });
 }
 
 // Record a balance history entry after an account balance change
 async function recordBalanceHistory(
-  tx: Parameters<Parameters<typeof db.$transaction>[0]>[0],
+  tx: TransactionClient,
   accountId: string,
   newBalance: number,
   note: string,
@@ -134,6 +170,24 @@ export async function createExpense(input: CreateExpenseInput) {
   const validated = CreateExpenseSchema.parse(input);
 
   const expense = await db.$transaction(async (tx) => {
+    const linkedAccount = validated.accountId
+      ? await tx.account.findFirst({
+          where: {
+            id: validated.accountId,
+            userId,
+            isActive: true,
+          },
+        })
+      : null;
+
+    if (validated.accountId && !linkedAccount) {
+      throw new Error("Account not found");
+    }
+
+    if (linkedAccount) {
+      assertAvailableCredit(linkedAccount, validated.amount);
+    }
+
     const created = await tx.expense.create({
       data: {
         userId,
@@ -150,18 +204,16 @@ export async function createExpense(input: CreateExpenseInput) {
     });
 
     // Adjust account balance if linked
-    if (validated.accountId) {
-      const account = await tx.account.findUnique({ where: { id: validated.accountId } });
-      if (account) {
-        const adjustment = getBalanceAdjustment(account.type, validated.amount);
-        const updatedAccount = await tx.account.update({
-          where: { id: validated.accountId },
-          data: { currentBalance: { increment: adjustment } },
-        });
-        const label = validated.description || validated.category || "Expense";
-        const expenseDate = validated.date || new Date();
-        await recordBalanceHistory(tx, validated.accountId, updatedAccount.currentBalance, `Expense: ${label} (₹${validated.amount})`, expenseDate);
-      }
+    if (validated.accountId && linkedAccount) {
+      const updatedAccount = await applyExpenseToAccount(
+        tx,
+        userId,
+        linkedAccount,
+        validated.amount,
+      );
+      const label = validated.description || validated.category || "Expense";
+      const expenseDate = validated.date || new Date();
+      await recordBalanceHistory(tx, validated.accountId, updatedAccount.currentBalance, `Expense: ${label} (₹${validated.amount})`, expenseDate);
     }
 
     // Link tags
@@ -243,7 +295,15 @@ export async function getExpenses(options?: z.infer<typeof GetExpensesOptionsSch
 
   const expenses = await db.expense.findMany({
     where,
-    include: { tags: { include: { tag: true } } },
+    include: {
+      tags: { include: { tag: true } },
+      loan: {
+        select: {
+          id: true,
+          borrowerName: true,
+        },
+      },
+    },
     orderBy: [
       { createdAt: "desc" },
       { id: "desc" },
@@ -345,12 +405,20 @@ export async function updateExpense(
     // Get existing expense to reverse old balance effect
     const existing = await tx.expense.findFirst({ where: { id: validatedId, userId } });
     if (!existing) throw new Error("Expense not found");
+    if (existing.loanId || existing.repaymentId) {
+      throw new Error("Loan-linked expenses must be managed from the loan");
+    }
 
     // Reverse old balance effect if expense was linked to an account
     if (existing.accountId) {
-      const oldAccount = await tx.account.findUnique({ where: { id: existing.accountId } });
+      const oldAccount = await tx.account.findFirst({
+        where: {
+          id: existing.accountId,
+          userId,
+        },
+      });
       if (oldAccount) {
-        const reversal = -getBalanceAdjustment(oldAccount.type, existing.amount);
+        const reversal = -getExpenseBalanceAdjustment(oldAccount.type, existing.amount);
         const updatedOld = await tx.account.update({
           where: { id: existing.accountId },
           data: { currentBalance: { increment: reversal } },
@@ -365,17 +433,26 @@ export async function updateExpense(
 
     // Apply new balance effect
     if (newAccountId) {
-      const newAccount = await tx.account.findUnique({ where: { id: newAccountId } });
-      if (newAccount) {
-        const adjustment = getBalanceAdjustment(newAccount.type, newAmount);
-        const updatedNew = await tx.account.update({
-          where: { id: newAccountId },
-          data: { currentBalance: { increment: adjustment } },
-        });
-        const label = validated.description || validated.category || "Expense";
-        const expenseDate = validated.date || existing.date;
-        await recordBalanceHistory(tx, newAccountId, updatedNew.currentBalance, `Expense: ${label} (₹${newAmount})`, expenseDate);
-      }
+      const newAccount = await tx.account.findFirst({
+        where: {
+          id: newAccountId,
+          userId,
+          isActive: true,
+        },
+      });
+      if (!newAccount) throw new Error("Account not found");
+
+      assertAvailableCredit(newAccount, newAmount);
+
+      const updatedNew = await applyExpenseToAccount(
+        tx,
+        userId,
+        newAccount,
+        newAmount,
+      );
+      const label = validated.description || validated.category || "Expense";
+      const expenseDate = validated.date || existing.date;
+      await recordBalanceHistory(tx, newAccountId, updatedNew.currentBalance, `Expense: ${label} (₹${newAmount})`, expenseDate);
     }
 
     // Update the expense
@@ -433,12 +510,20 @@ export async function deleteExpense(id: string, reverseBalance: boolean = true) 
     // Get expense to reverse balance effect
     const existing = await tx.expense.findFirst({ where: { id: validated.id, userId } });
     if (!existing) throw new Error("Expense not found");
+    if (existing.loanId || existing.repaymentId) {
+      throw new Error("Loan-linked expenses must be managed from the loan");
+    }
 
     // Reverse balance effect if linked to an account (only if requested)
     if (validated.reverseBalance && existing.accountId) {
-      const account = await tx.account.findUnique({ where: { id: existing.accountId } });
+      const account = await tx.account.findFirst({
+        where: {
+          id: existing.accountId,
+          userId,
+        },
+      });
       if (account) {
-        const reversal = -getBalanceAdjustment(account.type, existing.amount);
+        const reversal = -getExpenseBalanceAdjustment(account.type, existing.amount);
         const updatedAccount = await tx.account.update({
           where: { id: existing.accountId },
           data: { currentBalance: { increment: reversal } },
@@ -620,6 +705,21 @@ export async function getAnalyticsData() {
     color: categoryColors[name] || "#95A5A6",
   }));
 
+  // ponytail: single query for tag breakdown instead of N+1
+  const tagExpenses = await db.expense.findMany({
+    where: {
+      userId,
+      date: { gte: startOfMonth },
+    },
+    select: { amount: true, tags: { include: { tag: { select: { name: true } } } } },
+  });
+  const tagBreakdown: Record<string, number> = {};
+  for (const exp of tagExpenses) {
+    for (const et of exp.tags) {
+      tagBreakdown[et.tag.name] = (tagBreakdown[et.tag.name] || 0) + exp.amount;
+    }
+  }
+
   // Daily spending for current month (area chart)
   const dailySpendingMap: Record<string, number> = {};
   for (const exp of currentMonthExpenses) {
@@ -681,6 +781,11 @@ export async function getAnalyticsData() {
     previousMonthSpent,
     highestSpendingDay,
     transactionCount,
+    tagBreakdown,
+    tagData: Object.entries(tagBreakdown)
+      .map(([name, value]) => ({ name, value }))
+      .sort((a, b) => b.value - a.value)
+      .slice(0, 20),
   };
 }
 
@@ -796,4 +901,3 @@ export async function getMonthlyHistory(year?: number): Promise<{
     availableYears,
   };
 }
-

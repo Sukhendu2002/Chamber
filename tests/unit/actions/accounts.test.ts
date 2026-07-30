@@ -163,12 +163,12 @@ describe("Account Actions", () => {
     describe("getAccountStats", () => {
         it("should calculate aggregate statistics", async () => {
             const mockAccounts = [
-                { type: "BANK", currentBalance: 10000, isActive: true },
-                { type: "BANK", currentBalance: 20000, isActive: true },
-                { type: "INVESTMENT", currentBalance: 50000, isActive: true },
-                { type: "WALLET", currentBalance: 5000, isActive: true },
-                { type: "CASH", currentBalance: 2000, isActive: true },
-                { type: "CREDIT_CARD", currentBalance: 7000, isActive: true },
+                { type: "BANK", currentBalance: 10000, isActive: true, includeInNetWorth: true },
+                { type: "BANK", currentBalance: 20000, isActive: true, includeInNetWorth: true },
+                { type: "INVESTMENT", currentBalance: 50000, isActive: true, includeInNetWorth: true },
+                { type: "WALLET", currentBalance: 5000, isActive: true, includeInNetWorth: true },
+                { type: "CASH", currentBalance: 2000, isActive: true, includeInNetWorth: true },
+                { type: "CREDIT_CARD", currentBalance: 7000, isActive: true, includeInNetWorth: true },
             ];
 
             mockDb.account.findMany.mockResolvedValue(mockAccounts);
@@ -183,6 +183,28 @@ describe("Account Actions", () => {
             expect(result.totalCreditCardOutstanding).toBe(7000);
             expect(result.totalBankBalance).toBe(30000);
             expect(result.totalInvestments).toBe(50000);
+        });
+
+        it("should include every active card in card debt even when excluded from net worth", async () => {
+            const mockAccounts = [
+                { type: "BANK", currentBalance: 10000, isActive: true, includeInNetWorth: true },
+                { type: "CREDIT_CARD", currentBalance: 1958, isActive: true, includeInNetWorth: true },
+                { type: "CREDIT_CARD", currentBalance: 2700, isActive: true, includeInNetWorth: false },
+            ];
+
+            mockDb.account.findMany.mockResolvedValue(mockAccounts);
+
+            vi.resetModules();
+            const { getAccountStats } = await import("@/lib/actions/accounts");
+            const result = await getAccountStats();
+
+            expect(mockDb.account.findMany).toHaveBeenCalledWith({
+                where: { userId: "test-user-id", isActive: true },
+            });
+            expect(result.totalCreditCardOutstanding).toBe(4658);
+            expect(result.totalLiabilities).toBe(4658);
+            expect(result.totalNetWorth).toBe(8042);
+            expect(result.accountCount).toBe(2);
         });
     });
 

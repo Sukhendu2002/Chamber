@@ -384,7 +384,7 @@ export async function getAccountStats() {
   if (!userId) throw new Error("Unauthorized");
 
   const accounts = await db.account.findMany({
-    where: { userId, isActive: true, includeInNetWorth: true },
+    where: { userId, isActive: true },
   });
 
   let totalBankBalance = 0;
@@ -397,9 +397,13 @@ export async function getAccountStats() {
   let totalCardCredit = 0;
   let totalOther = 0;
   let totalNetWorth = 0;
+  let accountCount = 0;
 
   for (const account of accounts) {
-    totalNetWorth += getNetWorthContribution(account.type, account.currentBalance);
+    if (account.includeInNetWorth) {
+      totalNetWorth += getNetWorthContribution(account.type, account.currentBalance);
+      accountCount += 1;
+    }
 
     switch (account.type) {
       case "BANK":
@@ -449,7 +453,7 @@ export async function getAccountStats() {
       totalCardCredit,
     totalLiabilities: totalCreditCardOutstanding,
     totalNetWorth,
-    accountCount: accounts.length,
+    accountCount,
   };
 }
 

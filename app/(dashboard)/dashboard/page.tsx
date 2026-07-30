@@ -289,8 +289,8 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
       />
 
       {widgets.showStats && (
-        <section aria-label="Monthly financial overview" className="grid gap-3 xl:grid-cols-[minmax(0,2fr)_minmax(18rem,1fr)]">
-          <Card>
+        <section aria-label="Monthly financial overview" className="grid gap-3 xl:grid-cols-3">
+          <Card className="xl:col-span-2">
             <CardHeader className="grid-cols-[auto_1fr_auto] items-center gap-x-3">
               <span className="row-span-2 flex size-9 items-center justify-center rounded-md bg-secondary text-primary">
                 <IconWallet aria-hidden="true" className="size-5 stroke-[1.8]" />
@@ -426,7 +426,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
       )}
 
       {(widgets.showStats || widgets.showCategories || widgets.showRecent) && (
-        <section aria-label="Spending details" className="mt-3 grid gap-3 xl:grid-cols-[1.2fr_.95fr_1.05fr]">
+        <section aria-label="Spending details" className="mt-3 grid gap-3 xl:grid-cols-3">
           {widgets.showStats && (
             <Card>
               <CardHeader>

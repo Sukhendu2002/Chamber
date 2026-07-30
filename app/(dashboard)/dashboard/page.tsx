@@ -273,6 +273,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           <>
             <DashboardMonthPicker value={monthValue} />
             <AddExpenseDialog
+              triggerClassName="h-9"
               currency={settings.currency}
               accounts={accounts.map((account) => ({
                 id: account.id,

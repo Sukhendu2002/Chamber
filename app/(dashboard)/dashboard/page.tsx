@@ -4,7 +4,6 @@ import {
   IconAlertCircle,
   IconArrowUpRight,
   IconBuildingBank,
-  IconCalendar,
   IconChartLine,
   IconCreditCard,
   IconCurrencyDollar,
@@ -18,9 +17,14 @@ import {
 
 import { AddExpenseDialog } from "@/components/add-expense-dialog";
 import { BalanceHistoryChart } from "@/components/balance-history-chart";
+import { DashboardMonthPicker } from "@/components/dashboard-month-picker";
 import { ExpenseCalendarWidget } from "@/components/expense-calendar-widget";
 import { ForecastWidget } from "@/components/forecast-widget";
 import { PageHeader, PageShell } from "@/components/page-shell";
+import {
+  SpendingTrendChart,
+  type SpendingTrendPoint,
+} from "@/components/spending-trend-chart";
 import { Badge } from "@/components/ui/badge";
 import {
   Card,
@@ -31,15 +35,11 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { getAccounts, getAccountStats, getAllBalanceHistory } from "@/lib/actions/accounts";
+import { getUserCategories } from "@/lib/actions/categories";
 import { getMonthlyStats } from "@/lib/actions/expenses";
 import { getForecastData, getUpcomingRecurringAlerts } from "@/lib/actions/forecasting";
 import { getUserSettings } from "@/lib/actions/settings";
 import { DashboardWidgets, DEFAULT_DASHBOARD_WIDGETS } from "@/types/dashboard";
-
-interface TrendPoint {
-  label: string;
-  value: number;
-}
 
 interface CompactMetricCardProps {
   title: string;
@@ -98,13 +98,13 @@ function CompactMetricCard({
   href,
 }: CompactMetricCardProps) {
   const content = (
-    <Card className="group h-full hover:border-primary/25 hover:shadow-[0_14px_38px_oklch(0.2_0.02_286/0.06)]">
-      <CardContent className="flex h-full items-center gap-4">
+    <Card className="group h-full hover:border-primary/35">
+      <CardContent className="flex h-full items-center gap-3">
         <span
           className={
             tone === "success"
-              ? "flex size-12 shrink-0 items-center justify-center rounded-2xl bg-chart-2/15 text-chart-2"
-              : "flex size-12 shrink-0 items-center justify-center rounded-2xl bg-secondary text-primary"
+              ? "flex size-9 shrink-0 items-center justify-center rounded-md bg-chart-2/15 text-chart-2"
+              : "flex size-9 shrink-0 items-center justify-center rounded-md bg-secondary text-primary"
           }
         >
           <Icon aria-hidden="true" className="size-5 stroke-[1.8]" />
@@ -130,7 +130,7 @@ function CompactMetricCard({
   );
 
   return href ? (
-    <Link href={href} className="block h-full rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+    <Link href={href} className="block h-full rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
       {content}
     </Link>
   ) : (
@@ -138,120 +138,42 @@ function CompactMetricCard({
   );
 }
 
-function SpendingTrendChart({
-  data,
-  currency,
-}: {
-  data: TrendPoint[];
-  currency: string;
-}) {
-  const width = 640;
-  const height = 250;
-  const left = 58;
-  const right = 18;
-  const top = 20;
-  const bottom = 38;
-  const chartWidth = width - left - right;
-  const chartHeight = height - top - bottom;
-  const maxValue = Math.max(...data.map((point) => point.value), 1);
-  const roundedMax = Math.ceil(maxValue / 1000) * 1000 || 1000;
-  const points = data.map((point, index) => ({
-    ...point,
-    x: left + (index / Math.max(data.length - 1, 1)) * chartWidth,
-    y: top + chartHeight - (point.value / roundedMax) * chartHeight,
-  }));
-  const linePoints = points.map((point) => `${point.x},${point.y}`).join(" ");
-  const areaPoints = `${left},${top + chartHeight} ${linePoints} ${left + chartWidth},${top + chartHeight}`;
-  const formatter = new Intl.NumberFormat("en-IN", {
-    style: "currency",
-    currency,
-    notation: "compact",
-    maximumFractionDigits: 0,
-  });
-
-  return (
-    <div>
-      <svg
-        role="img"
-        aria-label={`Seven-day spending trend. Highest daily spend was ${formatter.format(maxValue)}.`}
-        viewBox={`0 0 ${width} ${height}`}
-        className="h-auto w-full overflow-visible text-muted-foreground"
-      >
-        <defs>
-          <linearGradient id="spending-area" x1="0" x2="0" y1="0" y2="1">
-            <stop offset="0%" stopColor="var(--primary)" stopOpacity="0.2" />
-            <stop offset="100%" stopColor="var(--primary)" stopOpacity="0" />
-          </linearGradient>
-        </defs>
-        {[0, 0.33, 0.66, 1].map((ratio) => {
-          const y = top + ratio * chartHeight;
-          const value = roundedMax * (1 - ratio);
-          return (
-            <g key={ratio}>
-              <line
-                x1={left}
-                x2={left + chartWidth}
-                y1={y}
-                y2={y}
-                stroke="currentColor"
-                strokeOpacity="0.16"
-                strokeDasharray="4 5"
-              />
-              <text x={left - 10} y={y + 4} textAnchor="end" fontSize="11" fill="currentColor">
-                {formatter.format(value)}
-              </text>
-            </g>
-          );
-        })}
-        <polygon points={areaPoints} fill="url(#spending-area)" />
-        <polyline
-          points={linePoints}
-          fill="none"
-          stroke="var(--primary)"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          strokeWidth="3"
-        />
-        {points.map((point) => (
-          <g key={point.label}>
-            <circle cx={point.x} cy={point.y} r="4" fill="var(--card)" stroke="var(--primary)" strokeWidth="2.5" />
-            <text
-              x={point.x}
-              y={height - 10}
-              textAnchor="middle"
-              fontSize="11"
-              fill="currentColor"
-            >
-              {point.label}
-            </text>
-          </g>
-        ))}
-      </svg>
-      <div className="mt-1 flex items-center gap-2 text-xs font-medium text-muted-foreground">
-        <span className="h-0.5 w-7 rounded-full bg-primary" />
-        Amount spent
-      </div>
-    </div>
-  );
+interface DashboardPageProps {
+  searchParams: Promise<{ month?: string }>;
 }
 
-export default async function DashboardPage() {
-  const [stats, settings, accountStats, balanceHistory, accounts, forecast, alerts] = await Promise.all([
-    getMonthlyStats(),
+export default async function DashboardPage({ searchParams }: DashboardPageProps) {
+  const params = await searchParams;
+  const now = new Date();
+  const monthMatch = params.month?.match(/^(\d{4})-(\d{2})$/);
+  const selectedYear = monthMatch ? Number(monthMatch[1]) : now.getFullYear();
+  const selectedMonth = monthMatch ? Number(monthMatch[2]) : now.getMonth() + 1;
+  const hasValidMonth =
+    selectedYear >= 2000 &&
+    selectedYear <= 2100 &&
+    selectedMonth >= 1 &&
+    selectedMonth <= 12;
+  const dashboardYear = hasValidMonth ? selectedYear : now.getFullYear();
+  const dashboardMonth = hasValidMonth ? selectedMonth : now.getMonth() + 1;
+  const selectedDate = new Date(dashboardYear, dashboardMonth - 1, 1);
+  const monthValue = `${dashboardYear}-${String(dashboardMonth).padStart(2, "0")}`;
+
+  const [stats, settings, accountStats, balanceHistory, accounts, categories, forecast, alerts] = await Promise.all([
+    getMonthlyStats({ year: dashboardYear, month: dashboardMonth }),
     getUserSettings(),
     getAccountStats(),
     getAllBalanceHistory(6),
     getAccounts(),
+    getUserCategories(),
     getForecastData(),
     getUpcomingRecurringAlerts(),
   ]);
 
-  const currentDate = new Date();
-  const monthYear = currentDate.toLocaleDateString("en-US", {
+  const monthYear = selectedDate.toLocaleDateString("en-US", {
     month: "long",
     year: "numeric",
   });
-  const hour = currentDate.getHours();
+  const hour = now.getHours();
   const greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
   const budget = settings.monthlyBudget;
   const spentForBudget = stats.spentExcludingInvestment;
@@ -262,7 +184,12 @@ export default async function DashboardPage() {
   const budgetMarker = budget > 0
     ? Math.min(Math.max((budget / Math.max(spentForBudget, budget)) * 100, 6), 94)
     : 0;
-  const dailyAverage = stats.totalSpent / Math.max(currentDate.getDate(), 1);
+  const isCurrentMonth =
+    dashboardYear === now.getFullYear() && dashboardMonth === now.getMonth() + 1;
+  const daysInSelectedMonth = new Date(dashboardYear, dashboardMonth, 0).getDate();
+  const elapsedDays = isCurrentMonth ? now.getDate() : daysInSelectedMonth;
+  const trendDayCount = isCurrentMonth ? elapsedDays : daysInSelectedMonth;
+  const dailyAverage = stats.totalSpent / Math.max(elapsedDays, 1);
 
   const widgets: DashboardWidgets = {
     ...DEFAULT_DASHBOARD_WIDGETS,
@@ -285,28 +212,42 @@ export default async function DashboardPage() {
   };
   const CurrencyIcon = currencyIcons[settings.currency as keyof typeof currencyIcons] || IconCurrencyDollar;
 
-  const trendData: TrendPoint[] = Array.from({ length: 7 }, (_, index) => {
-    const date = new Date(currentDate);
-    date.setHours(0, 0, 0, 0);
-    date.setDate(currentDate.getDate() - (6 - index));
-    const value = stats.calendarExpenses.reduce((sum, expense) => {
-      const expenseDate = new Date(expense.date);
-      return expenseDate.toDateString() === date.toDateString() ? sum + expense.amount : sum;
-    }, 0);
-    return {
-      label: date.toLocaleDateString("en-US", { weekday: "short" }),
-      value,
-    };
+  const selectedMonthExpenses = stats.calendarExpenses.filter((expense) => {
+    const expenseDate = new Date(expense.date);
+    return (
+      expenseDate.getFullYear() === dashboardYear &&
+      expenseDate.getMonth() === dashboardMonth - 1
+    );
   });
-  const transactionTrend = trendData.map((day) =>
-    stats.calendarExpenses.filter((expense) => {
-      const expenseDate = new Date(expense.date);
-      const targetDate = new Date(currentDate);
-      targetDate.setHours(0, 0, 0, 0);
-      targetDate.setDate(currentDate.getDate() - (6 - trendData.indexOf(day)));
-      return expenseDate.toDateString() === targetDate.toDateString();
-    }).length
+  const trendData: SpendingTrendPoint[] = Array.from(
+    { length: trendDayCount },
+    (_, index) => {
+      const date = new Date(dashboardYear, dashboardMonth - 1, index + 1);
+      const dayExpenses = selectedMonthExpenses.filter((expense) => {
+        const expenseDate = new Date(expense.date);
+        return expenseDate.getDate() === date.getDate();
+      });
+
+      return {
+        date: date.toLocaleDateString("en-US", {
+          month: "long",
+          day: "numeric",
+          year: "numeric",
+        }),
+        label: date.toLocaleDateString("en-US", {
+          month: "short",
+          day: "numeric",
+        }),
+        value: dayExpenses.reduce((sum, expense) => sum + expense.amount, 0),
+      };
+    },
   );
+  const transactionTrend = trendData.map((_, index) => {
+    return selectedMonthExpenses.filter((expense) => {
+      const expenseDate = new Date(expense.date);
+      return expenseDate.getDate() === index + 1;
+    }).length;
+  });
   const trendValues = trendData.map((day) => day.value);
 
   const topCategories = Object.entries(stats.categoryBreakdown as Record<string, number>)
@@ -330,10 +271,7 @@ export default async function DashboardPage() {
         description={`Here’s your financial overview for ${monthYear}`}
         actions={
           <>
-            <div className="flex h-10 items-center gap-2 rounded-xl border border-border bg-card px-3.5 text-sm font-medium shadow-sm">
-              <IconCalendar aria-hidden="true" className="size-4 text-muted-foreground" />
-              {monthYear}
-            </div>
+            <DashboardMonthPicker value={monthValue} />
             <AddExpenseDialog
               currency={settings.currency}
               accounts={accounts.map((account) => ({
@@ -343,16 +281,17 @@ export default async function DashboardPage() {
                 currentBalance: account.currentBalance,
                 creditLimit: account.creditLimit,
               }))}
+              categories={categories}
             />
           </>
         }
       />
 
       {widgets.showStats && (
-        <section aria-label="Monthly financial overview" className="grid gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(19rem,1fr)]">
-          <Card className="min-h-[22rem]">
+        <section aria-label="Monthly financial overview" className="grid gap-3 xl:grid-cols-[minmax(0,2fr)_minmax(18rem,1fr)]">
+          <Card>
             <CardHeader className="grid-cols-[auto_1fr_auto] items-center gap-x-3">
-              <span className="row-span-2 flex size-11 items-center justify-center rounded-2xl bg-secondary text-primary">
+              <span className="row-span-2 flex size-9 items-center justify-center rounded-md bg-secondary text-primary">
                 <IconWallet aria-hidden="true" className="size-5 stroke-[1.8]" />
               </span>
               <CardTitle>Monthly budget</CardTitle>
@@ -360,28 +299,28 @@ export default async function DashboardPage() {
               <CardAction className="col-start-3 row-start-1 row-span-2 self-center">
                 <Link
                   href="/analytics"
-                  className="inline-flex min-h-10 items-center gap-1 rounded-lg px-2 text-sm font-semibold text-primary transition-colors hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  className="inline-flex min-h-8 items-center gap-1 rounded-sm px-2 text-xs font-semibold text-primary transition-colors hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   View report
                   <IconArrowUpRight aria-hidden="true" className="size-4" />
                 </Link>
               </CardAction>
             </CardHeader>
-            <CardContent className="flex flex-1 flex-col justify-between gap-7">
-              <div className="grid gap-5 sm:grid-cols-3 sm:divide-x sm:divide-border">
+            <CardContent className="flex flex-1 flex-col justify-between gap-5">
+              <div className="grid gap-4 sm:grid-cols-3 sm:divide-x sm:divide-border">
                 <div>
                   <p className="text-sm text-muted-foreground">Budget</p>
                   <p className="mt-1 text-2xl font-semibold tracking-[-0.035em] tabular-nums">
                     {formatCurrency(budget)}
                   </p>
                 </div>
-                <div className="sm:pl-5">
+                <div className="sm:pl-4">
                   <p className="text-sm text-muted-foreground">Spent (excl. investments)</p>
                   <p className="mt-1 text-2xl font-semibold tracking-[-0.035em] tabular-nums">
                     {formatCurrency(spentForBudget)}
                   </p>
                 </div>
-                <div className="sm:pl-5">
+                <div className="sm:pl-4">
                   <p className="text-sm text-muted-foreground">{remaining < 0 ? "Overspent" : "Remaining"}</p>
                   <p
                     className={
@@ -423,7 +362,7 @@ export default async function DashboardPage() {
                   </div>
                 </div>
               ) : (
-                <div className="rounded-xl border border-dashed border-primary/35 bg-secondary/55 p-4 text-sm text-secondary-foreground">
+                <div className="rounded-md border border-dashed border-primary/35 bg-secondary/55 p-3 text-sm text-secondary-foreground">
                   Add a monthly budget in Settings to see progress and overspend guidance.
                 </div>
               )}
@@ -431,8 +370,8 @@ export default async function DashboardPage() {
               <div
                 className={
                   remaining < 0
-                    ? "flex flex-col gap-2 rounded-xl border border-destructive/15 bg-destructive/[0.055] px-4 py-3 text-sm sm:flex-row sm:items-center sm:justify-between"
-                    : "flex flex-col gap-2 rounded-xl border border-chart-2/20 bg-chart-2/[0.08] px-4 py-3 text-sm sm:flex-row sm:items-center sm:justify-between"
+                    ? "flex flex-col gap-2 rounded-md border border-destructive/15 bg-destructive/[0.055] px-3 py-2.5 text-xs sm:flex-row sm:items-center sm:justify-between"
+                    : "flex flex-col gap-2 rounded-md border border-chart-2/20 bg-chart-2/[0.08] px-3 py-2.5 text-xs sm:flex-row sm:items-center sm:justify-between"
                 }
               >
                 <span className="inline-flex items-center gap-2 font-semibold">
@@ -456,11 +395,11 @@ export default async function DashboardPage() {
             </CardContent>
           </Card>
 
-          <div className="grid gap-4 sm:grid-cols-3 xl:grid-cols-1">
+          <div className="grid gap-3 sm:grid-cols-3 xl:grid-cols-1">
             <CompactMetricCard
               title="Total spent"
               value={formatCurrency(stats.totalSpent)}
-              subtitle="This month"
+              subtitle={monthYear}
               icon={CurrencyIcon}
               values={trendValues}
               href="/expenses"
@@ -468,7 +407,7 @@ export default async function DashboardPage() {
             <CompactMetricCard
               title="Transactions"
               value={stats.transactionCount.toString()}
-              subtitle="This month"
+              subtitle={monthYear}
               icon={IconReceipt}
               values={transactionTrend}
               tone="success"
@@ -477,7 +416,7 @@ export default async function DashboardPage() {
             <CompactMetricCard
               title="Daily average"
               value={formatCurrency(dailyAverage)}
-              subtitle={`Across ${currentDate.getDate()} days`}
+              subtitle={`Across ${elapsedDays} days`}
               icon={IconTrendingUp}
               values={trendValues}
             />
@@ -486,14 +425,14 @@ export default async function DashboardPage() {
       )}
 
       {(widgets.showStats || widgets.showCategories || widgets.showRecent) && (
-        <section aria-label="Spending details" className="mt-4 grid gap-4 xl:grid-cols-[1.2fr_.95fr_1.05fr]">
+        <section aria-label="Spending details" className="mt-3 grid gap-3 xl:grid-cols-[1.2fr_.95fr_1.05fr]">
           {widgets.showStats && (
             <Card>
               <CardHeader>
                 <CardTitle>Spending trend</CardTitle>
-                <CardDescription>Last seven days</CardDescription>
+                <CardDescription>Daily totals for {monthYear}</CardDescription>
                 <CardAction>
-                  <Badge variant="secondary">This week</Badge>
+                  <Badge variant="secondary">{monthYear}</Badge>
                 </CardAction>
               </CardHeader>
               <CardContent>
@@ -515,10 +454,10 @@ export default async function DashboardPage() {
               </CardHeader>
               <CardContent>
                 {topCategories.length > 0 ? (
-                  <div className="space-y-4">
+                  <div className="space-y-3">
                     {topCategories.map(([category, amount], index) => (
                       <div key={category}>
-                        <div className="mb-2 flex items-center justify-between gap-3 text-sm">
+                        <div className="mb-1.5 flex items-center justify-between gap-3 text-sm">
                           <span className="flex min-w-0 items-center gap-2.5 font-medium">
                             <span className={`size-2.5 shrink-0 rounded-full ${CATEGORY_TONES[index]}`} />
                             <span className="truncate">{category}</span>
@@ -527,9 +466,9 @@ export default async function DashboardPage() {
                             {formatCurrency(amount, 0)}
                           </span>
                         </div>
-                        <div className="h-2 overflow-hidden rounded-full bg-muted">
+                        <div className="h-1.5 overflow-hidden rounded-sm bg-muted">
                           <div
-                            className={`h-full rounded-full ${CATEGORY_TONES[index]}`}
+                            className={`h-full rounded-sm ${CATEGORY_TONES[index]}`}
                             style={{ width: `${Math.max((amount / largestCategory) * 100, 5)}%` }}
                           />
                         </div>
@@ -563,9 +502,9 @@ export default async function DashboardPage() {
                       <Link
                         key={expense.id}
                         href="/expenses"
-                        className="flex min-h-[3.75rem] items-center gap-3 rounded-lg px-1 transition-colors hover:bg-muted/45"
+                        className="flex min-h-12 items-center gap-2.5 rounded-sm px-1 transition-colors hover:bg-muted/45"
                       >
-                        <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-muted text-muted-foreground">
+                        <span className="flex size-8 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">
                           <IconReceipt aria-hidden="true" className="size-4" />
                         </span>
                         <span className="min-w-0 flex-1">
@@ -598,8 +537,8 @@ export default async function DashboardPage() {
       )}
 
       {(widgets.showNetWorth || widgets.showBalanceTrend || widgets.showForecast || widgets.showCalendar) && (
-        <section aria-labelledby="more-insights-title" className="mt-8">
-          <div className="mb-4 flex items-end justify-between">
+        <section aria-labelledby="more-insights-title" className="mt-4">
+          <div className="mb-3 flex items-end justify-between">
             <div>
               <p className="eyebrow">Portfolio</p>
               <h2 id="more-insights-title" className="mt-1 text-xl font-semibold tracking-[-0.025em]">
@@ -607,7 +546,7 @@ export default async function DashboardPage() {
               </h2>
             </div>
           </div>
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
             {widgets.showNetWorth && (
               <Card>
                 <CardHeader>
@@ -621,22 +560,22 @@ export default async function DashboardPage() {
                 </CardHeader>
                 <CardContent>
                   <div className="metric-value mb-5">{formatCurrency(accountStats.totalNetWorth)}</div>
-                  <div className="grid gap-3 sm:grid-cols-3">
-                    <div className="rounded-xl bg-muted/65 p-3">
+                  <div className="grid divide-y border sm:grid-cols-3 sm:divide-x sm:divide-y-0">
+                    <div className="p-3">
                       <IconBuildingBank className="mb-2 size-4 text-primary" />
                       <div className="text-xs text-muted-foreground">Banks</div>
                       <div className="mt-0.5 truncate text-sm font-semibold tabular-nums">
                         {formatCurrency(accountStats.totalBankBalance, 0)}
                       </div>
                     </div>
-                    <div className="rounded-xl bg-muted/65 p-3">
+                    <div className="p-3">
                       <IconChartLine className="mb-2 size-4 text-chart-2" />
                       <div className="text-xs text-muted-foreground">Investments</div>
                       <div className="mt-0.5 truncate text-sm font-semibold tabular-nums">
                         {formatCurrency(accountStats.totalInvestments, 0)}
                       </div>
                     </div>
-                    <div className="rounded-xl bg-destructive/[0.055] p-3">
+                    <div className="p-3">
                       <IconCreditCard className="mb-2 size-4 text-destructive" />
                       <div className="text-xs text-muted-foreground">Card debt</div>
                       <div className="mt-0.5 truncate text-sm font-semibold text-destructive tabular-nums">
@@ -670,6 +609,7 @@ export default async function DashboardPage() {
 
             {widgets.showCalendar && (
               <ExpenseCalendarWidget
+                key={monthValue}
                 expenses={stats.calendarExpenses.map((expense) => ({
                   id: expense.id,
                   amount: expense.amount,
@@ -679,6 +619,7 @@ export default async function DashboardPage() {
                   date: expense.date,
                 }))}
                 currency={settings.currency}
+                initialDate={selectedDate}
               />
             )}
           </div>

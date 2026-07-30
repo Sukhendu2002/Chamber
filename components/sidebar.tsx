@@ -77,13 +77,13 @@ const emptySubscribe = () => () => { };
 
 function SidebarNav({ pathname, onNavigate }: { pathname: string; onNavigate?: () => void }) {
   return (
-    <nav className="flex-1 space-y-5 overflow-y-auto px-3 py-4">
+    <nav className="flex-1 space-y-4 overflow-y-auto px-2 py-3">
       {navGroups.map((group) => (
         <div key={group.label}>
-          <p className="mb-1.5 px-3 text-[0.6875rem] font-semibold uppercase tracking-[0.12em] text-muted-foreground/75">
+          <p className="mb-1 px-2 text-[0.625rem] font-semibold uppercase tracking-[0.1em] text-muted-foreground/75">
             {group.label}
           </p>
-          <div className="space-y-1">
+          <div className="space-y-0.5">
             {group.items.map((item) => {
               const isActive = pathname === item.href;
               return (
@@ -94,9 +94,9 @@ function SidebarNav({ pathname, onNavigate }: { pathname: string; onNavigate?: (
                   onClick={onNavigate}
                   aria-current={isActive ? "page" : undefined}
                   className={cn(
-                    "group flex min-h-10 items-center gap-3 rounded-xl px-3 text-sm font-medium transition-all duration-200",
+                    "group flex min-h-9 items-center gap-2.5 rounded-md px-2.5 text-xs font-medium transition-colors duration-150",
                     isActive
-                      ? "bg-sidebar-accent text-sidebar-accent-foreground shadow-[inset_0_0_0_1px_oklch(0.558_0.248_289/0.08)]"
+                      ? "bg-sidebar-accent text-sidebar-accent-foreground"
                       : "text-muted-foreground hover:bg-muted/70 hover:text-foreground"
                   )}
                 >
@@ -127,10 +127,10 @@ function SidebarFooter({ mounted, isLoaded, user, signOut, isDemoMode, toggleDem
   toggleDemoMode: () => void;
 }) {
   return (
-    <div className="space-y-2 border-t border-sidebar-border p-3">
+    <div className="space-y-1.5 border-t border-sidebar-border p-2">
       <Link
         href="/settings"
-        className="flex min-h-10 items-center gap-3 rounded-xl px-3 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted/70 hover:text-foreground"
+        className="flex min-h-9 items-center gap-2.5 rounded-md px-2.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted/70 hover:text-foreground"
       >
         <IconSettings aria-hidden="true" className="size-[1.125rem] stroke-[1.8]" />
         Settings
@@ -195,7 +195,7 @@ function SidebarFooter({ mounted, isLoaded, user, signOut, isDemoMode, toggleDem
             </DropdownMenuContent>
           </DropdownMenu>
         ) : (
-          <div className="flex h-10 flex-1 items-center gap-2 rounded-xl border border-sidebar-border px-2.5">
+          <div className="flex h-9 flex-1 items-center gap-2 rounded-md border border-sidebar-border px-2.5">
             <div className="size-7 animate-pulse rounded-full bg-muted" />
             <div className="h-4 w-16 animate-pulse rounded bg-muted" />
           </div>
@@ -223,7 +223,7 @@ export function Sidebar() {
   return (
     <>
       {/* Mobile top bar */}
-      <div className="sticky top-0 z-40 flex h-16 items-center gap-2 border-b border-sidebar-border bg-sidebar/95 px-4 backdrop-blur md:hidden">
+      <div className="sticky top-0 z-40 flex h-14 items-center gap-2 border-b border-sidebar-border bg-sidebar/95 px-3 backdrop-blur md:hidden">
         <Button
           variant="ghost"
           size="icon"
@@ -239,9 +239,9 @@ export function Sidebar() {
 
       {/* Mobile sheet sidebar */}
       <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
-        <SheetContent side="left" className="w-[17rem] bg-sidebar p-0" showCloseButton={false}>
+        <SheetContent side="left" className="w-60 bg-sidebar p-0" showCloseButton={false}>
           <SheetTitle className="sr-only">Navigation Menu</SheetTitle>
-          <div className="flex h-[4.5rem] items-center gap-2 border-b border-sidebar-border px-5">
+          <div className="flex h-14 items-center gap-2 border-b border-sidebar-border px-4">
             <span className="text-xl font-semibold tracking-[-0.04em]">Chamber</span>
             <IconSparkles aria-hidden="true" className="size-4 fill-primary/15 text-primary" />
           </div>
@@ -251,10 +251,10 @@ export function Sidebar() {
       </Sheet>
 
       {/* Desktop sidebar */}
-      <aside className="sticky top-0 hidden h-screen w-[17rem] shrink-0 flex-col border-r border-sidebar-border bg-sidebar md:flex">
+      <aside className="sticky top-0 hidden h-screen w-60 shrink-0 flex-col border-r border-sidebar-border bg-sidebar md:flex">
         {/* Logo */}
-        <div className="flex h-[4.5rem] items-center gap-2 border-b border-sidebar-border px-6">
-          <span className="text-2xl font-semibold tracking-[-0.045em]">Chamber</span>
+        <div className="flex h-14 items-center gap-2 border-b border-sidebar-border px-4">
+          <span className="text-xl font-semibold tracking-tight">Chamber</span>
           <IconSparkles aria-hidden="true" className="size-[1.125rem] fill-primary/15 text-primary" />
         </div>
 

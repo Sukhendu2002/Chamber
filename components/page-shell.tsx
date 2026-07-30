@@ -34,7 +34,7 @@ export function PageHeader({
         {eyebrow && <p className="eyebrow mb-2">{eyebrow}</p>}
         <div className="flex items-center gap-3">
           {Icon && (
-            <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-secondary text-primary">
+            <span className="flex size-9 shrink-0 items-center justify-center rounded-md bg-secondary text-primary">
               <Icon aria-hidden={true} className="size-5 stroke-[1.8]" />
             </span>
           )}

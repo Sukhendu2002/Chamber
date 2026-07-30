@@ -20,8 +20,9 @@ export default async function SubscriptionsPage() {
   const accountOptions = accounts.map(a => ({ id: a.id, name: a.name, type: a.type }));
 
   return (
-    <PageShell className="flex flex-col gap-6">
+    <PageShell className="flex flex-col gap-4">
       <PageHeader
+        className="mb-0"
         title="Subscriptions"
         description="Track recurring payments and get reminders before renewal"
         actions={<AddSubscriptionDialog accounts={accountOptions} />}

@@ -5,53 +5,53 @@ may refine layout, but they must keep these tokens and interaction rules.
 
 ## Product direction
 
-- Pattern: editorial financial cockpit with bento-grid composition
-- Tone: calm, precise, trustworthy, contemporary
-- Hierarchy: one dominant story per page, compact supporting metrics, clear detail cards
-- Density: information-rich without cramped controls or repeated equal-weight cards
+- Pattern: compact financial cockpit with a restrained grid
+- Tone: direct, precise, trustworthy
+- Hierarchy: one dominant story per page with dense supporting information
+- Density: compact spacing and grouped metrics without decorative card clutter
 
 ## Core palette
 
 | Role | Reference | Usage |
 |---|---|---|
-| Canvas | warm off-white | App and marketing backgrounds |
-| Surface | paper white | Cards, dialogs, inputs, menus |
-| Ink | charcoal | Primary copy and financial values |
-| Primary | electric violet | Navigation, links, primary actions, chart emphasis |
-| Positive | muted mint | Healthy balances and on-track states |
-| Risk | muted coral | Overspend, debt, destructive actions |
-| Muted | warm grey | Secondary surfaces and supporting copy |
+| Canvas | white / near-black | App and marketing backgrounds |
+| Surface | white / dark grey | Cards, dialogs, inputs, menus |
+| Ink | black / near-white | Primary copy and financial values |
+| Primary | black / light grey | Navigation, links, primary actions, chart emphasis |
+| Positive | green | Healthy balances and on-track states |
+| Risk | red | Overspend, debt, destructive actions |
+| Muted | neutral grey | Secondary surfaces and supporting copy |
 
 The implementation uses semantic OKLCH variables in `app/globals.css`. Components
 must consume semantic Tailwind tokens instead of embedding palette hex values.
 
 ## Typography
 
-- Family: Geist for headings and body; Geist Mono only where code requires it
-- Financial values: proportional Geist with `tabular-nums`
+- Family: JetBrains Mono throughout the product
+- Financial values use `tabular-nums`
 - Page title: 24–30px, semibold, tight tracking
 - Card title: 15px, semibold
-- Body: 14–16px with generous line height
+- Body: 12–14px with readable line height
 - Labels: 11–12px, medium or semibold
 - Avoid monospaced body copy and decorative display fonts
 
 ## Shape, spacing, and elevation
 
 - Spacing follows a 4/8px rhythm
-- Main page gutters: 16px mobile, 24px tablet, 32px desktop
-- Control radius: 12px
-- Card radius: 20px
-- Dialog radius: 24px
-- Borders are thin and warm; shadows are soft and low contrast
-- Hover motion may lift interactive cards by at most 2px
+- Main page gutters: 16px mobile, 20px tablet, 24px desktop
+- Control radius: 4px
+- Card radius: 4px
+- Dialog radius: 4px
+- Borders are thin and neutral; shadows are minimal
+- Hover states change color or border without lifting the layout
 
 ## Components
 
-- Buttons are at least 40px high; primary form and page actions use 44px
-- Inputs are 44px high with persistent labels and visible focus rings
-- Cards use white surfaces, thin borders, and subtle elevation
-- Tabs use a soft segmented surface with a clear selected state
-- Tables use muted headers, comfortable cell padding, and row hover feedback
+- Buttons are compact while retaining visible focus and clear labels
+- Inputs use persistent labels and visible focus rings
+- Cards use neutral surfaces, thin borders, small radii, and little elevation
+- Tabs use a compact segmented surface with a clear selected state
+- Tables use muted headers, dense cell padding, and row hover feedback
 - Dialogs and sheets use a 45% scrim and purposeful background blur
 - Icons use the Tabler outline family with consistent 1.8–2px strokes
 
@@ -67,9 +67,8 @@ must consume semantic Tailwind tokens instead of embedding palette hex values.
 
 ## Anti-patterns
 
-- Five or more identical KPI cards with equal visual weight
-- Pure white full-page backgrounds
+- Five or more detached KPI cards with equal visual weight
 - Heavy gradients, glassmorphism, neon, or exaggerated shadows
 - Tiny controls, hidden focus states, or hover-only affordances
 - Red for decoration; reserve it for actionable risk
-- Arbitrary radii, icon families, or spacing values
+- Large radii, excessive padding, arbitrary icon families, or spacing values

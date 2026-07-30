@@ -1,14 +1,12 @@
 import { getAnalyticsData } from "@/lib/actions/expenses";
 import { getUserSettings } from "@/lib/actions/settings";
-import { getAISpendingInsights } from "@/lib/actions/analytics";
 import { AnalyticsCharts } from "@/components/analytics-charts";
 import { PageHeader, PageShell } from "@/components/page-shell";
 
 export default async function AnalyticsPage() {
-  const [analytics, settings, aiInsights] = await Promise.all([
+  const [analytics, settings] = await Promise.all([
     getAnalyticsData(),
     getUserSettings(),
-    getAISpendingInsights().catch(() => ["Unable to generate insights at this time."]),
   ]);
 
   return (
@@ -30,7 +28,6 @@ export default async function AnalyticsPage() {
         previousMonthSpent={analytics.previousMonthSpent}
         highestSpendingDay={analytics.highestSpendingDay}
         transactionCount={analytics.transactionCount}
-        aiInsights={aiInsights}
         tagData={analytics.tagData}
       />
     </PageShell>

@@ -43,7 +43,7 @@ export default async function CapturePage({
         </header>
 
         <section className="mb-8">
-          <div className="mb-4 flex size-12 items-center justify-center rounded-2xl bg-secondary text-primary">
+          <div className="mb-3 flex size-10 items-center justify-center rounded-md bg-secondary text-primary">
             <IconShieldCheck aria-hidden="true" className="size-6" />
           </div>
           <h1 className="page-title">Quick Capture</h1>

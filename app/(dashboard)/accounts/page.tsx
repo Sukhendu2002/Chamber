@@ -30,10 +30,54 @@ export default async function AccountsPage() {
       maximumFractionDigits: 0,
     }).format(amount);
   };
+  const summaryItems = [
+    {
+      label: "Net Worth",
+      amount: stats.totalNetWorth,
+      icon: IconCoin,
+      valueClassName: "",
+      note: `${stats.accountCount} accounts`,
+    },
+    {
+      label: "Card Debt",
+      amount: stats.totalCreditCardOutstanding,
+      icon: IconCreditCard,
+      valueClassName: "text-red-600",
+      note:
+        stats.totalCardCredit > 0
+          ? `${formatCurrency(stats.totalCardCredit)} card credit`
+          : undefined,
+    },
+    {
+      label: "Bank Balance",
+      amount: stats.totalBankBalance,
+      icon: IconBuildingBank,
+      valueClassName: "text-blue-600",
+    },
+    {
+      label: "Investments",
+      amount: stats.totalInvestments,
+      icon: IconChartLine,
+      valueClassName: "text-green-600",
+    },
+    {
+      label: "Wallet",
+      amount: stats.totalWallet,
+      icon: IconWallet,
+      valueClassName: "text-purple-600",
+    },
+    {
+      label: "Cash",
+      amount: stats.totalCash,
+      icon: IconCash,
+      valueClassName: "text-yellow-600",
+    },
+  ];
 
   return (
-    <PageShell className="flex flex-col gap-6">
+    <PageShell className="flex flex-col gap-4">
       <PageHeader
+        className="mb-0"
         title="Accounts"
         description="Track assets, card liabilities, and net worth"
         actions={
@@ -54,78 +98,25 @@ export default async function AccountsPage() {
         }
       />
 
-      {/* Stats Cards */}
-      <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3 xl:grid-cols-6">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Net Worth</CardTitle>
-            <IconCoin className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <HiddenAmount amount={formatCurrency(stats.totalNetWorth)} className="text-2xl font-bold" />
-            <p className="text-xs text-muted-foreground">
-              {stats.accountCount} accounts
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Card Debt</CardTitle>
-            <IconCreditCard className="h-4 w-4 text-red-500" />
-          </CardHeader>
-          <CardContent>
+      {/* Compact account summary */}
+      <div className="grid grid-cols-2 gap-px overflow-hidden rounded-md border bg-border md:grid-cols-3 xl:grid-cols-6">
+        {summaryItems.map((item) => (
+          <div key={item.label} className="min-w-0 bg-card p-3">
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <p className="truncate text-xs font-medium text-muted-foreground">{item.label}</p>
+              <item.icon className="size-4 shrink-0 text-muted-foreground" />
+            </div>
             <HiddenAmount
-              amount={formatCurrency(stats.totalCreditCardOutstanding)}
-              className="text-2xl font-bold text-red-600"
+              amount={formatCurrency(item.amount)}
+              className={`truncate text-lg font-bold tabular-nums ${item.valueClassName}`}
             />
-            {stats.totalCardCredit > 0 && (
-              <p className="text-xs text-green-600">
-                {formatCurrency(stats.totalCardCredit)} card credit
+            {item.note && (
+              <p className="mt-0.5 truncate text-[0.6875rem] text-muted-foreground">
+                {item.note}
               </p>
             )}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Bank Balance</CardTitle>
-            <IconBuildingBank className="h-4 w-4 text-blue-500" />
-          </CardHeader>
-          <CardContent>
-            <HiddenAmount amount={formatCurrency(stats.totalBankBalance)} className="text-2xl font-bold text-blue-600" />
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Investments</CardTitle>
-            <IconChartLine className="h-4 w-4 text-green-500" />
-          </CardHeader>
-          <CardContent>
-            <HiddenAmount amount={formatCurrency(stats.totalInvestments)} className="text-2xl font-bold text-green-600" />
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Wallet</CardTitle>
-            <IconWallet className="h-4 w-4 text-purple-500" />
-          </CardHeader>
-          <CardContent>
-            <HiddenAmount amount={formatCurrency(stats.totalWallet)} className="text-2xl font-bold text-purple-600" />
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Cash</CardTitle>
-            <IconCash className="h-4 w-4 text-yellow-500" />
-          </CardHeader>
-          <CardContent>
-            <HiddenAmount amount={formatCurrency(stats.totalCash)} className="text-2xl font-bold text-yellow-600" />
-          </CardContent>
-        </Card>
+          </div>
+        ))}
       </div>
 
       {/* Accounts List */}

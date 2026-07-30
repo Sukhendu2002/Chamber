@@ -456,17 +456,22 @@ export function AnimatedLanding() {
             {/* Header */}
             <motion.header
                 style={{ opacity: headerOpacity }}
-                className="sticky top-0 z-50 border-b border-border/80 bg-background/85 backdrop-blur-xl"
+                className="sticky top-0 z-50 border-b bg-background/80 backdrop-blur-md"
             >
-                <div className="container mx-auto flex h-16 max-w-6xl items-center justify-between px-4 sm:h-[4.5rem]">
+                <div className="container mx-auto max-w-6xl flex h-14 items-center justify-between px-4 sm:h-16">
                     <motion.div
                         className="flex items-center gap-2"
                         initial={{ opacity: 0, x: -20 }}
                         animate={{ opacity: 1, x: 0 }}
                         transition={{ duration: 0.5 }}
                     >
-                        <span className="text-xl font-semibold tracking-[-0.045em]">Chamber</span>
-                        <IconSparkles className="size-4 fill-primary/15 text-primary" />
+                        <motion.div
+                            className="flex h-8 w-8 items-center justify-center rounded-md bg-primary text-primary-foreground font-bold"
+                            whileHover={{ rotate: 10, scale: 1.1 }}
+                        >
+                            C
+                        </motion.div>
+                        <span className="font-semibold">Chamber</span>
                     </motion.div>
                     <motion.div
                         className="flex items-center gap-2"
@@ -476,7 +481,7 @@ export function AnimatedLanding() {
                     >
                         <Link href="/dashboard">
                             <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.97 }}>
-                                <Button variant="default" size="sm">
+                                <Button variant="default" size="sm" className="rounded-md">
                                     <span className="hidden sm:inline">Go to Dashboard</span>
                                     <span className="sm:hidden">Dashboard</span>
                                     <IconArrowRight className="ml-1 h-3.5 w-3.5" />
@@ -510,7 +515,7 @@ export function AnimatedLanding() {
                             </motion.div>
 
                             <motion.h1
-                                className="max-w-4xl text-4xl font-semibold tracking-[-0.055em] sm:text-5xl md:text-6xl lg:text-7xl"
+                                className="max-w-4xl text-3xl font-bold tracking-tight sm:text-4xl md:text-5xl lg:text-6xl"
                                 initial={{ opacity: 0, y: 30 }}
                                 animate={{ opacity: 1, y: 0 }}
                                 transition={{ duration: 0.7, delay: 0.2 }}
@@ -536,7 +541,7 @@ export function AnimatedLanding() {
                             >
                                 <Link href="/dashboard">
                                     <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.97 }}>
-                                        <Button size="lg" className="px-6">
+                                        <Button size="lg" className="rounded-md px-6 shadow-md shadow-primary/30">
                                             Get Started Free
                                             <motion.span
                                                 animate={{ x: [0, 4, 0] }}
@@ -549,7 +554,7 @@ export function AnimatedLanding() {
                                 </Link>
                                 <Link href="#features">
                                     <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.97 }}>
-                                        <Button variant="outline" size="lg" className="px-6">
+                                        <Button variant="outline" size="lg" className="rounded-md px-6">
                                             See Features
                                         </Button>
                                     </motion.div>
@@ -625,7 +630,7 @@ export function AnimatedLanding() {
                     </FadeUpSection>
 
                     <FadeUpSection delay={0.1}>
-                        <div className="mx-auto max-w-5xl overflow-hidden rounded-[1.75rem] border border-border/80 bg-card shadow-[0_28px_80px_oklch(0.2_0.02_286/0.12)]">
+                        <div className="mx-auto max-w-4xl overflow-hidden rounded-2xl border bg-card shadow-2xl">
                             {/* Mock browser bar */}
                             <div className="flex items-center gap-2 border-b bg-muted/50 px-4 py-3">
                                 <div className="flex gap-1.5">
@@ -636,85 +641,49 @@ export function AnimatedLanding() {
                                 <div className="mx-auto h-6 w-48 rounded-full bg-muted border" />
                             </div>
 
-                            {/* Financial cockpit preview */}
-                            <div className="grid gap-3 p-4 sm:grid-cols-[1.65fr_.85fr] sm:p-6">
-                                <motion.div
-                                    className="rounded-2xl border border-border bg-card p-4 sm:p-5"
-                                    initial={{ opacity: 0, y: 20 }}
-                                    whileInView={{ opacity: 1, y: 0 }}
-                                    viewport={{ once: true }}
-                                    transition={{ delay: 0.2, duration: 0.5 }}
-                                >
-                                    <div className="mb-5 flex items-center justify-between">
-                                        <div>
-                                            <p className="text-sm font-semibold">Monthly budget</p>
-                                            <p className="text-xs text-muted-foreground">Progress for July</p>
-                                        </div>
-                                        <span className="text-xs font-semibold text-primary">View report</span>
-                                    </div>
-                                    <div className="grid grid-cols-3 gap-3">
-                                        <div><p className="text-[10px] text-muted-foreground">Budget</p><p className="mt-1 text-sm font-semibold tabular-nums">₹40,000</p></div>
-                                        <div><p className="text-[10px] text-muted-foreground">Spent</p><p className="mt-1 text-sm font-semibold tabular-nums">₹28,450</p></div>
-                                        <div><p className="text-[10px] text-muted-foreground">Remaining</p><p className="mt-1 text-sm font-semibold text-chart-2 tabular-nums">₹11,550</p></div>
-                                    </div>
-                                    <div className="mt-5 h-2 overflow-hidden rounded-full bg-muted">
-                                        <motion.div
-                                            className="h-full rounded-full bg-primary"
-                                            initial={{ width: 0 }}
-                                            whileInView={{ width: "71%" }}
-                                            viewport={{ once: true }}
-                                            transition={{ delay: 0.35, duration: 0.8 }}
-                                        />
-                                    </div>
-                                    <div className="mt-4 flex items-center justify-between rounded-xl bg-chart-2/10 px-3 py-2 text-[10px] font-semibold">
-                                        <span>71% budget used</span>
-                                        <span className="text-chart-2">On track</span>
-                                    </div>
-                                </motion.div>
-
-                                <div className="grid gap-3">
-                                    {[
-                                        { label: "Total spent", value: "₹28,450" },
-                                        { label: "Transactions", value: "47" },
-                                        { label: "Daily average", value: "₹918" },
-                                    ].map((card, index) => (
-                                        <motion.div
-                                            key={card.label}
-                                            className="flex items-center gap-3 rounded-2xl border border-border bg-card p-3"
-                                            initial={{ opacity: 0, x: 20 }}
-                                            whileInView={{ opacity: 1, x: 0 }}
-                                            viewport={{ once: true }}
-                                            transition={{ delay: 0.25 + index * 0.08, duration: 0.45 }}
-                                        >
-                                            <span className="size-8 rounded-xl bg-secondary" />
-                                            <div>
-                                                <p className="text-[10px] text-muted-foreground">{card.label}</p>
-                                                <p className="text-sm font-semibold tabular-nums">{card.value}</p>
-                                            </div>
-                                        </motion.div>
-                                    ))}
-                                </div>
+                            {/* Mock dashboard content */}
+                            <div className="grid grid-cols-2 gap-3 p-4 sm:grid-cols-4 sm:p-6">
+                                {[
+                                    { label: "Total Spent", value: "₹28,450", color: "text-foreground", bg: "bg-primary/5", delay: 0.2 },
+                                    { label: "Budget Left", value: "₹11,550", color: "text-green-500", bg: "bg-green-500/5", delay: 0.3 },
+                                    { label: "Transactions", value: "47", color: "text-blue-500", bg: "bg-blue-500/5", delay: 0.4 },
+                                    { label: "Top Category", value: "Food", color: "text-orange-500", bg: "bg-orange-500/5", delay: 0.5 },
+                                ].map((card) => (
+                                    <motion.div
+                                        key={card.label}
+                                        className={`rounded-xl border ${card.bg} p-3 sm:p-4`}
+                                        initial={{ opacity: 0, y: 20 }}
+                                        whileInView={{ opacity: 1, y: 0 }}
+                                        viewport={{ once: true }}
+                                        transition={{ delay: card.delay, duration: 0.5 }}
+                                    >
+                                        <p className="text-xs text-muted-foreground">{card.label}</p>
+                                        <p className={`mt-1 text-lg font-bold sm:text-xl ${card.color}`}>{card.value}</p>
+                                    </motion.div>
+                                ))}
                             </div>
 
-                            <div className="grid gap-3 px-4 pb-4 sm:grid-cols-3 sm:px-6 sm:pb-6">
-                                {["Spending trend", "Top categories", "Recent expenses"].map((label, cardIndex) => (
-                                    <div key={label} className="rounded-2xl border border-border bg-card p-4">
-                                        <p className="text-xs font-semibold">{label}</p>
-                                        <div className="mt-4 flex h-16 items-end gap-1.5">
-                                            {[38, 66, 48, 82, 58].map((height, index) => (
-                                                <motion.span
-                                                    key={index}
-                                                    className={cardIndex === 1 ? "flex-1 rounded-full bg-primary/25" : cardIndex === 2 ? "flex-1 rounded-full bg-muted" : "flex-1 rounded-t bg-primary/70"}
-                                                    style={{ height: `${cardIndex === 2 ? 16 : height}%` }}
-                                                    initial={{ scaleY: 0, originY: 1 }}
-                                                    whileInView={{ scaleY: 1 }}
-                                                    viewport={{ once: true }}
-                                                    transition={{ delay: 0.35 + index * 0.06, duration: 0.45 }}
-                                                />
-                                            ))}
-                                        </div>
-                                    </div>
-                                ))}
+                            {/* Mock bar chart */}
+                            <div className="px-4 pb-4 sm:px-6 sm:pb-6">
+                                <p className="mb-3 text-xs font-medium text-muted-foreground">Monthly Spending Trend</p>
+                                <div className="flex items-end gap-2 h-24">
+                                    {[35, 55, 40, 70, 60, 85, 72].map((h, i) => (
+                                        <motion.div
+                                            key={i}
+                                            className="flex-1 rounded-t-md bg-primary/80"
+                                            initial={{ scaleY: 0, originY: 1 }}
+                                            whileInView={{ scaleY: 1 }}
+                                            viewport={{ once: true }}
+                                            style={{ height: `${h}%` }}
+                                            transition={{ delay: 0.3 + i * 0.07, duration: 0.5, ease: "easeOut" }}
+                                        />
+                                    ))}
+                                </div>
+                                <div className="mt-2 flex gap-2">
+                                    {["Aug", "Sep", "Oct", "Nov", "Dec", "Jan", "Feb"].map((m) => (
+                                        <p key={m} className="flex-1 text-center text-xs text-muted-foreground">{m}</p>
+                                    ))}
+                                </div>
                             </div>
                         </div>
                     </FadeUpSection>
@@ -910,8 +879,10 @@ export function AnimatedLanding() {
                 <footer className="border-t">
                     <div className="container mx-auto max-w-6xl flex flex-col items-center gap-2 px-4 py-6 sm:flex-row sm:justify-between sm:py-8">
                         <div className="flex items-center gap-2">
-                            <IconSparkles className="h-5 w-5 text-primary" aria-hidden="true" />
-                            <span className="text-sm font-semibold tracking-[-0.03em]">Chamber</span>
+                            <div className="flex h-6 w-6 items-center justify-center rounded bg-primary text-primary-foreground text-xs font-bold">
+                                C
+                            </div>
+                            <span className="text-sm font-medium">Chamber</span>
                         </div>
                         <p className="text-xs text-muted-foreground sm:text-sm">
                             Built by Sukhendu &middot;{" "}

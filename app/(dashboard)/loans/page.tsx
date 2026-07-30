@@ -24,8 +24,9 @@ export default async function LoansPage() {
   };
 
   return (
-    <PageShell className="flex flex-col gap-6">
+    <PageShell className="flex flex-col gap-4">
       <PageHeader
+        className="mb-0"
         title="Lent Money"
         description="Track money you’ve lent to others"
         actions={<AddLoanDialog

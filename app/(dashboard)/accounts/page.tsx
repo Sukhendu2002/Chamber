@@ -13,6 +13,7 @@ import { AccountList } from "@/components/account-list";
 import { AddAccountDialog } from "@/components/add-account-dialog";
 import { BankTransferDialog } from "@/components/bank-transfer-dialog";
 import { HiddenAmount } from "@/components/hidden-amount";
+import { PageHeader, PageShell } from "@/components/page-shell";
 
 export default async function AccountsPage() {
   const [accounts, stats, settings] = await Promise.all([
@@ -31,15 +32,12 @@ export default async function AccountsPage() {
   };
 
   return (
-    <div className="flex flex-1 flex-col gap-4 p-4 md:p-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Accounts</h1>
-          <p className="text-muted-foreground">
-            Track assets, card liabilities, and net worth
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
+    <PageShell className="flex flex-col gap-6">
+      <PageHeader
+        title="Accounts"
+        description="Track assets, card liabilities, and net worth"
+        actions={
+          <>
           <BankTransferDialog
             accounts={accounts
               .filter((account) => account.type !== "CREDIT_CARD")
@@ -52,8 +50,9 @@ export default async function AccountsPage() {
             currency={settings.currency}
           />
           <AddAccountDialog currency={settings.currency} />
-        </div>
-      </div>
+          </>
+        }
+      />
 
       {/* Stats Cards */}
       <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3 xl:grid-cols-6">
@@ -140,6 +139,6 @@ export default async function AccountsPage() {
           <AccountList accounts={accounts} currency={settings.currency} />
         </CardContent>
       </Card>
-    </div>
+    </PageShell>
   );
 }

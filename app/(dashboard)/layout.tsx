@@ -10,9 +10,15 @@ export default function DashboardLayout({
 }) {
   return (
     <DemoModeProvider>
-      <div className="flex min-h-screen flex-col md:flex-row">
+      <a
+        href="#main-content"
+        className="fixed left-4 top-4 z-[100] -translate-y-20 rounded-xl bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-lg transition-transform focus:translate-y-0"
+      >
+        Skip to content
+      </a>
+      <div className="flex min-h-dvh flex-col md:flex-row">
         <Sidebar />
-        <main className="flex-1 overflow-auto">
+        <main id="main-content" className="min-w-0 flex-1 overflow-auto bg-background">
           <AutoRefresh />
           {children}
         </main>

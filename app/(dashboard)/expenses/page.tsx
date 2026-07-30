@@ -9,6 +9,7 @@ import type { DateRangePreset } from "@/lib/actions/expenses";
 import { getUserSettings } from "@/lib/actions/settings";
 import { getAccounts } from "@/lib/actions/accounts";
 import { getUserCategories } from "@/lib/actions/categories";
+import { PageHeader, PageShell } from "@/components/page-shell";
 
 const ITEMS_PER_PAGE = 10;
 
@@ -67,16 +68,12 @@ export default async function ExpensesPage({
   const hasFilters = search || category || excludeCategory || tags.length > 0 || dateRange;
 
   return (
-    <div className="p-4 md:p-6">
-      {/* Header */}
-      <div className="mb-6 flex flex-col gap-4 sm:mb-8 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">Expenses</h1>
-          <p className="text-sm text-muted-foreground">
-            Manage and track all your expenses
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
+    <PageShell>
+      <PageHeader
+        title="Expenses"
+        description="Manage and track all your expenses"
+        actions={
+          <>
           <CategoryManager categories={userCategories} />
           <AddExpenseDialog
             currency={settings.currency}
@@ -89,8 +86,9 @@ export default async function ExpensesPage({
             }))}
             categories={userCategories}
           />
-        </div>
-      </div>
+          </>
+        }
+      />
 
       {/* Filters */}
       <ExpenseFilters
@@ -145,6 +143,6 @@ export default async function ExpensesPage({
           )}
         </CardContent>
       </Card>
-    </div>
+    </PageShell>
   );
 }

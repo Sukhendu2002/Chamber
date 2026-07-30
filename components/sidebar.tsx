@@ -39,73 +39,36 @@ import {
   IconReportAnalytics,
   IconCrystalBall,
   IconCamera,
+  IconSparkles,
 } from "@tabler/icons-react";
 
-const navItems = [
+const navGroups = [
   {
-    title: "Dashboard",
-    href: "/dashboard",
-    icon: IconLayoutDashboard,
+    label: "Overview",
+    items: [
+      { title: "Dashboard", href: "/dashboard", icon: IconLayoutDashboard },
+      { title: "Expenses", href: "/expenses", icon: IconReceipt },
+      { title: "Accounts", href: "/accounts", icon: IconBuildingBank },
+      { title: "Analytics", href: "/analytics", icon: IconChartPie },
+    ],
   },
   {
-    title: "Expenses",
-    href: "/expenses",
-    icon: IconReceipt,
+    label: "Plan",
+    items: [
+      { title: "Subscriptions", href: "/subscriptions", icon: IconCalendarRepeat },
+      { title: "Lent Money", href: "/loans", icon: IconCash },
+      { title: "Forecast", href: "/forecast", icon: IconCrystalBall },
+      { title: "Summary", href: "/summary", icon: IconReportAnalytics },
+    ],
   },
   {
-    title: "Quick Capture",
-    href: "/capture",
-    icon: IconCamera,
-  },
-  {
-    title: "Subscriptions",
-    href: "/subscriptions",
-    icon: IconCalendarRepeat,
-  },
-  {
-    title: "Lent Money",
-    href: "/loans",
-    icon: IconCash,
-  },
-  {
-    title: "Accounts",
-    href: "/accounts",
-    icon: IconBuildingBank,
-  },
-  {
-    title: "Analytics",
-    href: "/analytics",
-    icon: IconChartPie,
-  },
-  {
-    title: "Receipts",
-    href: "/receipts",
-    icon: IconPhoto,
-  },
-  {
-    title: "Forecast",
-    href: "/forecast",
-    icon: IconCrystalBall,
-  },
-  {
-    title: "Summary",
-    href: "/summary",
-    icon: IconReportAnalytics,
-  },
-  {
-    title: "Import",
-    href: "/import",
-    icon: IconFileImport,
-  },
-  {
-    title: "Telegram",
-    href: "/telegram",
-    icon: IconBrandTelegram,
-  },
-  {
-    title: "Settings",
-    href: "/settings",
-    icon: IconSettings,
+    label: "Tools",
+    items: [
+      { title: "Quick Capture", href: "/capture", icon: IconCamera },
+      { title: "Receipts", href: "/receipts", icon: IconPhoto },
+      { title: "Import", href: "/import", icon: IconFileImport },
+      { title: "Telegram", href: "/telegram", icon: IconBrandTelegram },
+    ],
   },
 ];
 
@@ -114,27 +77,43 @@ const emptySubscribe = () => () => { };
 
 function SidebarNav({ pathname, onNavigate }: { pathname: string; onNavigate?: () => void }) {
   return (
-    <nav className="flex-1 space-y-1 p-2">
-      {navItems.map((item) => {
-        const isActive = pathname === item.href;
-        return (
-          <Link
-            key={item.href}
-            href={item.href}
-            prefetch={true}
-            onClick={onNavigate}
-            className={cn(
-              "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
-              isActive
-                ? "bg-primary text-primary-foreground"
-                : "text-muted-foreground hover:bg-muted hover:text-foreground"
-            )}
-          >
-            <item.icon className="h-4 w-4" />
-            {item.title}
-          </Link>
-        );
-      })}
+    <nav className="flex-1 space-y-5 overflow-y-auto px-3 py-4">
+      {navGroups.map((group) => (
+        <div key={group.label}>
+          <p className="mb-1.5 px-3 text-[0.6875rem] font-semibold uppercase tracking-[0.12em] text-muted-foreground/75">
+            {group.label}
+          </p>
+          <div className="space-y-1">
+            {group.items.map((item) => {
+              const isActive = pathname === item.href;
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  prefetch={true}
+                  onClick={onNavigate}
+                  aria-current={isActive ? "page" : undefined}
+                  className={cn(
+                    "group flex min-h-10 items-center gap-3 rounded-xl px-3 text-sm font-medium transition-all duration-200",
+                    isActive
+                      ? "bg-sidebar-accent text-sidebar-accent-foreground shadow-[inset_0_0_0_1px_oklch(0.558_0.248_289/0.08)]"
+                      : "text-muted-foreground hover:bg-muted/70 hover:text-foreground"
+                  )}
+                >
+                  <item.icon
+                    aria-hidden="true"
+                    className={cn(
+                      "size-[1.125rem] stroke-[1.8]",
+                      isActive ? "text-primary" : "text-muted-foreground group-hover:text-foreground"
+                    )}
+                  />
+                  {item.title}
+                </Link>
+              );
+            })}
+          </div>
+        </div>
+      ))}
     </nav>
   );
 }
@@ -148,36 +127,45 @@ function SidebarFooter({ mounted, isLoaded, user, signOut, isDemoMode, toggleDem
   toggleDemoMode: () => void;
 }) {
   return (
-    <div className="border-t p-2">
-      <div className="flex items-center justify-between px-2 py-1">
-        <div className="flex items-center gap-1">
-          <Button
-            variant="ghost"
-            size="icon"
-            className={cn("h-8 w-8", isDemoMode && "text-yellow-500")}
-            onClick={toggleDemoMode}
-            title={isDemoMode ? "Demo mode on (Ctrl+D)" : "Demo mode off (Ctrl+D)"}
-          >
-            {isDemoMode ? <IconEyeOff className="h-4 w-4" /> : <IconEye className="h-4 w-4" />}
-          </Button>
-        </div>
+    <div className="space-y-2 border-t border-sidebar-border p-3">
+      <Link
+        href="/settings"
+        className="flex min-h-10 items-center gap-3 rounded-xl px-3 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted/70 hover:text-foreground"
+      >
+        <IconSettings aria-hidden="true" className="size-[1.125rem] stroke-[1.8]" />
+        Settings
+      </Link>
+      <div className="flex items-center gap-2">
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          className={cn("shrink-0 shadow-none", isDemoMode && "bg-amber-500/10 text-amber-600")}
+          onClick={toggleDemoMode}
+          title={isDemoMode ? "Demo mode on (Ctrl+D)" : "Demo mode off (Ctrl+D)"}
+          aria-label={isDemoMode ? "Turn demo mode off" : "Turn demo mode on"}
+        >
+          {isDemoMode ? <IconEyeOff className="size-4" /> : <IconEye className="size-4" />}
+        </Button>
         {mounted && isLoaded ? (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" className="flex items-center gap-2 px-2">
+              <Button
+                variant="outline"
+                className="min-w-0 flex-1 justify-start gap-2.5 border-sidebar-border bg-sidebar px-2.5 shadow-none"
+              >
                 {user?.imageUrl ? (
                   /* eslint-disable-next-line @next/next/no-img-element */
                   <img
                     src={user.imageUrl}
                     alt={user.fullName || "User"}
-                    className="h-7 w-7 rounded-full"
+                    className="size-7 rounded-full object-cover"
                   />
                 ) : (
-                  <div className="flex h-7 w-7 items-center justify-center rounded-full bg-muted">
-                    <IconUser className="h-4 w-4" />
+                  <div className="flex size-7 items-center justify-center rounded-full bg-secondary text-secondary-foreground">
+                    <IconUser className="size-4" />
                   </div>
                 )}
-                <span className="text-sm font-medium truncate max-w-[80px]">
+                <span className="truncate text-sm font-semibold">
                   {user?.firstName || "User"}
                 </span>
               </Button>
@@ -207,9 +195,9 @@ function SidebarFooter({ mounted, isLoaded, user, signOut, isDemoMode, toggleDem
             </DropdownMenuContent>
           </DropdownMenu>
         ) : (
-          <div className="flex items-center gap-2 px-2">
-            <div className="h-7 w-7 rounded-full bg-muted animate-pulse" />
-            <div className="h-4 w-16 bg-muted rounded animate-pulse" />
+          <div className="flex h-10 flex-1 items-center gap-2 rounded-xl border border-sidebar-border px-2.5">
+            <div className="size-7 animate-pulse rounded-full bg-muted" />
+            <div className="h-4 w-16 animate-pulse rounded bg-muted" />
           </div>
         )}
       </div>
@@ -235,31 +223,27 @@ export function Sidebar() {
   return (
     <>
       {/* Mobile top bar */}
-      <div className="sticky top-0 z-40 flex h-14 items-center gap-2 border-b bg-background px-4 md:hidden">
+      <div className="sticky top-0 z-40 flex h-16 items-center gap-2 border-b border-sidebar-border bg-sidebar/95 px-4 backdrop-blur md:hidden">
         <Button
           variant="ghost"
           size="icon"
-          className="h-9 w-9"
+          className="shadow-none"
           onClick={() => setMobileOpen(true)}
         >
           <IconMenu2 className="h-5 w-5" />
           <span className="sr-only">Open menu</span>
         </Button>
-        <div className="flex h-7 w-7 items-center justify-center rounded-md bg-primary text-primary-foreground font-bold text-xs">
-          C
-        </div>
-        <span className="font-semibold text-sm">Chamber</span>
+        <span className="text-lg font-semibold tracking-[-0.035em]">Chamber</span>
+        <IconSparkles aria-hidden="true" className="size-4 fill-primary/15 text-primary" />
       </div>
 
       {/* Mobile sheet sidebar */}
       <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
-        <SheetContent side="left" className="w-64 p-0" showCloseButton={false}>
+        <SheetContent side="left" className="w-[17rem] bg-sidebar p-0" showCloseButton={false}>
           <SheetTitle className="sr-only">Navigation Menu</SheetTitle>
-          <div className="flex h-14 items-center gap-2 border-b px-4">
-            <div className="flex h-8 w-8 items-center justify-center rounded-md bg-primary text-primary-foreground font-bold text-sm">
-              C
-            </div>
-            <span className="font-semibold">Chamber</span>
+          <div className="flex h-[4.5rem] items-center gap-2 border-b border-sidebar-border px-5">
+            <span className="text-xl font-semibold tracking-[-0.04em]">Chamber</span>
+            <IconSparkles aria-hidden="true" className="size-4 fill-primary/15 text-primary" />
           </div>
           <SidebarNav pathname={pathname} onNavigate={() => setMobileOpen(false)} />
           <SidebarFooter {...footerProps} />
@@ -267,13 +251,11 @@ export function Sidebar() {
       </Sheet>
 
       {/* Desktop sidebar */}
-      <aside className="sticky top-0 hidden h-screen w-56 flex-col border-r bg-background md:flex">
+      <aside className="sticky top-0 hidden h-screen w-[17rem] shrink-0 flex-col border-r border-sidebar-border bg-sidebar md:flex">
         {/* Logo */}
-        <div className="flex h-16 items-center gap-2 border-b px-4">
-          <div className="flex h-8 w-8 items-center justify-center rounded-md bg-primary text-primary-foreground font-bold text-sm">
-            C
-          </div>
-          <span className="font-semibold">Chamber</span>
+        <div className="flex h-[4.5rem] items-center gap-2 border-b border-sidebar-border px-6">
+          <span className="text-2xl font-semibold tracking-[-0.045em]">Chamber</span>
+          <IconSparkles aria-hidden="true" className="size-[1.125rem] fill-primary/15 text-primary" />
         </div>
 
         <SidebarNav pathname={pathname} />

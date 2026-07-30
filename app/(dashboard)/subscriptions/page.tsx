@@ -5,6 +5,7 @@ import { getUserSettings } from "@/lib/actions/settings";
 import { getAccounts } from "@/lib/actions/accounts";
 import { SubscriptionCalendar } from "@/components/subscription-calendar";
 import { AddSubscriptionDialog } from "@/components/add-subscription-dialog";
+import { PageHeader, PageShell } from "@/components/page-shell";
 
 export default async function SubscriptionsPage() {
   const { userId } = await auth();
@@ -19,22 +20,18 @@ export default async function SubscriptionsPage() {
   const accountOptions = accounts.map(a => ({ id: a.id, name: a.name, type: a.type }));
 
   return (
-    <div className="flex flex-col gap-4 p-4 sm:gap-6 md:p-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">Subscriptions</h1>
-          <p className="text-muted-foreground">
-            Track your recurring subscriptions and get reminders before renewal
-          </p>
-        </div>
-        <AddSubscriptionDialog accounts={accountOptions} />
-      </div>
+    <PageShell className="flex flex-col gap-6">
+      <PageHeader
+        title="Subscriptions"
+        description="Track recurring payments and get reminders before renewal"
+        actions={<AddSubscriptionDialog accounts={accountOptions} />}
+      />
 
       <SubscriptionCalendar 
         subscriptions={subscriptions} 
         currency={settings?.currency || "INR"}
         accounts={accountOptions}
       />
-    </div>
+    </PageShell>
   );
 }

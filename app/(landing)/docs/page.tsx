@@ -10,6 +10,7 @@ import {
   IconBrandTelegram,
   IconHelpCircle,
   IconTool,
+  IconSparkles,
 } from "@tabler/icons-react";
 
 export default function DocsLandingPage() {
@@ -83,23 +84,21 @@ export default function DocsLandingPage() {
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
-      <header className="sticky top-0 z-50 border-b bg-background/80 backdrop-blur-md">
-        <div className="container mx-auto max-w-5xl flex h-14 items-center justify-between px-4 sm:h-16">
-          <Link href="/" className="flex items-center gap-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-md bg-primary text-primary-foreground font-bold">
-              C
-            </div>
-            <span className="font-semibold">Chamber</span>
+      <header className="sticky top-0 z-50 border-b border-border/80 bg-background/85 backdrop-blur-xl">
+        <div className="container mx-auto flex h-16 max-w-5xl items-center justify-between px-4 sm:h-[4.5rem]">
+          <Link href="/" className="flex items-center gap-2 text-xl font-semibold tracking-[-0.04em]">
+            <span>Chamber</span>
+            <IconSparkles aria-hidden="true" className="size-4 fill-primary/15 text-primary" />
           </Link>
           <Link href="/dashboard">
-            <Button variant="default" size="sm" className="rounded-md">
+            <Button variant="default" size="sm">
               Go to Dashboard
             </Button>
           </Link>
         </div>
       </header>
 
-      <main className="container mx-auto max-w-5xl px-4 py-12">
+      <main className="container mx-auto max-w-5xl px-4 py-14 sm:py-20">
         {/* Back Link */}
         <Link 
           href="/" 
@@ -111,7 +110,8 @@ export default function DocsLandingPage() {
 
         {/* Hero */}
         <div className="mb-12">
-          <h1 className="text-3xl font-bold tracking-tight sm:text-4xl mb-4">
+          <p className="eyebrow mb-3">Learn Chamber</p>
+          <h1 className="mb-4 text-4xl font-semibold tracking-[-0.045em] sm:text-5xl">
             Documentation
           </h1>
           <p className="text-muted-foreground max-w-2xl">
@@ -126,7 +126,7 @@ export default function DocsLandingPage() {
             <Link
               key={section.title}
               href={section.href}
-              className="group flex items-start gap-4 rounded-xl border bg-card p-5 transition-colors hover:bg-muted/50"
+              className="group flex items-start gap-4 rounded-2xl border border-border/80 bg-card p-5 shadow-[0_1px_2px_oklch(0.2_0.02_286/0.04)] transition-all duration-200 hover:-translate-y-0.5 hover:border-primary/25 hover:shadow-lg"
             >
               <div
                 className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${section.bg} ${section.color}`}
@@ -145,13 +145,11 @@ export default function DocsLandingPage() {
       </main>
 
       {/* Footer */}
-      <footer className="border-t mt-12">
+      <footer className="mt-12 border-t border-border/80">
         <div className="container mx-auto max-w-5xl flex flex-col items-center gap-2 px-4 py-6 sm:flex-row sm:justify-between">
           <div className="flex items-center gap-2">
-            <div className="flex h-6 w-6 items-center justify-center rounded bg-primary text-primary-foreground text-xs font-bold">
-              C
-            </div>
-            <span className="text-sm font-medium">Chamber</span>
+            <span className="text-sm font-semibold tracking-[-0.02em]">Chamber</span>
+            <IconSparkles aria-hidden="true" className="size-3.5 fill-primary/15 text-primary" />
           </div>
           <p className="text-xs text-muted-foreground">
             Built by Sukhendu &middot;{" "}

@@ -3,6 +3,7 @@ import { getUserSettings } from "@/lib/actions/settings";
 import { getAIMonthlyInsights } from "@/lib/actions/analytics";
 import { MonthlySummary } from "@/components/monthly-summary";
 import { MonthDetailPage } from "@/components/month-detail-page";
+import { PageHeader, PageShell } from "@/components/page-shell";
 
 export default async function SummaryPage({
     searchParams,
@@ -28,7 +29,7 @@ export default async function SummaryPage({
 
         if (monthData) {
             return (
-                <div className="p-4 md:p-6">
+                <PageShell>
                     <MonthDetailPage
                         month={monthData}
                         prevMonth={prevMonth}
@@ -37,20 +38,18 @@ export default async function SummaryPage({
                         aiInsight={aiInsights[monthParam] ?? null}
                         year={currentYear}
                     />
-                </div>
+                </PageShell>
             );
         }
     }
 
     // Default: 12-month grid
     return (
-        <div className="p-4 md:p-6">
-            <div className="mb-6 sm:mb-8">
-                <h1 className="text-2xl font-bold">Monthly Summary</h1>
-                <p className="text-sm text-muted-foreground">
-                    Review your spending month by month
-                </p>
-            </div>
+        <PageShell>
+            <PageHeader
+                title="Monthly Summary"
+                description="Review your spending month by month"
+            />
 
             <MonthlySummary
                 months={history.months}
@@ -63,6 +62,6 @@ export default async function SummaryPage({
                 currency={settings.currency}
                 budget={settings.monthlyBudget}
             />
-        </div>
+        </PageShell>
     );
 }

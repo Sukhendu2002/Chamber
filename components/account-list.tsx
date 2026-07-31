@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toLocalDateString } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
@@ -50,6 +50,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import {
+  IconChevronDown,
   IconDotsVertical,
   IconRefresh,
   IconTrash,
@@ -98,6 +99,20 @@ type AccountListProps = {
   currency: string;
 };
 
+type AccountGroupId =
+  | "banking"
+  | "credit-cards"
+  | "investments"
+  | "wallets-cash"
+  | "other";
+
+type AccountGroup = {
+  id: AccountGroupId;
+  label: string;
+  types: Account["type"][];
+  iconType: Account["type"];
+};
+
 const accountTypes = [
   { value: "BANK", label: "Bank Account" },
   { value: "CREDIT_CARD", label: "Credit Card" },
@@ -106,6 +121,39 @@ const accountTypes = [
   { value: "WALLET", label: "Digital Wallet" },
   { value: "CASH", label: "Cash" },
   { value: "OTHER", label: "Other" },
+];
+
+const ACCOUNT_GROUPS: AccountGroup[] = [
+  {
+    id: "banking",
+    label: "Banking",
+    types: ["BANK", "DEBIT_CARD"],
+    iconType: "BANK",
+  },
+  {
+    id: "credit-cards",
+    label: "Credit cards",
+    types: ["CREDIT_CARD"],
+    iconType: "CREDIT_CARD",
+  },
+  {
+    id: "investments",
+    label: "Investments",
+    types: ["INVESTMENT"],
+    iconType: "INVESTMENT",
+  },
+  {
+    id: "wallets-cash",
+    label: "Wallets & cash",
+    types: ["WALLET", "CASH"],
+    iconType: "WALLET",
+  },
+  {
+    id: "other",
+    label: "Other",
+    types: ["OTHER"],
+    iconType: "OTHER",
+  },
 ];
 
 export function AccountList({ accounts, currency }: AccountListProps) {
@@ -127,6 +175,9 @@ export function AccountList({ accounts, currency }: AccountListProps) {
   const [editName, setEditName] = useState("");
   const [editType, setEditType] = useState<Account["type"]>("BANK");
   const [editDescription, setEditDescription] = useState("");
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<AccountGroupId>>(
+    new Set()
+  );
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat("en-IN", {
@@ -175,6 +226,90 @@ export function AccountList({ accounts, currency }: AccountListProps) {
       OTHER: "bg-gray-500",
     };
     return <Badge className={colors[type]}>{type}</Badge>;
+  };
+
+  const populatedGroups = ACCOUNT_GROUPS.map((group) => ({
+    ...group,
+    accounts: accounts.filter((account) => group.types.includes(account.type)),
+  })).filter((group) => group.accounts.length > 0);
+
+  const allGroupsCollapsed = populatedGroups.every((group) =>
+    collapsedGroups.has(group.id)
+  );
+
+  const toggleGroup = (groupId: AccountGroupId) => {
+    setCollapsedGroups((current) => {
+      const next = new Set(current);
+      if (next.has(groupId)) {
+        next.delete(groupId);
+      } else {
+        next.add(groupId);
+      }
+      return next;
+    });
+  };
+
+  const toggleAllGroups = () => {
+    setCollapsedGroups(
+      allGroupsCollapsed
+        ? new Set()
+        : new Set(populatedGroups.map((group) => group.id))
+    );
+  };
+
+  const getGroupSummary = (
+    group: (typeof populatedGroups)[number]
+  ): string => {
+    const total = group.accounts.reduce(
+      (sum, account) => sum + account.currentBalance,
+      0
+    );
+
+    if (group.id !== "credit-cards") {
+      return formatCurrency(total);
+    }
+
+    if (total < 0) {
+      return `${formatCurrency(Math.abs(total))} credit`;
+    }
+
+    return `${formatCurrency(total)} outstanding`;
+  };
+
+  const renderGroupToggle = (
+    group: (typeof populatedGroups)[number],
+    contentId: string
+  ) => {
+    const isCollapsed = collapsedGroups.has(group.id);
+
+    return (
+      <button
+        type="button"
+        className="flex min-h-11 w-full cursor-pointer items-center justify-between gap-3 bg-muted/35 px-3 py-2 text-left transition-colors hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+        aria-expanded={!isCollapsed}
+        aria-controls={contentId}
+        onClick={() => toggleGroup(group.id)}
+      >
+        <span className="flex min-w-0 items-center gap-2">
+          {getTypeIcon(group.iconType)}
+          <span className="truncate text-sm font-semibold">{group.label}</span>
+          <span className="shrink-0 text-xs text-muted-foreground">
+            {group.accounts.length}
+          </span>
+        </span>
+        <span className="flex shrink-0 items-center gap-2">
+          <span className="text-xs font-medium tabular-nums text-muted-foreground sm:text-sm">
+            {getGroupSummary(group)}
+          </span>
+          <IconChevronDown
+            className={`size-4 text-muted-foreground transition-transform ${
+              isCollapsed ? "-rotate-90" : ""
+            }`}
+            aria-hidden="true"
+          />
+        </span>
+      </button>
+    );
   };
 
   const openUpdateDialog = (account: Account) => {
@@ -410,56 +545,98 @@ export function AccountList({ accounts, currency }: AccountListProps) {
 
   return (
     <>
+      <div className="mb-2 flex min-h-8 items-center justify-between gap-3">
+        <p className="text-xs text-muted-foreground">
+          Grouped by account type
+        </p>
+        {populatedGroups.length > 1 && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-8 px-2 text-xs"
+            onClick={toggleAllGroups}
+          >
+            {allGroupsCollapsed ? "Expand all" : "Collapse all"}
+          </Button>
+        )}
+      </div>
+
       {/* Mobile card layout */}
-      <div className="space-y-3 md:hidden">
-        {accounts.map((account) => {
-          const lastUpdate = account.balanceHistory[0];
+      <div className="space-y-2 md:hidden">
+        {populatedGroups.map((group) => {
+          const contentId = `account-group-${group.id}-mobile`;
+          const isCollapsed = collapsedGroups.has(group.id);
+
           return (
-            <div key={account.id} className="rounded-lg border p-3">
-              <div className="flex items-start justify-between gap-2">
-                <div className="flex items-center gap-2 min-w-0">
-                  {getTypeIcon(account.type)}
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-1.5 font-medium">
-                      <span className="truncate">{account.name}</span>
-                      {account.showOnTelegram && (
-                        <IconBrandTelegram className="h-3.5 w-3.5 shrink-0 text-blue-400" />
-                      )}
-                      {!account.includeInNetWorth && (
-                        <IconCalculator className="h-3.5 w-3.5 shrink-0 text-muted-foreground" title="Excluded from Net Worth" />
-                      )}
-                    </div>
-                    {account.description && (
-                      <div className="text-xs text-muted-foreground truncate">
-                        {account.description}
+            <section
+              key={group.id}
+              className="overflow-hidden rounded-sm border"
+            >
+              {renderGroupToggle(group, contentId)}
+              {!isCollapsed && (
+                <div id={contentId} className="divide-y border-t">
+                  {group.accounts.map((account) => {
+                    const lastUpdate = account.balanceHistory[0];
+
+                    return (
+                      <div key={account.id} className="p-3">
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex min-w-0 items-center gap-2">
+                            {getTypeIcon(account.type)}
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-1.5 font-medium">
+                                <span className="truncate">{account.name}</span>
+                                {account.showOnTelegram && (
+                                  <IconBrandTelegram className="h-3.5 w-3.5 shrink-0 text-blue-400" />
+                                )}
+                                {!account.includeInNetWorth && (
+                                  <IconCalculator
+                                    className="h-3.5 w-3.5 shrink-0 text-muted-foreground"
+                                    title="Excluded from Net Worth"
+                                  />
+                                )}
+                              </div>
+                              {account.description && (
+                                <div className="truncate text-xs text-muted-foreground">
+                                  {account.description}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                          {renderAccountMenu(account)}
+                        </div>
+                        <div className="mt-2 flex items-center justify-between">
+                          <div>
+                            {account.type === "CREDIT_CARD" ? (
+                              renderCreditCardBalance(account)
+                            ) : (
+                              <div className="font-bold">
+                                {formatCurrency(account.currentBalance)}
+                              </div>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-2">
+                            {getTypeBadge(account.type)}
+                          </div>
+                        </div>
+                        {lastUpdate && (
+                          <div className="mt-1 text-xs text-muted-foreground">
+                            Updated: {formatDate(lastUpdate.date)}
+                          </div>
+                        )}
                       </div>
-                    )}
-                  </div>
-                </div>
-                {renderAccountMenu(account)}
-              </div>
-              <div className="mt-2 flex items-center justify-between">
-                <div>
-                  {account.type === "CREDIT_CARD" ? renderCreditCardBalance(account) : (
-                    <div className="font-bold">{formatCurrency(account.currentBalance)}</div>
-                  )}
-                </div>
-                <div className="flex items-center gap-2">
-                  {getTypeBadge(account.type)}
-                </div>
-              </div>
-              {lastUpdate && (
-                <div className="mt-1 text-xs text-muted-foreground">
-                  Updated: {formatDate(lastUpdate.date)}
+                    );
+                  })}
                 </div>
               )}
-            </div>
+            </section>
           );
         })}
       </div>
 
       {/* Desktop table layout */}
-      <div className="hidden md:block">
+      <div className="hidden overflow-hidden rounded-sm border md:block">
         <Table>
           <TableHeader>
             <TableRow>
@@ -470,49 +647,71 @@ export function AccountList({ accounts, currency }: AccountListProps) {
               <TableHead className="w-[50px]"></TableHead>
             </TableRow>
           </TableHeader>
-          <TableBody>
-            {accounts.map((account) => {
-              const lastUpdate = account.balanceHistory[0];
+          {populatedGroups.map((group) => {
+            const contentId = `account-group-${group.id}-desktop`;
+            const isCollapsed = collapsedGroups.has(group.id);
 
-              return (
-                <TableRow key={account.id}>
-                  <TableCell>
-                    <div className="flex items-center gap-2">
-                      {getTypeIcon(account.type)}
-                      <div>
-                        <div className="flex items-center gap-1.5 font-medium">
-                          {account.name}
-                          {account.showOnTelegram && (
-                            <IconBrandTelegram className="h-3.5 w-3.5 text-blue-400" title="Visible on Telegram" />
-                          )}
-                          {!account.includeInNetWorth && (
-                            <IconCalculator className="h-3.5 w-3.5 text-muted-foreground" title="Excluded from Net Worth" />
-                          )}
-                        </div>
-                        {account.description && (
-                          <div className="text-xs text-muted-foreground">
-                            {account.description}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </TableCell>
-                  <TableCell>{getTypeBadge(account.type)}</TableCell>
-                  <TableCell className="font-bold">
-                    {account.type === "CREDIT_CARD" ? renderCreditCardBalance(account) : (
-                      formatCurrency(account.currentBalance)
-                    )}
-                  </TableCell>
-                  <TableCell className="text-muted-foreground">
-                    {lastUpdate ? formatDate(lastUpdate.date) : "-"}
-                  </TableCell>
-                  <TableCell>
-                    {renderAccountMenu(account)}
-                  </TableCell>
-                </TableRow>
-              );
-            })}
-          </TableBody>
+            return (
+              <Fragment key={group.id}>
+                <TableBody>
+                  <TableRow className="border-b hover:bg-transparent">
+                    <TableCell colSpan={5} className="h-auto p-0">
+                      {renderGroupToggle(group, contentId)}
+                    </TableCell>
+                  </TableRow>
+                </TableBody>
+                {!isCollapsed && (
+                  <TableBody id={contentId}>
+                    {group.accounts.map((account) => {
+                      const lastUpdate = account.balanceHistory[0];
+
+                      return (
+                        <TableRow key={account.id}>
+                          <TableCell>
+                            <div className="flex items-center gap-2">
+                              {getTypeIcon(account.type)}
+                              <div>
+                                <div className="flex items-center gap-1.5 font-medium">
+                                  {account.name}
+                                  {account.showOnTelegram && (
+                                    <IconBrandTelegram
+                                      className="h-3.5 w-3.5 text-blue-400"
+                                      title="Visible on Telegram"
+                                    />
+                                  )}
+                                  {!account.includeInNetWorth && (
+                                    <IconCalculator
+                                      className="h-3.5 w-3.5 text-muted-foreground"
+                                      title="Excluded from Net Worth"
+                                    />
+                                  )}
+                                </div>
+                                {account.description && (
+                                  <div className="text-xs text-muted-foreground">
+                                    {account.description}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </TableCell>
+                          <TableCell>{getTypeBadge(account.type)}</TableCell>
+                          <TableCell className="font-bold">
+                            {account.type === "CREDIT_CARD"
+                              ? renderCreditCardBalance(account)
+                              : formatCurrency(account.currentBalance)}
+                          </TableCell>
+                          <TableCell className="text-muted-foreground">
+                            {lastUpdate ? formatDate(lastUpdate.date) : "-"}
+                          </TableCell>
+                          <TableCell>{renderAccountMenu(account)}</TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                )}
+              </Fragment>
+            );
+          })}
         </Table>
       </div>
 

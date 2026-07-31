@@ -1,19 +1,17 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getTelegramStatus } from "@/lib/actions/settings";
 import { TelegramLinkingForm } from "@/components/telegram-linking-form";
+import { PageHeader, PageShell } from "@/components/page-shell";
 
 export default async function TelegramPage() {
   const status = await getTelegramStatus();
 
   return (
-    <div className="p-4 md:p-6">
-      {/* Header */}
-      <div className="mb-6 sm:mb-8">
-        <h1 className="text-2xl font-bold">Telegram</h1>
-        <p className="text-sm text-muted-foreground">
-          Link your Telegram account to track expenses on the go
-        </p>
-      </div>
+    <PageShell>
+      <PageHeader
+        title="Telegram"
+        description="Link Telegram to track expenses on the go"
+      />
 
       <TelegramLinkingForm isLinked={status.isLinked} />
 
@@ -56,6 +54,6 @@ export default async function TelegramPage() {
           </div>
         </CardContent>
       </Card>
-    </div>
+    </PageShell>
   );
 }

@@ -481,6 +481,17 @@ export function ExpenseTable({ expenses: initialExpenses, currency, accounts = [
                     )}
                   </div>
                 )}
+                {getReceipts(expense).length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => openReceiptViewer(expense.id)}
+                    className="mt-1 inline-flex items-center gap-1 rounded-sm border px-1.5 py-0.5 text-xs font-medium text-foreground hover:bg-muted"
+                  >
+                    <IconPhoto className="size-3.5" />
+                    {getReceipts(expense).length}{" "}
+                    {getReceipts(expense).length === 1 ? "receipt" : "receipts"} attached
+                  </button>
+                )}
               </div>
               <p
                 className={`text-sm font-bold whitespace-nowrap ${
@@ -577,6 +588,17 @@ export function ExpenseTable({ expenses: initialExpenses, currency, accounts = [
                 <TableCell className="font-medium">
                   <div className="flex flex-col gap-1">
                     <span>{expense.description || expense.merchant || "-"}</span>
+                    {getReceipts(expense).length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => openReceiptViewer(expense.id)}
+                        className="inline-flex w-fit items-center gap-1 rounded-sm border px-1.5 py-0.5 text-[0.6875rem] font-medium text-foreground hover:bg-muted"
+                      >
+                        <IconPhoto className="size-3" />
+                        {getReceipts(expense).length}{" "}
+                        {getReceipts(expense).length === 1 ? "receipt" : "receipts"} attached
+                      </button>
+                    )}
                     {expense.loanId && expense.loan && (
                       <Badge
                         variant="outline"

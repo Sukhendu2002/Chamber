@@ -31,8 +31,8 @@ export default async function CapturePage({
 
   return (
     <main className="min-h-dvh bg-background text-foreground">
-      <div className="mx-auto w-full max-w-2xl px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-[max(1rem,env(safe-area-inset-top))] sm:px-6">
-        <header className="mb-6 flex items-center justify-between gap-3">
+      <div className="mx-auto w-full max-w-3xl px-4 pb-[max(1.5rem,env(safe-area-inset-bottom))] pt-[max(1rem,env(safe-area-inset-top))] sm:px-6">
+        <header className="mb-8 flex items-center justify-between gap-3">
           <Button asChild variant="ghost" className="min-h-11">
             <Link href="/dashboard">
               <IconArrowLeft aria-hidden="true" />
@@ -42,11 +42,11 @@ export default async function CapturePage({
           <PwaInstallButton />
         </header>
 
-        <section className="mb-6">
-          <div className="mb-3 flex size-12 items-center justify-center border bg-primary text-primary-foreground">
+        <section className="mb-8">
+          <div className="mb-3 flex size-10 items-center justify-center rounded-md bg-secondary text-primary">
             <IconShieldCheck aria-hidden="true" className="size-6" />
           </div>
-          <h1 className="text-2xl font-bold tracking-tight">Quick Capture</h1>
+          <h1 className="page-title">Quick Capture</h1>
           <p className="mt-2 max-w-xl text-sm text-muted-foreground">
             Chamber cannot float above or capture another app from a PWA. Android can
             securely hand Chamber a screenshot through the system Share menu.

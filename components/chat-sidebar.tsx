@@ -349,7 +349,7 @@ export function ChatSidebar() {
             {/* Chat panel */}
             <div
                 className={cn(
-                    "fixed bottom-24 right-6 z-50 flex flex-col overflow-hidden rounded-xl border bg-background shadow-2xl transition-all duration-300",
+                    "fixed bottom-20 right-4 z-50 flex flex-col overflow-hidden rounded-md border bg-background shadow-xl transition-all duration-300",
                     "w-[380px] max-h-[600px]",
                     // Mobile: full screen
                     "max-md:bottom-0 max-md:right-0 max-md:left-0 max-md:top-0 max-md:w-full max-md:max-h-full max-md:rounded-none",

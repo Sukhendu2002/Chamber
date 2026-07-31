@@ -25,10 +25,19 @@ type ExpenseCalendarWidgetProps = {
   currency: string;
   monthlyIncome?: number;
   salaryDay?: number;
+  initialDate?: Date;
 };
 
-export function ExpenseCalendarWidget({ expenses, currency, monthlyIncome = 0, salaryDay = 1 }: ExpenseCalendarWidgetProps) {
-  const [currentDate, setCurrentDate] = useState(new Date());
+export function ExpenseCalendarWidget({
+  expenses,
+  currency,
+  monthlyIncome = 0,
+  salaryDay = 1,
+  initialDate,
+}: ExpenseCalendarWidgetProps) {
+  const [currentDate, setCurrentDate] = useState(() =>
+    initialDate ? new Date(initialDate) : new Date(),
+  );
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat("en-IN", {

@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { IconCash, IconCashOff, IconUsers, IconCheck } from "@tabler/icons-react";
 import { LoanList } from "@/components/loan-list";
 import { AddLoanDialog } from "@/components/add-loan-dialog";
+import { PageHeader, PageShell } from "@/components/page-shell";
 
 export default async function LoansPage() {
   const [loans, stats, settings, accounts] = await Promise.all([
@@ -23,15 +24,12 @@ export default async function LoansPage() {
   };
 
   return (
-    <div className="flex flex-1 flex-col gap-4 p-4 md:p-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Lent Money</h1>
-          <p className="text-muted-foreground">
-            Track money you&apos;ve lent to others
-          </p>
-        </div>
-        <AddLoanDialog
+    <PageShell className="flex flex-col gap-4">
+      <PageHeader
+        className="mb-0"
+        title="Lent Money"
+        description="Track money you’ve lent to others"
+        actions={<AddLoanDialog
           currency={settings.currency}
           accounts={accounts.map((a) => ({
             id: a.id,
@@ -39,8 +37,8 @@ export default async function LoansPage() {
             type: a.type,
             currentBalance: a.currentBalance,
           }))}
-        />
-      </div>
+        />}
+      />
 
       {/* Stats Cards */}
       <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-4">
@@ -110,6 +108,6 @@ export default async function LoansPage() {
           <LoanList loans={loans} currency={settings.currency} />
         </CardContent>
       </Card>
-    </div>
+    </PageShell>
   );
 }

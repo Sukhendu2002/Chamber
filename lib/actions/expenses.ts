@@ -68,6 +68,11 @@ const GetExpensesCountOptionsSchema = z.object({
   search: z.string().max(200).optional(),
 }).optional();
 
+const MonthlyStatsOptionsSchema = z.object({
+  year: z.number().int().min(2000).max(2100),
+  month: z.number().int().min(1).max(12),
+}).optional();
+
 const IdSchema = z.string().uuid();
 
 const DeleteExpenseSchema = z.object({
@@ -541,9 +546,11 @@ export async function deleteExpense(id: string, reverseBalance: boolean = true) 
   revalidatePath("/accounts");
 }
 
-export async function getMonthlyStats() {
+export async function getMonthlyStats(options?: z.infer<typeof MonthlyStatsOptionsSchema>) {
   const { userId } = await auth();
   if (!userId) throw new Error("Unauthorized");
+
+  const validated = MonthlyStatsOptionsSchema.parse(options);
 
   // Get user's timezone setting
   const settings = await getUserSettings();
@@ -551,10 +558,17 @@ export async function getMonthlyStats() {
 
   // Use user's timezone for date calculations
   const now = getNowInTimezone(userTimezone);
-  const startOfMonth = getStartOfMonthInTimezone(userTimezone);
-  const endOfMonth = getEndOfMonthInTimezone(userTimezone);
+  const selectedDate = validated
+    ? new Date(validated.year, validated.month - 1, 1)
+    : now;
+  const startOfMonth = validated
+    ? new Date(selectedDate.getFullYear(), selectedDate.getMonth(), 1, 0, 0, 0, 0)
+    : getStartOfMonthInTimezone(userTimezone);
+  const endOfMonth = validated
+    ? new Date(selectedDate.getFullYear(), selectedDate.getMonth() + 1, 0, 23, 59, 59, 999)
+    : getEndOfMonthInTimezone(userTimezone);
 
-  // Get expenses for current month (for stats)
+  // Get expenses for the selected month.
   const monthlyExpenses = await db.expense.findMany({
     where: {
       userId,
@@ -569,20 +583,12 @@ export async function getMonthlyStats() {
     ],
   });
 
-  // Get 5 most recent expenses overall (for recent expenses widget)
-  const recentExpenses = await db.expense.findMany({
-    where: { userId },
-    orderBy: [
-      { createdAt: "desc" },
-      { id: "desc" },
-    ],
-    take: 5,
-  });
+  const recentExpenses = monthlyExpenses.slice(0, 5);
 
-  // Get ALL expenses for current month (for calendar widget)
+  // Fetch a wider range around the selected month for the calendar widget.
   // Need to fetch a wider range for calendar to work correctly with timezone differences
-  const calendarStartDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-  const calendarEndDate = new Date(now.getFullYear(), now.getMonth() + 2, 0);
+  const calendarStartDate = new Date(selectedDate.getFullYear(), selectedDate.getMonth() - 1, 1);
+  const calendarEndDate = new Date(selectedDate.getFullYear(), selectedDate.getMonth() + 2, 0);
   const calendarExpenses = await db.expense.findMany({
     where: {
       userId,
@@ -617,8 +623,8 @@ export async function getMonthlyStats() {
     spentExcludingInvestment,
     transactionCount,
     categoryBreakdown,
-    expenses: recentExpenses, // 5 most recent expenses overall
-    calendarExpenses, // All expenses for calendar widget (wider date range)
+    expenses: recentExpenses,
+    calendarExpenses,
   };
 }
 

@@ -22,8 +22,6 @@ import {
   IconArrowDownRight,
   IconReceipt,
   IconCurrencyRupee,
-  IconSparkles,
-  IconTrendingUp,
 } from "@tabler/icons-react";
 
 type CategoryData = {
@@ -64,7 +62,6 @@ type AnalyticsChartsProps = {
   previousMonthSpent: number;
   highestSpendingDay: { date: string; amount: number };
   transactionCount: number;
-  aiInsights: string[];
   tagData?: TagData[];
 };
 
@@ -80,7 +77,6 @@ export function AnalyticsCharts({
   previousMonthSpent,
   highestSpendingDay,
   transactionCount,
-  aiInsights,
   tagData,
 }: AnalyticsChartsProps) {
   const budgetPercentage = budget > 0 ? Math.round((totalSpent / budget) * 100) : 0;
@@ -132,7 +128,7 @@ export function AnalyticsCharts({
   return (
     <>
       {/* Summary Stats Row */}
-      <div className="mb-6 grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
+      <div className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
         {summaryStats.map((stat) => (
           <Card key={stat.title} className="border">
             <CardHeader className="flex flex-row items-center justify-between pb-2">
@@ -152,7 +148,7 @@ export function AnalyticsCharts({
       </div>
 
       {/* Budget Overview */}
-      <Card className="mb-6 border">
+      <Card className="mb-4 border">
         <CardHeader>
           <CardTitle className="text-sm font-medium">
             Monthly Budget Overview
@@ -174,29 +170,9 @@ export function AnalyticsCharts({
         </CardContent>
       </Card>
 
-      {/* AI Insights Card */}
-      {aiInsights.length > 0 && (
-        <Card className="mb-6 border border-primary/20 bg-gradient-to-br from-primary/5 to-transparent">
-          <CardHeader className="flex flex-row items-center gap-2">
-            <IconSparkles className="h-5 w-5 text-primary" />
-            <CardTitle className="text-sm font-medium">AI Spending Insights</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <ul className="space-y-3">
-              {aiInsights.map((insight, i) => (
-                <li key={i} className="flex gap-3 text-sm">
-                  <IconTrendingUp className="mt-0.5 h-4 w-4 shrink-0 text-primary/70" />
-                  <span className="text-muted-foreground">{insight}</span>
-                </li>
-              ))}
-            </ul>
-          </CardContent>
-        </Card>
-      )}
-
       {/* Daily Spending Area Chart */}
       {dailySpending.length > 0 && (
-        <Card className="mb-6 border">
+        <Card className="mb-4 border">
           <CardHeader>
             <CardTitle className="text-sm font-medium">
               Daily Spending This Month
@@ -233,7 +209,7 @@ export function AnalyticsCharts({
       )}
 
       {/* Charts Grid */}
-      <div className="mb-6 grid gap-6 md:grid-cols-2">
+      <div className="mb-4 grid gap-4 md:grid-cols-2">
         {/* Spending by Category Pie Chart */}
         <Card className="border">
           <CardHeader>
@@ -301,7 +277,7 @@ export function AnalyticsCharts({
       </div>
 
       {/* Bottom Grid: Top Merchants + Category Breakdown */}
-      <div className="grid gap-6 md:grid-cols-2">
+      <div className="grid gap-4 md:grid-cols-2">
         {/* Top Merchants */}
         {topMerchants.length > 0 && (
           <Card className="border">

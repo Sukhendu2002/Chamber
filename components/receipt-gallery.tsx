@@ -265,7 +265,7 @@ export function ReceiptGallery({
                     })}
                 </div>
             ) : (
-                <div className="flex flex-col items-center justify-center rounded-xl border border-dashed py-24 text-center">
+                <div className="flex flex-col items-center justify-center rounded-md border border-dashed py-16 text-center">
                     <IconPhoto className="mb-3 h-12 w-12 text-muted-foreground/40" />
                     <p className="text-base font-medium text-muted-foreground">No receipts found</p>
                     <p className="mt-1 text-sm text-muted-foreground">

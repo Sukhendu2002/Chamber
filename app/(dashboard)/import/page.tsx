@@ -19,6 +19,7 @@ import {
   IconCheck,
   IconAlertTriangle,
 } from "@tabler/icons-react";
+import { PageHeader, PageShell } from "@/components/page-shell";
 
 // Mock imported transactions
 const importedTransactions = [
@@ -73,14 +74,11 @@ export default function ImportPage() {
   const [isDragging, setIsDragging] = useState(false);
 
   return (
-    <div className="p-4 md:p-6">
-      {/* Header */}
-      <div className="mb-6 sm:mb-8">
-        <h1 className="text-2xl font-bold">Import</h1>
-        <p className="text-sm text-muted-foreground">
-          Upload bank statements for reconciliation
-        </p>
-      </div>
+    <PageShell>
+      <PageHeader
+        title="Import"
+        description="Upload bank statements for fast reconciliation"
+      />
 
       {/* Upload Section */}
       <Card className="mb-6 border">
@@ -188,6 +186,6 @@ export default function ImportPage() {
           </div>
         </CardContent>
       </Card>
-    </div>
+    </PageShell>
   );
 }

@@ -4,7 +4,7 @@ import { useEffect, useCallback } from "react";
 import { useTheme } from "next-themes";
 import { useSyncExternalStore } from "react";
 import { cn } from "@/lib/utils";
-import { IconSun, IconMoon } from "@tabler/icons-react";
+import { IconCheck, IconMoon, IconSun } from "@tabler/icons-react";
 
 type ThemeKey = "default" | "ocean" | "forest" | "sunset" | "mono";
 type ModeKey = "light" | "dark";
@@ -377,106 +377,103 @@ export function ThemeSelector() {
 
   if (!mounted) {
     return (
-      <div className="space-y-4">
-        <div className="grid grid-cols-5 gap-3">
+      <div className="space-y-3" aria-hidden="true">
+        <div className="grid grid-cols-5 gap-1.5">
           {THEMES.map((t) => (
             <div
               key={t.key}
-              className="h-20 rounded border border-border bg-muted animate-pulse"
+              className="h-12 animate-pulse rounded-md border border-border bg-muted"
             />
           ))}
         </div>
+        <div className="h-9 animate-pulse rounded-md border bg-muted" />
       </div>
     );
   }
 
   return (
-    <div className="space-y-4">
-      {/* Theme cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
-        {THEMES.map((t) => {
-          const isActive = current.base === t.key;
-          return (
-            <button
-              key={t.key}
-              onClick={() => selectTheme(t.key)}
-              className={cn(
-                "group relative rounded-lg border-2 p-3 transition-all text-left",
-                isActive
-                  ? "border-primary ring-1 ring-primary"
-                  : "border-border hover:border-primary/40 hover:shadow-sm"
-              )}
-            >
-              {/* Color swatches */}
-              <div className="flex gap-1 mb-2">
-                {t.colors.map((c, i) => (
-                  <div
-                    key={i}
-                    className="h-5 flex-1 rounded"
-                    style={{ backgroundColor: c }}
-                  />
-                ))}
-              </div>
-              <span
+    <div className="space-y-3">
+      <div>
+        <p id="color-theme-label" className="mb-1.5 text-xs font-medium">
+          Color theme
+        </p>
+        <div
+          role="group"
+          aria-labelledby="color-theme-label"
+          className="grid grid-cols-5 gap-1.5"
+        >
+          {THEMES.map((themeOption) => {
+            const isActive = current.base === themeOption.key;
+            return (
+              <button
+                key={themeOption.key}
+                type="button"
+                aria-pressed={isActive}
+                aria-label={`${themeOption.label} color theme`}
+                onClick={() => selectTheme(themeOption.key)}
                 className={cn(
-                  "text-xs font-medium",
-                  isActive ? "text-primary" : "text-muted-foreground"
+                  "relative min-h-12 cursor-pointer rounded-md border p-1.5 text-left outline-none transition-colors hover:border-primary/40 hover:bg-muted/40 focus-visible:ring-2 focus-visible:ring-ring/30",
+                  isActive &&
+                    "border-primary bg-primary/[0.04] ring-1 ring-primary/25"
                 )}
               >
-                {t.label}
-              </span>
-              {isActive && (
-                <div className="absolute top-1.5 right-1.5 h-4 w-4 rounded-full bg-primary flex items-center justify-center">
-                  <svg
-                    width="10"
-                    height="10"
-                    viewBox="0 0 10 10"
-                    fill="none"
-                    className="text-primary-foreground"
-                  >
-                    <path
-                      d="M2 5L4 7L8 3"
-                      stroke="currentColor"
-                      strokeWidth="1.5"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
+                <span className="flex gap-0.5" aria-hidden="true">
+                  {themeOption.colors.map((color) => (
+                    <span
+                      key={color}
+                      className="h-3.5 flex-1 rounded-[0.1875rem]"
+                      style={{ backgroundColor: color }}
                     />
-                  </svg>
-                </div>
-              )}
-            </button>
-          );
-        })}
+                  ))}
+                </span>
+                <span className="mt-1 block truncate text-center text-[0.625rem] font-medium text-muted-foreground">
+                  {themeOption.label}
+                </span>
+                {isActive && (
+                  <span className="absolute -right-1 -top-1 flex size-4 items-center justify-center rounded-full bg-primary text-primary-foreground">
+                    <IconCheck
+                      aria-hidden="true"
+                      className="size-2.5 stroke-[2.5]"
+                    />
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
       </div>
 
-      {/* Light/Dark toggle */}
-      <div className="flex items-center justify-between rounded-lg border border-border p-3">
-        <div>
-          <p className="text-sm font-medium">Mode</p>
-          <p className="text-xs text-muted-foreground">
-            {current.mode === "light" ? "Light" : "Dark"} mode
-          </p>
-        </div>
-        <button
-          onClick={toggleMode}
-          className={cn(
-            "relative h-7 w-12 rounded-full transition-colors",
-            current.mode === "dark" ? "bg-primary" : "bg-muted"
-          )}
+      <div>
+        <p id="theme-mode-label" className="mb-1.5 text-xs font-medium">
+          Mode
+        </p>
+        <div
+          role="group"
+          aria-labelledby="theme-mode-label"
+          className="grid grid-cols-2 rounded-md border p-0.5"
         >
-          <div
-            className={cn(
-              "absolute top-0.5 h-6 w-6 rounded-full bg-white shadow-sm flex items-center justify-center transition-transform",
-              current.mode === "dark" ? "translate-x-5.5" : "translate-x-0.5"
-            )}
-          >
-            {current.mode === "dark" ? (
-              <IconMoon className="h-3 w-3 text-foreground" />
-            ) : (
-              <IconSun className="h-3 w-3 text-amber-500" />
-            )}
-          </div>
-        </button>
+          {(["light", "dark"] as const).map((mode) => {
+            const isActive = current.mode === mode;
+            const ModeIcon = mode === "light" ? IconSun : IconMoon;
+            return (
+              <button
+                key={mode}
+                type="button"
+                aria-pressed={isActive}
+                onClick={() => {
+                  if (!isActive) toggleMode();
+                }}
+                className={cn(
+                  "flex h-8 cursor-pointer items-center justify-center gap-1.5 rounded-sm text-xs font-medium capitalize text-muted-foreground outline-none transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/30",
+                  isActive && "bg-muted text-foreground shadow-xs"
+                )}
+              >
+                <ModeIcon aria-hidden="true" className="size-3.5" />
+                {mode}
+              </button>
+            );
+          })}
+        </div>
       </div>
     </div>
   );

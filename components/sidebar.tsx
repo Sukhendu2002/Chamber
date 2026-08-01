@@ -118,7 +118,8 @@ function SidebarNav({ pathname, onNavigate }: { pathname: string; onNavigate?: (
   );
 }
 
-function SidebarFooter({ mounted, isLoaded, user, signOut, isDemoMode, toggleDemoMode }: {
+function SidebarFooter({ pathname, mounted, isLoaded, user, signOut, isDemoMode, toggleDemoMode }: {
+  pathname: string;
   mounted: boolean;
   isLoaded: boolean;
   user: ReturnType<typeof useUser>["user"];
@@ -130,9 +131,21 @@ function SidebarFooter({ mounted, isLoaded, user, signOut, isDemoMode, toggleDem
     <div className="space-y-1.5 border-t border-sidebar-border p-2">
       <Link
         href="/settings"
-        className="flex min-h-9 items-center gap-2.5 rounded-md px-2.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted/70 hover:text-foreground"
+        aria-current={pathname === "/settings" ? "page" : undefined}
+        className={cn(
+          "flex min-h-9 items-center gap-2.5 rounded-md px-2.5 text-xs font-medium transition-colors",
+          pathname === "/settings"
+            ? "bg-sidebar-accent text-sidebar-accent-foreground"
+            : "text-muted-foreground hover:bg-muted/70 hover:text-foreground"
+        )}
       >
-        <IconSettings aria-hidden="true" className="size-[1.125rem] stroke-[1.8]" />
+        <IconSettings
+          aria-hidden="true"
+          className={cn(
+            "size-[1.125rem] stroke-[1.8]",
+            pathname === "/settings" && "text-primary"
+          )}
+        />
         Settings
       </Link>
       <div className="flex items-center gap-2">
@@ -218,7 +231,7 @@ export function Sidebar() {
     () => false
   );
 
-  const footerProps = { mounted, isLoaded, user, signOut, isDemoMode, toggleDemoMode };
+  const footerProps = { pathname, mounted, isLoaded, user, signOut, isDemoMode, toggleDemoMode };
 
   return (
     <>

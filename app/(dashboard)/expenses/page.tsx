@@ -18,10 +18,11 @@ const DATE_RANGE_PRESETS = ["this_month", "last_month", "last_3_months", "last_6
 export default async function ExpensesPage({
   searchParams,
 }: {
-  searchParams: Promise<{ page?: string; search?: string; category?: string; excludeCategory?: string; tags?: string | string[]; dateRange?: string }>;
+  searchParams: Promise<{ page?: string; expenseId?: string; search?: string; category?: string; excludeCategory?: string; tags?: string | string[]; dateRange?: string }>;
 }) {
   const params = await searchParams;
   const page = parseInt(params.page || "1", 10);
+  const expenseId = params.expenseId || "";
   const search = params.search || "";
   const category = params.category || "";
   const excludeCategory = params.excludeCategory || "";
@@ -34,6 +35,7 @@ export default async function ExpensesPage({
 
   const [expenses, { count: totalCount, totalAmount }, settings, accounts, allTags, userCategories] = await Promise.all([
     getExpenses({
+      expenseId: expenseId || undefined,
       limit: ITEMS_PER_PAGE,
       offset,
       search: search || undefined,
@@ -43,6 +45,7 @@ export default async function ExpensesPage({
       dateRange,
     }),
     getExpensesCount({
+      expenseId: expenseId || undefined,
       search: search || undefined,
       category: category || undefined,
       excludeCategory: excludeCategory || undefined,
@@ -65,7 +68,7 @@ export default async function ExpensesPage({
     }).format(amount);
   };
 
-  const hasFilters = search || category || excludeCategory || tags.length > 0 || dateRange;
+  const hasFilters = expenseId || search || category || excludeCategory || tags.length > 0 || dateRange;
 
   return (
     <PageShell>
@@ -92,6 +95,7 @@ export default async function ExpensesPage({
 
       {/* Filters */}
       <ExpenseFilters
+        currentExpenseId={expenseId}
         currentSearch={search}
         currentCategory={category}
         currentExcludeCategory={excludeCategory}

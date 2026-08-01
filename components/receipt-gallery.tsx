@@ -113,6 +113,11 @@ function getReceiptUrl(expenseId: string, index: number) {
     return `/api/receipt/${expenseId}?index=${index}`;
 }
 
+function getExpenseUrl(expenseId: string) {
+    const params = new URLSearchParams({ expenseId });
+    return `/expenses?${params.toString()}`;
+}
+
 function formatDate(date: Date) {
     return new Date(date).toLocaleDateString("en-IN", {
         day: "numeric",
@@ -670,7 +675,7 @@ function ReceiptActions({ expense, onPreview }: ReceiptActionsProps) {
                     Preview
                 </DropdownMenuItem>
                 <DropdownMenuItem asChild>
-                    <Link href="/expenses">
+                    <Link href={getExpenseUrl(expense.id)}>
                         <IconExternalLink aria-hidden={true} />
                         View expense
                     </Link>
@@ -824,7 +829,7 @@ function ReceiptPreview({
                         </p>
                         <div className="mt-4 grid grid-cols-2 gap-2">
                             <Button variant="outline" asChild>
-                                <Link href="/expenses">
+                                <Link href={getExpenseUrl(expense.id)}>
                                     View expense
                                     <IconExternalLink aria-hidden={true} />
                                 </Link>

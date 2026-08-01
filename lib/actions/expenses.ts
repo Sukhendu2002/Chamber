@@ -47,6 +47,7 @@ function getDateRangeFromPreset(preset: DateRangePreset, timezone: string): { st
 }
 
 const GetExpensesOptionsSchema = z.object({
+  expenseId: z.string().uuid().optional(),
   limit: z.number().int().positive().optional(),
   offset: z.number().int().nonnegative().optional(),
   startDate: z.date().optional(),
@@ -59,6 +60,7 @@ const GetExpensesOptionsSchema = z.object({
 }).optional();
 
 const GetExpensesCountOptionsSchema = z.object({
+  expenseId: z.string().uuid().optional(),
   startDate: z.date().optional(),
   endDate: z.date().optional(),
   dateRange: z.enum(DATE_RANGE_PRESETS).optional(),
@@ -258,6 +260,10 @@ export async function getExpenses(options?: z.infer<typeof GetExpensesOptionsSch
 
   const where: Record<string, unknown> = { userId };
 
+  if (validated?.expenseId) {
+    where.id = validated.expenseId;
+  }
+
   // Resolve date range
   let startDate = validated?.startDate;
   let endDate = validated?.endDate;
@@ -330,6 +336,10 @@ export async function getExpensesCount(options?: z.infer<typeof GetExpensesCount
   const validated = GetExpensesCountOptionsSchema.parse(options);
 
   const where: Record<string, unknown> = { userId };
+
+  if (validated?.expenseId) {
+    where.id = validated.expenseId;
+  }
 
   // Resolve date range
   let startDate = validated?.startDate;

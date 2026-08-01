@@ -68,25 +68,25 @@ const accounts = [
 ];
 
 describe("AccountList", () => {
-  it("groups accounts and lets each group collapse independently", () => {
+  it("starts collapsed and reveals a group's accounts and total when expanded", () => {
     render(<AccountList accounts={accounts} currency="INR" />);
 
     const bankingToggles = screen.getAllByRole("button", { name: /Banking/ });
     expect(bankingToggles).toHaveLength(2);
-    expect(bankingToggles[0].getAttribute("aria-expanded")).toBe("true");
-    expect(screen.getAllByText("Primary checking")).toHaveLength(2);
+    expect(bankingToggles[0].getAttribute("aria-expanded")).toBe("false");
+    expect(bankingToggles[0].textContent).toContain("₹••••••");
+    expect(screen.queryByText("Primary checking")).toBeNull();
 
     fireEvent.click(bankingToggles[0]);
 
-    expect(screen.queryByText("Primary checking")).toBeNull();
-    expect(bankingToggles[0].getAttribute("aria-expanded")).toBe("false");
-    expect(screen.getAllByText("Travel card")).toHaveLength(2);
+    expect(screen.getAllByText("Primary checking")).toHaveLength(2);
+    expect(bankingToggles[0].getAttribute("aria-expanded")).toBe("true");
+    expect(bankingToggles[0].textContent).toContain("₹55,000");
+    expect(screen.queryByText("Travel card")).toBeNull();
   });
 
-  it("collapses and expands every populated group at once", () => {
+  it("expands and collapses every populated group at once", () => {
     render(<AccountList accounts={accounts} currency="INR" />);
-
-    fireEvent.click(screen.getByRole("button", { name: "Collapse all" }));
 
     expect(screen.queryByText("Primary checking")).toBeNull();
     expect(screen.queryByText("Travel card")).toBeNull();
@@ -100,5 +100,10 @@ describe("AccountList", () => {
 
     expect(screen.getAllByText("Primary checking")).toHaveLength(2);
     expect(screen.getAllByText("Travel card")).toHaveLength(2);
+
+    fireEvent.click(screen.getByRole("button", { name: "Collapse all" }));
+
+    expect(screen.queryByText("Primary checking")).toBeNull();
+    expect(screen.queryByText("Travel card")).toBeNull();
   });
 });

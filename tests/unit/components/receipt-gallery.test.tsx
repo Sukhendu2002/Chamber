@@ -26,6 +26,21 @@ const expenses: ReceiptExpense[] = [
 }));
 
 describe("ReceiptGallery", () => {
+  it("links the receipt preview to its specific expense", () => {
+    render(
+      <ReceiptGallery
+        expenses={expenses}
+        currency="INR"
+        currentSearch=""
+        currentCategory=""
+      />
+    );
+
+    expect(
+      screen.getByRole("link", { name: /View expense/ }).getAttribute("href")
+    ).toBe("/expenses?expenseId=railways");
+  });
+
   it("switches views and updates the selected receipt preview", () => {
     render(
       <ReceiptGallery

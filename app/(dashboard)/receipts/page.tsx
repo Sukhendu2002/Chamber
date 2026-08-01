@@ -1,7 +1,7 @@
 import { getExpensesWithReceipts } from "@/lib/actions/receipts";
 import { getUserSettings } from "@/lib/actions/settings";
 import { ReceiptGallery } from "@/components/receipt-gallery";
-import { PageHeader, PageShell } from "@/components/page-shell";
+import { PageShell } from "@/components/page-shell";
 
 export default async function ReceiptsPage({
     searchParams,
@@ -22,12 +22,8 @@ export default async function ReceiptsPage({
 
     return (
         <PageShell>
-            <PageHeader
-                title="Receipts"
-                description="All your uploaded receipts in one place"
-            />
-
             <ReceiptGallery
+                key={`${search}:${category}`}
                 expenses={expenses}
                 currency={settings.currency}
                 currentSearch={search}

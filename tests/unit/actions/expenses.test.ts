@@ -348,6 +348,24 @@ describe("Expense Actions", () => {
             );
         });
 
+        it("should filter by expense ID", async () => {
+            mockDb.expense.findMany.mockResolvedValue([]);
+
+            vi.resetModules();
+            const { getExpenses } = await import("@/lib/actions/expenses");
+
+            await getExpenses({ expenseId: UUIDS.expense1 });
+
+            expect(mockDb.expense.findMany).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    where: expect.objectContaining({
+                        id: UUIDS.expense1,
+                        userId: "test-user-id",
+                    }),
+                })
+            );
+        });
+
         it("should filter by date range", async () => {
             mockDb.expense.findMany.mockResolvedValue([]);
 
@@ -583,6 +601,27 @@ describe("Expense Actions", () => {
                                 }),
                             }),
                         }),
+                    }),
+                })
+            );
+        });
+
+        it("should count only the selected expense", async () => {
+            mockDb.expense.aggregate.mockResolvedValue({
+                _count: { id: 1 },
+                _sum: { amount: 100 },
+            });
+
+            vi.resetModules();
+            const { getExpensesCount } = await import("@/lib/actions/expenses");
+
+            await getExpensesCount({ expenseId: UUIDS.expense1 });
+
+            expect(mockDb.expense.aggregate).toHaveBeenCalledWith(
+                expect.objectContaining({
+                    where: expect.objectContaining({
+                        id: UUIDS.expense1,
+                        userId: "test-user-id",
                     }),
                 })
             );

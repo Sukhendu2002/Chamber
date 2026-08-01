@@ -40,6 +40,7 @@ const DATE_RANGE_OPTIONS: { value: DateRangePreset; label: string }[] = [
 ];
 
 type ExpenseFiltersProps = {
+  currentExpenseId?: string;
   currentSearch: string;
   currentCategory: string;
   currentExcludeCategory?: string;
@@ -50,6 +51,7 @@ type ExpenseFiltersProps = {
 };
 
 export function ExpenseFilters({
+  currentExpenseId,
   currentSearch,
   currentCategory,
   currentExcludeCategory,
@@ -107,7 +109,7 @@ export function ExpenseFilters({
   };
 
   const hasFilters =
-    currentSearch || currentCategory || currentExcludeCategory || currentTags.length > 0 || currentDateRange;
+    currentExpenseId || currentSearch || currentCategory || currentExcludeCategory || currentTags.length > 0 || currentDateRange;
 
   // Preserve existing searchParams for category change (keep other filters)
   const handleCategoryChange = (value: string) => {

@@ -176,7 +176,7 @@ export function AccountList({ accounts, currency }: AccountListProps) {
   const [editType, setEditType] = useState<Account["type"]>("BANK");
   const [editDescription, setEditDescription] = useState("");
   const [collapsedGroups, setCollapsedGroups] = useState<Set<AccountGroupId>>(
-    new Set()
+    () => new Set(ACCOUNT_GROUPS.map((group) => group.id))
   );
 
   const formatCurrency = (amount: number) => {
@@ -195,6 +195,14 @@ export function AccountList({ accounts, currency }: AccountListProps) {
       year: "numeric",
     });
   };
+
+  const currencySymbol =
+    new Intl.NumberFormat("en-IN", {
+      style: "currency",
+      currency,
+    })
+      .formatToParts(0)
+      .find((part) => part.type === "currency")?.value ?? currency;
 
   const getTypeIcon = (type: Account["type"]) => {
     switch (type) {
@@ -299,7 +307,14 @@ export function AccountList({ accounts, currency }: AccountListProps) {
         </span>
         <span className="flex shrink-0 items-center gap-2">
           <span className="text-xs font-medium tabular-nums text-muted-foreground sm:text-sm">
-            {getGroupSummary(group)}
+            {isCollapsed ? (
+              <>
+                <span aria-hidden="true">{currencySymbol}••••••</span>
+                <span className="sr-only">Balance hidden</span>
+              </>
+            ) : (
+              getGroupSummary(group)
+            )}
           </span>
           <IconChevronDown
             className={`size-4 text-muted-foreground transition-transform ${
@@ -421,8 +436,6 @@ export function AccountList({ accounts, currency }: AccountListProps) {
       setLoading(false);
     }
   };
-
-  const currencySymbol = currency === "INR" ? "₹" : currency === "USD" ? "$" : currency === "EUR" ? "€" : "£";
 
   if (accounts.length === 0) {
     return (

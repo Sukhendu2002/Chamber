@@ -833,10 +833,16 @@ async function handlePhotoMessage(chatId: number, photo: TelegramMessage["photo"
 
  let aiResult;
 
- // If caption has useful expense info (contains amount), use free text model to save credits
+ // Try the free text model first when the caption is self-contained.
+ // If it cannot parse the caption, fall back to the image that was already downloaded.
  if (caption && caption.trim().length > 5 && hasUsefulExpenseInfo(caption)) {
  console.log("Caption has expense info, using free text model:", caption);
  aiResult = await parseExpenseWithAI(`User sent a payment screenshot with this caption: "${caption}"`, userSettings.currency || "INR");
+
+ if (!aiResult.success || !aiResult.expense) {
+ console.log("Caption parsing failed, falling back to Vision AI...");
+ aiResult = await parseReceiptWithVision(imageBase64, "image/jpeg", caption, userSettings.currency || "INR");
+ }
  } else {
  // Send image directly to GPT-4.1 Nano vision - no OCR needed
  console.log("Sending image to Vision AI (GPT-4.1 Nano)...");
@@ -946,13 +952,21 @@ async function handleDocumentMessage(chatId: number, document: TelegramMessage["
 
  let aiResult;
 
- // If caption has useful expense info, use free text model to save credits
+ // Try the free text model first when the caption is self-contained.
+ // If it cannot parse the caption, fall back to the attached document or image.
  if (caption && caption.trim().length > 5 && hasUsefulExpenseInfo(caption)) {
  console.log("Caption has expense info, using free text model:", caption);
  aiResult = await parseExpenseWithAI(
  `User sent a ${isPdf ? "PDF invoice" : "image"} with caption: "${caption}"`,
  userSettings.currency || "INR"
  );
+
+ if (!aiResult.success || !aiResult.expense) {
+ console.log("Caption parsing failed, falling back to attachment analysis...");
+ aiResult = isPdf
+ ? await parsePDFWithVision(fileBase64, caption, userSettings.currency || "INR")
+ : await parseReceiptWithVision(fileBase64, mimeType, caption, userSettings.currency || "INR");
+ }
  } else if (isPdf) {
  // Send PDF directly to vision model
  aiResult = await parsePDFWithVision(fileBase64, caption, userSettings.currency || "INR");

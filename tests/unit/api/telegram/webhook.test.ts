@@ -10,6 +10,7 @@ const mockDb = {
     },
     expense: {
         findMany: vi.fn(),
+        findFirst: vi.fn(),
         create: vi.fn(),
     },
     account: {
@@ -660,6 +661,105 @@ describe("Telegram Webhook", () => {
             const body = JSON.parse(String(sendMessageCall?.[1]?.body));
             expect(body.text).toContain("$5000.00");
             expect(body.text).not.toContain("₹");
+        });
+    });
+
+    describe("Photo Messages", () => {
+        it("falls back to vision when an expense caption cannot be parsed", async () => {
+            const { parseExpenseWithAI, parseReceiptWithVision } = await import("@/lib/ai");
+            const { getAccountsByUserId } = await import("@/lib/actions/accounts");
+
+            mockDb.userSettings.findFirst.mockResolvedValue({
+                userId: "test-user-id",
+                currency: "INR",
+                telegramChatId: "123456",
+            });
+            mockDb.expense.findFirst.mockResolvedValue(null);
+            vi.mocked(getAccountsByUserId).mockResolvedValue([
+                { id: "acc-1", name: "Cash Wallet", type: "WALLET" },
+            ]);
+            vi.mocked(parseExpenseWithAI).mockResolvedValue({
+                success: false,
+                error: "Could not parse AI response",
+            });
+            vi.mocked(parseReceiptWithVision).mockResolvedValue({
+                success: true,
+                expense: {
+                    amount: 290,
+                    category: "Food",
+                    description: "Sweets",
+                    merchant: "Sweets Shop",
+                    confidence: 0.95,
+                },
+            });
+            vi.mocked(fetch).mockImplementation(async (input) => {
+                const url = String(input);
+
+                if (url.includes("/getFile")) {
+                    return new Response(JSON.stringify({
+                        ok: true,
+                        result: { file_path: "photos/receipt.jpg" },
+                    }), {
+                        headers: { "Content-Type": "application/json" },
+                    });
+                }
+
+                if (url.includes("/file/bot")) {
+                    return new Response(new Uint8Array([1, 2, 3]));
+                }
+
+                return new Response(JSON.stringify({ ok: true }), {
+                    headers: { "Content-Type": "application/json" },
+                });
+            });
+
+            const { POST } = await import("@/app/api/telegram/webhook/route");
+            const caption = "Paid 290 to Sweets Shop";
+            const request = new Request("http://localhost/api/telegram/webhook", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                    "x-telegram-bot-api-secret-token": "test-webhook-secret",
+                },
+                body: JSON.stringify({
+                    update_id: 127,
+                    message: {
+                        message_id: 4,
+                        from: { id: 123456, first_name: "Test" },
+                        chat: { id: 123456, type: "private" },
+                        date: Date.now(),
+                        caption,
+                        photo: [
+                            {
+                                file_id: "photo-file-id",
+                                file_unique_id: "photo-unique-id",
+                                width: 1080,
+                                height: 1920,
+                            },
+                        ],
+                    },
+                }),
+            });
+
+            const response = await POST(request);
+
+            expect(response.status).toBe(200);
+            expect(parseExpenseWithAI).toHaveBeenCalledWith(
+                `User sent a payment screenshot with this caption: "${caption}"`,
+                "INR",
+            );
+            expect(parseReceiptWithVision).toHaveBeenCalledWith(
+                "AQID",
+                "image/jpeg",
+                caption,
+                "INR",
+            );
+
+            const sentBodies = vi.mocked(fetch).mock.calls
+                .filter(([input]) => String(input).includes("/sendMessage"))
+                .map(([, init]) => JSON.parse(String(init?.body)) as { text: string });
+            expect(sentBodies.some(({ text }) => text.includes("Select payment method"))).toBe(true);
+            expect(sentBodies.some(({ text }) => text.includes("Could not extract expense"))).toBe(false);
         });
     });
 

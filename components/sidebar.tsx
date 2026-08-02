@@ -40,6 +40,7 @@ import {
   IconCrystalBall,
   IconCamera,
   IconSparkles,
+  IconBrain,
 } from "@tabler/icons-react";
 
 const navGroups = [
@@ -59,6 +60,7 @@ const navGroups = [
       { title: "Lent Money", href: "/loans", icon: IconCash },
       { title: "Forecast", href: "/forecast", icon: IconCrystalBall },
       { title: "Summary", href: "/summary", icon: IconReportAnalytics },
+      { title: "AI Analysis", href: "/ai-analysis", icon: IconBrain },
     ],
   },
   {

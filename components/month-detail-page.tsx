@@ -57,7 +57,6 @@ type MonthDetailPageProps = {
     prevMonth: MonthSummary | null;
     currency: string;
     budget: number;
-    aiInsight: string | null;
     year: number;
 };
 
@@ -66,7 +65,6 @@ export function MonthDetailPage({
     prevMonth,
     currency,
     budget,
-    aiInsight,
     year,
 }: MonthDetailPageProps) {
     const formatCurrency = (amount: number) =>
@@ -194,18 +192,28 @@ export function MonthDetailPage({
                 </div>
             )}
 
-            {/* AI Summary */}
-            {aiInsight && (
-                <Card className="mb-6 border border-primary/20 bg-gradient-to-br from-primary/5 to-transparent">
-                    <CardHeader className="flex flex-row items-center gap-2 pb-2">
-                        <IconSparkles className="h-5 w-5 text-primary" />
-                        <CardTitle className="text-sm font-medium">AI Summary</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <p className="text-sm text-muted-foreground leading-relaxed">{aiInsight}</p>
-                    </CardContent>
-                </Card>
-            )}
+            {/* AI analysis is always generated explicitly, never during page load. */}
+            <Card className="mb-6 border-primary/20">
+                <CardContent className="flex flex-col gap-3 py-1 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="flex items-start gap-3">
+                        <span className="flex size-9 shrink-0 items-center justify-center rounded-md bg-secondary text-primary">
+                            <IconSparkles aria-hidden="true" className="size-4" />
+                        </span>
+                        <div>
+                            <p className="text-sm font-semibold">Want a deeper analysis?</p>
+                            <p className="mt-0.5 text-xs leading-5 text-muted-foreground">
+                                Generate a spending and savings report for {month.monthName} when you are ready.
+                            </p>
+                        </div>
+                    </div>
+                    <Button asChild className="min-h-11 sm:min-h-8">
+                        <Link href={`/ai-analysis?type=DEEP_ANALYSIS&period=MONTHLY&year=${month.year}&month=${month.month + 1}`}>
+                            <IconSparkles aria-hidden="true" className="size-4" />
+                            Open AI Analysis
+                        </Link>
+                    </Button>
+                </CardContent>
+            </Card>
 
             {/* Charts row */}
             <div className="mb-6 grid gap-6 md:grid-cols-2">

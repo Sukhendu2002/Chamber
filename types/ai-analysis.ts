@@ -87,6 +87,7 @@ export interface AiAnalysisPageData {
   currentYear: number;
   currentMonth: number;
   availableYears: number[];
+  reportStorageReady: boolean;
   initialPreview: AiPeriodPreview;
   recentReports: AiReportListItem[];
   latestReport: AiReportRecord | null;

@@ -46,6 +46,46 @@ interface StoredAiReport {
   createdAt: Date;
 }
 
+interface StoredAiReportsResult {
+  reports: StoredAiReport[];
+  storageReady: boolean;
+}
+
+const AI_REPORT_STORAGE_ERROR =
+  "AI Analysis is temporarily unavailable while its database setup finishes";
+
+function isMissingAiReportTable(error: unknown): boolean {
+  return typeof error === "object"
+    && error !== null
+    && "code" in error
+    && error.code === "P2021";
+}
+
+function rethrowAiReportStorageError(error: unknown): never {
+  if (isMissingAiReportTable(error)) {
+    throw new Error(AI_REPORT_STORAGE_ERROR);
+  }
+  throw error;
+}
+
+async function getRecentReportsForUser(userId: string): Promise<StoredAiReportsResult> {
+  try {
+    const reports = await db.aiReport.findMany({
+      where: { userId },
+      orderBy: { createdAt: "desc" },
+      take: 8,
+    });
+
+    return {
+      reports: reports as StoredAiReport[],
+      storageReady: true,
+    };
+  } catch (error: unknown) {
+    if (!isMissingAiReportTable(error)) throw error;
+    return { reports: [], storageReady: false };
+  }
+}
+
 function validateReportRequest(input: AiReportRequest): AiReportRequest {
   const validated = AiReportRequestSchema.parse(input);
   const now = new Date();
@@ -135,18 +175,14 @@ export async function getAiAnalysisPageData(): Promise<AiAnalysisPageData> {
     month: now.getMonth() + 1,
   };
 
-  const [oldestExpense, initialPreview, recentStoredReports] = await Promise.all([
+  const [oldestExpense, initialPreview, storedReportResult] = await Promise.all([
     db.expense.findFirst({
       where: { userId },
       orderBy: { date: "asc" },
       select: { date: true },
     }),
     getPreviewForUser(userId, initialRequest),
-    db.aiReport.findMany({
-      where: { userId },
-      orderBy: { createdAt: "desc" },
-      take: 8,
-    }),
+    getRecentReportsForUser(userId),
   ]);
 
   const oldestYear = oldestExpense?.date.getFullYear() || now.getFullYear();
@@ -155,7 +191,7 @@ export async function getAiAnalysisPageData(): Promise<AiAnalysisPageData> {
     availableYears.push(year);
   }
 
-  const storedReports = recentStoredReports as StoredAiReport[];
+  const storedReports = storedReportResult.reports;
   const latestReport = storedReports
     .map(toReportRecord)
     .find((report): report is AiReportRecord => report !== null) || null;
@@ -164,6 +200,7 @@ export async function getAiAnalysisPageData(): Promise<AiAnalysisPageData> {
     currentYear: now.getFullYear(),
     currentMonth: now.getMonth() + 1,
     availableYears,
+    reportStorageReady: storedReportResult.storageReady,
     initialPreview,
     recentReports: storedReports.map(toReportListItem),
     latestReport,
@@ -184,9 +221,14 @@ export async function getAiReport(id: string): Promise<AiReportRecord> {
   if (!userId) throw new Error("Unauthorized");
 
   const validatedId = AiReportIdSchema.parse(id);
-  const report = await db.aiReport.findFirst({
-    where: { id: validatedId, userId },
-  });
+  let report;
+  try {
+    report = await db.aiReport.findFirst({
+      where: { id: validatedId, userId },
+    });
+  } catch (error: unknown) {
+    rethrowAiReportStorageError(error);
+  }
 
   if (!report) throw new Error("Report not found");
 
@@ -280,21 +322,26 @@ export async function generateAiReport(
   });
   const generated = await generateAiReportContent(context);
 
-  const savedReport = await db.aiReport.create({
-    data: {
-      userId,
-      type: request.type,
-      period: request.period,
-      year: request.year,
-      month: request.period === "MONTHLY" ? request.month : null,
-      periodStart: range.start,
-      periodEnd: range.end,
-      transactionCount: expenses.length,
-      currency: resolvedSettings.currency,
-      reportJson: generated.content as unknown as Prisma.InputJsonValue,
-      model: generated.model,
-    },
-  });
+  let savedReport;
+  try {
+    savedReport = await db.aiReport.create({
+      data: {
+        userId,
+        type: request.type,
+        period: request.period,
+        year: request.year,
+        month: request.period === "MONTHLY" ? request.month : null,
+        periodStart: range.start,
+        periodEnd: range.end,
+        transactionCount: expenses.length,
+        currency: resolvedSettings.currency,
+        reportJson: generated.content as unknown as Prisma.InputJsonValue,
+        model: generated.model,
+      },
+    });
+  } catch (error: unknown) {
+    rethrowAiReportStorageError(error);
+  }
 
   revalidatePath("/ai-analysis");
 

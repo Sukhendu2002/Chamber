@@ -19,11 +19,25 @@ vi.mock("@/lib/actions/ai-analysis", () => ({
 const now = new Date();
 const currentYear = now.getFullYear();
 const currentMonth = now.getMonth() + 1;
+const selectedModel = "nvidia/nemotron-3-super-120b-a12b:free";
 
 const pageData: AiAnalysisPageData = {
   currentYear,
   currentMonth,
   availableYears: [currentYear, currentYear - 1],
+  availableModels: [
+    {
+      id: selectedModel,
+      name: "NVIDIA: Nemotron 3 Super (free)",
+      group: "FREE",
+      contextLength: 1_000_000,
+      promptPricePerMillion: 0,
+      completionPricePerMillion: 0,
+      isFree: true,
+      supportsReasoningControl: true,
+    },
+  ],
+  defaultModel: selectedModel,
   reportStorageReady: true,
   initialPreview: {
     transactionCount: 42,
@@ -44,6 +58,7 @@ const generatedReport: AiReportRecord = {
   periodEnd: now.toISOString(),
   transactionCount: 42,
   currency: "INR",
+  model: selectedModel,
   createdAt: now.toISOString(),
   content: {
     assessment: "Spending is below budget, while recurring costs remain the clearest area to review this month.",
@@ -80,7 +95,7 @@ const generatedReport: AiReportRecord = {
 describe("AiAnalysisWorkspace", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockGenerateAiReport.mockResolvedValue(generatedReport);
+    mockGenerateAiReport.mockResolvedValue({ success: true, report: generatedReport });
   });
 
   it("does not generate a report on mount", () => {
@@ -92,6 +107,7 @@ describe("AiAnalysisWorkspace", () => {
           period: "MONTHLY",
           year: currentYear,
           month: currentMonth,
+          model: selectedModel,
         }}
         initialPreview={pageData.initialPreview}
       />,
@@ -111,6 +127,7 @@ describe("AiAnalysisWorkspace", () => {
           period: "MONTHLY",
           year: currentYear,
           month: currentMonth,
+          model: selectedModel,
         }}
         initialPreview={pageData.initialPreview}
       />,
@@ -131,6 +148,7 @@ describe("AiAnalysisWorkspace", () => {
           period: "MONTHLY",
           year: currentYear,
           month: currentMonth,
+          model: selectedModel,
         }}
         initialPreview={pageData.initialPreview}
       />,
@@ -140,6 +158,32 @@ describe("AiAnalysisWorkspace", () => {
     expect(
       screen.getByRole("button", { name: "Generate deep analysis" }).hasAttribute("disabled"),
     ).toBe(true);
+  });
+
+  it("shows a safe model error returned by the server action", async () => {
+    mockGenerateAiReport.mockResolvedValue({
+      success: false,
+      error: "The selected model is no longer available. Choose another model and try again.",
+    });
+    render(
+      <AiAnalysisWorkspace
+        data={pageData}
+        initialRequest={{
+          type: "DEEP_ANALYSIS",
+          period: "MONTHLY",
+          year: currentYear,
+          month: currentMonth,
+          model: selectedModel,
+        }}
+        initialPreview={pageData.initialPreview}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Generate deep analysis" }));
+
+    expect((await screen.findByRole("alert")).textContent).toContain(
+      "selected model is no longer available",
+    );
   });
 });
 

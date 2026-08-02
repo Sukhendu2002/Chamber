@@ -37,7 +37,21 @@ const INITIAL_SETTINGS = {
   savingsTargetPercent: 20,
   monthlyIncome: 80000,
   salaryDay: 1,
+  aiAnalysisModel: "nvidia/nemotron-3-super-120b-a12b:free",
 };
+
+const AI_MODELS = [
+  {
+    id: "nvidia/nemotron-3-super-120b-a12b:free",
+    name: "NVIDIA: Nemotron 3 Super (free)",
+    group: "FREE" as const,
+    contextLength: 1_000_000,
+    promptPricePerMillion: 0,
+    completionPricePerMillion: 0,
+    isFree: true,
+    supportsReasoningControl: true,
+  },
+];
 
 describe("SettingsForm", () => {
   beforeEach(() => {
@@ -45,11 +59,12 @@ describe("SettingsForm", () => {
   });
 
   it("renders the compact settings sections and status", () => {
-    render(<SettingsForm initialSettings={INITIAL_SETTINGS} />);
+    render(<SettingsForm initialSettings={INITIAL_SETTINGS} availableModels={AI_MODELS} />);
 
     expect(screen.getByRole("heading", { name: "Settings" })).toBeTruthy();
     expect(screen.getByRole("heading", { name: "Money & region" })).toBeTruthy();
     expect(screen.getByRole("heading", { name: "Forecasting" })).toBeTruthy();
+    expect(screen.getByRole("heading", { name: "AI analysis" })).toBeTruthy();
     expect(screen.getByRole("heading", { name: "Dashboard widgets" })).toBeTruthy();
     expect(screen.getByRole("heading", { name: "Appearance" })).toBeTruthy();
     expect(screen.getByRole("heading", { name: "Expense categories" })).toBeTruthy();
@@ -59,7 +74,7 @@ describe("SettingsForm", () => {
   });
 
   it("marks changes as unsaved and saves the current values", async () => {
-    render(<SettingsForm initialSettings={INITIAL_SETTINGS} />);
+    render(<SettingsForm initialSettings={INITIAL_SETTINGS} availableModels={AI_MODELS} />);
 
     fireEvent.change(screen.getByLabelText("Monthly budget"), {
       target: { value: "60000" },
@@ -85,7 +100,7 @@ describe("SettingsForm", () => {
   });
 
   it("keeps destructive deletion behind a confirmation dialog", () => {
-    render(<SettingsForm initialSettings={INITIAL_SETTINGS} />);
+    render(<SettingsForm initialSettings={INITIAL_SETTINGS} availableModels={AI_MODELS} />);
 
     fireEvent.click(screen.getByRole("button", { name: "Delete" }));
 

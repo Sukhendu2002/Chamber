@@ -17,6 +17,7 @@ import {
   IconTargetArrow,
 } from "@tabler/icons-react";
 
+import { AiModelSelect } from "@/components/ai-model-select";
 import {
   generateAiReport,
   getAiPeriodPreview,
@@ -25,6 +26,7 @@ import {
 import { cn } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
 import {
   Card,
   CardAction,
@@ -44,6 +46,7 @@ import {
   AI_REPORT_TYPE_LABELS,
   type AiAnalysisPageData,
   type AiPeriodPreview,
+  type AiReportGenerationRequest,
   type AiReportListItem,
   type AiReportPeriod,
   type AiReportRecord,
@@ -227,6 +230,11 @@ function ReportResult({
             <span aria-hidden="true" className="size-1.5 rounded-full bg-emerald-500" />
             {generatedAt}
           </Badge>
+          {report.model && (
+            <Badge variant="secondary" className="max-w-full font-mono text-[0.625rem] font-normal">
+              {report.model}
+            </Badge>
+          )}
         </div>
         <Button
           variant="outline"
@@ -374,6 +382,7 @@ export function AiAnalysisWorkspace({
   const [period, setPeriod] = useState<AiReportPeriod>(initialRequest.period);
   const [year, setYear] = useState(initialRequest.year);
   const [month, setMonth] = useState(initialRequest.month || data.currentMonth);
+  const [model, setModel] = useState(initialRequest.model || data.defaultModel || "");
   const [preview, setPreview] = useState(initialPreview);
   const [activeReport, setActiveReport] = useState<AiReportRecord | null>(data.latestReport);
   const [recentReports, setRecentReports] = useState(data.recentReports);
@@ -415,33 +424,47 @@ export function AiAnalysisWorkspace({
       });
   }, [month, period, reportType, selectedPeriodKey, year]);
 
-  const request: AiReportRequest = {
-    type: reportType,
-    period,
-    year,
-    month: period === "MONTHLY" ? month : undefined,
-  };
+  const request: AiReportGenerationRequest | null = model
+    ? {
+        type: reportType,
+        period,
+        year,
+        month: period === "MONTHLY" ? month : undefined,
+        model,
+      }
+    : null;
 
   const reportOption = REPORT_OPTIONS.find((option) => option.type === reportType) || REPORT_OPTIONS[2];
   const selectedPeriodLabel = getPeriodLabel(period, year, month);
   const savingsNeedsIncome = reportType === "SAVINGS_REVIEW" && !preview.incomeReady;
   const canGenerate = data.reportStorageReady
+    && request !== null
     && preview.transactionCount > 0
     && !savingsNeedsIncome
     && !isPreviewLoading;
 
-  async function handleGenerate(override?: AiReportRequest) {
+  async function handleGenerate(override?: AiReportGenerationRequest) {
     const nextRequest = override || request;
+    if (!nextRequest) {
+      setError("Choose an AI model before generating a report.");
+      return;
+    }
     setError(null);
     setIsGenerating(true);
 
     try {
-      const generatedReport = await generateAiReport(nextRequest);
+      const result = await generateAiReport(nextRequest);
+      if (!result.success) {
+        setError(result.error);
+        return;
+      }
+      const generatedReport = result.report;
       setActiveReport(generatedReport);
       setReportType(generatedReport.type);
       setPeriod(generatedReport.period);
       setYear(generatedReport.year);
       if (generatedReport.month) setMonth(generatedReport.month);
+      if (generatedReport.model) setModel(generatedReport.model);
       setRecentReports((current) => [
         {
           id: generatedReport.id,
@@ -449,6 +472,7 @@ export function AiAnalysisWorkspace({
           period: generatedReport.period,
           year: generatedReport.year,
           month: generatedReport.month,
+          model: generatedReport.model,
           createdAt: generatedReport.createdAt,
         },
         ...current.filter((report) => report.id !== generatedReport.id),
@@ -471,6 +495,9 @@ export function AiAnalysisWorkspace({
       setPeriod(savedReport.period);
       setYear(savedReport.year);
       if (savedReport.month) setMonth(savedReport.month);
+      if (savedReport.model && data.availableModels.some((item) => item.id === savedReport.model)) {
+        setModel(savedReport.model);
+      }
     } catch (loadError: unknown) {
       setError(getErrorMessage(loadError));
     } finally {
@@ -480,11 +507,17 @@ export function AiAnalysisWorkspace({
 
   function handleRegenerate() {
     if (!activeReport) return;
+    const regenerationModel = activeReport.model || model;
+    if (!regenerationModel) {
+      setError("Choose an AI model before regenerating this report.");
+      return;
+    }
     void handleGenerate({
       type: activeReport.type,
       period: activeReport.period,
       year: activeReport.year,
       month: activeReport.month || undefined,
+      model: regenerationModel,
     });
   }
 
@@ -499,6 +532,15 @@ export function AiAnalysisWorkspace({
             <span>
               AI Analysis is temporarily unavailable while its database setup finishes.
               Your existing financial data is unaffected.
+            </span>
+          </div>
+        )}
+
+        {data.availableModels.length === 0 && (
+          <div role="alert" className="flex items-start gap-2 rounded-md border border-amber-500/25 bg-amber-500/5 px-3 py-2 text-xs text-amber-800 dark:text-amber-300">
+            <IconAlertCircle aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
+            <span>
+              OpenRouter’s model catalog is temporarily unavailable. Refresh this page before generating a report.
             </span>
           </div>
         )}
@@ -563,6 +605,23 @@ export function AiAnalysisWorkspace({
               ))}
             </SelectContent>
           </Select>
+
+          <div className="w-full space-y-1 sm:ml-auto sm:w-[22rem]">
+            <Label htmlFor="ai-analysis-model" className="text-[0.6875rem] text-muted-foreground">
+              AI model
+            </Label>
+            <AiModelSelect
+              id="ai-analysis-model"
+              value={model}
+              models={data.availableModels}
+              onValueChange={(value) => {
+                setModel(value);
+                setError(null);
+              }}
+              disabled={isGenerating || data.availableModels.length === 0}
+              showDetails={false}
+            />
+          </div>
         </div>
 
         <fieldset>

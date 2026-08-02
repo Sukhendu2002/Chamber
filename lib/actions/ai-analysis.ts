@@ -6,21 +6,28 @@ import type { Prisma } from "@prisma/client";
 import { z } from "zod";
 
 import {
+  AiAnalysisGenerationError,
   AiReportContentSchema,
   generateAiReportContent,
   resolveAiReportRange,
   summarizeAiAnalysisData,
 } from "@/lib/ai-analysis";
 import { db } from "@/lib/db";
+import {
+  getOpenRouterAnalysisModels,
+  isValidAiModelId,
+} from "@/lib/openrouter-models";
 import { checkRateLimit } from "@/lib/rate-limit";
 import {
   AI_REPORT_PERIODS,
   AI_REPORT_TYPES,
   type AiAnalysisPageData,
   type AiPeriodPreview,
+  type AiReportGenerationRequest,
   type AiReportListItem,
   type AiReportRecord,
   type AiReportRequest,
+  type GenerateAiReportResult,
 } from "@/types/ai-analysis";
 
 const AiReportRequestSchema = z.object({
@@ -31,6 +38,9 @@ const AiReportRequestSchema = z.object({
 });
 
 const AiReportIdSchema = z.string().uuid();
+const AiReportGenerationRequestSchema = AiReportRequestSchema.extend({
+  model: z.string().refine(isValidAiModelId, "Choose a valid OpenRouter model"),
+});
 
 interface StoredAiReport {
   id: string;
@@ -43,6 +53,7 @@ interface StoredAiReport {
   transactionCount: number;
   currency: string;
   reportJson: unknown;
+  model: string | null;
   createdAt: Date;
 }
 
@@ -63,7 +74,7 @@ function isMissingAiReportTable(error: unknown): boolean {
 
 function rethrowAiReportStorageError(error: unknown): never {
   if (isMissingAiReportTable(error)) {
-    throw new Error(AI_REPORT_STORAGE_ERROR);
+    throw new AiAnalysisGenerationError(AI_REPORT_STORAGE_ERROR);
   }
   throw error;
 }
@@ -91,11 +102,11 @@ function validateReportRequest(input: AiReportRequest): AiReportRequest {
   const now = new Date();
 
   if (validated.period === "MONTHLY" && validated.month === undefined) {
-    throw new Error("Choose a month for this report");
+    throw new AiAnalysisGenerationError("Choose a month for this report");
   }
 
   if (validated.year > now.getFullYear()) {
-    throw new Error("Future periods cannot be analyzed");
+    throw new AiAnalysisGenerationError("Future periods cannot be analyzed");
   }
 
   if (
@@ -104,7 +115,7 @@ function validateReportRequest(input: AiReportRequest): AiReportRequest {
     && validated.month !== undefined
     && validated.month > now.getMonth() + 1
   ) {
-    throw new Error("Future periods cannot be analyzed");
+    throw new AiAnalysisGenerationError("Future periods cannot be analyzed");
   }
 
   return validated.period === "YEARLY"
@@ -119,6 +130,7 @@ function toReportListItem(report: StoredAiReport): AiReportListItem {
     period: AiReportRequestSchema.shape.period.parse(report.period),
     year: report.year,
     month: report.month,
+    model: report.model,
     createdAt: report.createdAt.toISOString(),
   };
 }
@@ -133,6 +145,7 @@ function toReportRecord(report: StoredAiReport): AiReportRecord | null {
     periodEnd: report.periodEnd.toISOString(),
     transactionCount: report.transactionCount,
     currency: report.currency,
+    model: report.model,
     content: content.data,
   };
 }
@@ -175,7 +188,7 @@ export async function getAiAnalysisPageData(): Promise<AiAnalysisPageData> {
     month: now.getMonth() + 1,
   };
 
-  const [oldestExpense, initialPreview, storedReportResult] = await Promise.all([
+  const [oldestExpense, initialPreview, storedReportResult, availableModels, modelSettings] = await Promise.all([
     db.expense.findFirst({
       where: { userId },
       orderBy: { date: "asc" },
@@ -183,6 +196,11 @@ export async function getAiAnalysisPageData(): Promise<AiAnalysisPageData> {
     }),
     getPreviewForUser(userId, initialRequest),
     getRecentReportsForUser(userId),
+    getOpenRouterAnalysisModels(),
+    db.userSettings.findUnique({
+      where: { userId },
+      select: { aiAnalysisModel: true },
+    }),
   ]);
 
   const oldestYear = oldestExpense?.date.getFullYear() || now.getFullYear();
@@ -195,11 +213,17 @@ export async function getAiAnalysisPageData(): Promise<AiAnalysisPageData> {
   const latestReport = storedReports
     .map(toReportRecord)
     .find((report): report is AiReportRecord => report !== null) || null;
+  const savedModel = modelSettings?.aiAnalysisModel || null;
+  const defaultModel = availableModels.some((model) => model.id === savedModel)
+    ? savedModel
+    : availableModels[0]?.id || null;
 
   return {
     currentYear: now.getFullYear(),
     currentMonth: now.getMonth() + 1,
     availableYears,
+    availableModels,
+    defaultModel,
     reportStorageReady: storedReportResult.storageReady,
     initialPreview,
     recentReports: storedReports.map(toReportListItem),
@@ -237,13 +261,22 @@ export async function getAiReport(id: string): Promise<AiReportRecord> {
   return parsed;
 }
 
-export async function generateAiReport(
-  input: AiReportRequest,
+async function createAiReport(
+  userId: string,
+  input: AiReportGenerationRequest,
 ): Promise<AiReportRecord> {
-  const { userId } = await auth();
-  if (!userId) throw new Error("Unauthorized");
-
-  const request = validateReportRequest(input);
+  const generationRequest = AiReportGenerationRequestSchema.parse(input);
+  const availableModels = await getOpenRouterAnalysisModels();
+  const selectedModel = availableModels.find((model) => model.id === generationRequest.model);
+  if (!selectedModel) {
+    throw new AiAnalysisGenerationError(
+      "That OpenRouter model is no longer available. Refresh the page and choose another model.",
+    );
+  }
+  const request = {
+    ...validateReportRequest(generationRequest),
+    model: generationRequest.model,
+  };
   const range = resolveAiReportRange(request);
 
   const [settings, expenses, previousExpenses, subscriptions, goals] = await Promise.all([
@@ -292,7 +325,7 @@ export async function generateAiReport(
   ]);
 
   if (expenses.length === 0) {
-    throw new Error("No expenses were found for the selected period");
+    throw new AiAnalysisGenerationError("No expenses were found for the selected period");
   }
 
   const resolvedSettings = settings || {
@@ -303,12 +336,16 @@ export async function generateAiReport(
   };
 
   if (request.type === "SAVINGS_REVIEW" && resolvedSettings.monthlyIncome <= 0) {
-    throw new Error("Add your monthly income in Settings before generating a savings review");
+    throw new AiAnalysisGenerationError(
+      "Add your monthly income in Settings before generating a savings review",
+    );
   }
 
   const rateLimit = checkRateLimit(`ai-analysis:${userId}`, 6, 60 * 60 * 1000);
   if (!rateLimit.success) {
-    throw new Error(`AI report limit reached. Try again in ${rateLimit.retryAfter} seconds`);
+    throw new AiAnalysisGenerationError(
+      `AI report limit reached. Try again in ${rateLimit.retryAfter} seconds`,
+    );
   }
 
   const context = summarizeAiAnalysisData({
@@ -320,7 +357,7 @@ export async function generateAiReport(
     subscriptions,
     goals,
   });
-  const generated = await generateAiReportContent(context);
+  const generated = await generateAiReportContent(context, selectedModel);
 
   let savedReport;
   try {
@@ -346,6 +383,30 @@ export async function generateAiReport(
   revalidatePath("/ai-analysis");
 
   const report = toReportRecord(savedReport as StoredAiReport);
-  if (!report) throw new Error("The generated report could not be saved");
+  if (!report) throw new AiAnalysisGenerationError("The generated report could not be saved");
   return report;
+}
+
+export async function generateAiReport(
+  input: AiReportGenerationRequest,
+): Promise<GenerateAiReportResult> {
+  const { userId } = await auth();
+  if (!userId) throw new Error("Unauthorized");
+
+  try {
+    return { success: true, report: await createAiReport(userId, input) };
+  } catch (error: unknown) {
+    if (error instanceof AiAnalysisGenerationError) {
+      return { success: false, error: error.message };
+    }
+    if (error instanceof z.ZodError) {
+      return { success: false, error: "Choose a valid report period and AI model." };
+    }
+
+    console.error("AI report generation failed", error);
+    return {
+      success: false,
+      error: "AI Analysis could not generate this report. Try again or choose another model.",
+    };
+  }
 }

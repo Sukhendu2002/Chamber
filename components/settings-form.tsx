@@ -12,11 +12,13 @@ import {
   IconLayoutDashboard,
   IconLoader2,
   IconPalette,
+  IconSparkles,
   IconTag,
   IconTrash,
   IconWallet,
 } from "@tabler/icons-react";
 
+import { AiModelSelect } from "@/components/ai-model-select";
 import { useDemoMode } from "@/components/demo-mode-provider";
 import { PageHeader } from "@/components/page-shell";
 import { ThemeSelector } from "@/components/theme-selector";
@@ -53,6 +55,7 @@ import {
   DASHBOARD_WIDGET_OPTIONS,
   DEFAULT_DASHBOARD_WIDGETS,
 } from "@/types/dashboard";
+import type { AiModelOption } from "@/types/ai-model";
 
 const CURRENCIES = [
   { value: "INR", label: "Indian Rupee (₹)" },
@@ -95,6 +98,7 @@ const CATEGORIES = [
 
 const SETTINGS_SECTIONS = [
   { id: "general", label: "General" },
+  { id: "ai", label: "AI" },
   { id: "dashboard", label: "Dashboard" },
   { id: "appearance", label: "Appearance" },
   { id: "categories", label: "Categories" },
@@ -113,7 +117,9 @@ interface SettingsFormProps {
     savingsTargetPercent: number;
     monthlyIncome: number;
     salaryDay: number;
+    aiAnalysisModel: string | null;
   };
+  availableModels: AiModelOption[];
 }
 
 interface SavedSettingsSnapshot {
@@ -125,6 +131,7 @@ interface SavedSettingsSnapshot {
   savingsTargetPercent: string;
   monthlyIncome: string;
   salaryDay: string;
+  aiAnalysisModel: string;
 }
 
 interface SettingsPanelHeaderProps {
@@ -215,7 +222,7 @@ function SettingsToggle({
   );
 }
 
-export function SettingsForm({ initialSettings }: SettingsFormProps) {
+export function SettingsForm({ initialSettings, availableModels }: SettingsFormProps) {
   const initialDashboardWidgets =
     initialSettings.dashboardWidgets || DEFAULT_DASHBOARD_WIDGETS;
   const [monthlyBudget, setMonthlyBudget] = useState(
@@ -240,6 +247,12 @@ export function SettingsForm({ initialSettings }: SettingsFormProps) {
   const [salaryDay, setSalaryDay] = useState(
     initialSettings.salaryDay?.toString() || "1"
   );
+  const initialAiAnalysisModel = availableModels.some(
+    (model) => model.id === initialSettings.aiAnalysisModel,
+  )
+    ? initialSettings.aiAnalysisModel || ""
+    : availableModels[0]?.id || "";
+  const [aiAnalysisModel, setAiAnalysisModel] = useState(initialAiAnalysisModel);
   const [savedSnapshot, setSavedSnapshot] = useState<SavedSettingsSnapshot>({
     monthlyBudget: initialSettings.monthlyBudget.toString(),
     currency: initialSettings.currency,
@@ -251,6 +264,7 @@ export function SettingsForm({ initialSettings }: SettingsFormProps) {
       initialSettings.savingsTargetPercent?.toString() || "20",
     monthlyIncome: initialSettings.monthlyIncome?.toString() || "0",
     salaryDay: initialSettings.salaryDay?.toString() || "1",
+    aiAnalysisModel: initialAiAnalysisModel,
   });
   const [activeSection, setActiveSection] =
     useState<SettingsSectionId>("general");
@@ -268,6 +282,7 @@ export function SettingsForm({ initialSettings }: SettingsFormProps) {
     savingsTargetPercent !== savedSnapshot.savingsTargetPercent ||
     monthlyIncome !== savedSnapshot.monthlyIncome ||
     salaryDay !== savedSnapshot.salaryDay ||
+    aiAnalysisModel !== savedSnapshot.aiAnalysisModel ||
     DASHBOARD_WIDGET_OPTIONS.some(
       ({ key }) =>
         dashboardWidgets[key] !== savedSnapshot.dashboardWidgets[key]
@@ -359,6 +374,7 @@ export function SettingsForm({ initialSettings }: SettingsFormProps) {
         savingsTargetPercent: savings,
         monthlyIncome: Number.parseFloat(monthlyIncome) || 0,
         salaryDay: normalizedSalaryDay,
+        aiAnalysisModel: aiAnalysisModel || null,
       });
 
       const normalizedSnapshot = {
@@ -370,6 +386,7 @@ export function SettingsForm({ initialSettings }: SettingsFormProps) {
         savingsTargetPercent: savings.toString(),
         monthlyIncome,
         salaryDay: normalizedSalaryDay.toString(),
+        aiAnalysisModel,
       };
 
       setForecastHorizonMonths(normalizedSnapshot.forecastHorizonMonths);
@@ -643,6 +660,41 @@ export function SettingsForm({ initialSettings }: SettingsFormProps) {
                   </span>
                 </div>
               </div>
+            </CardContent>
+          </Card>
+
+          <Card id="ai" size="sm" className="scroll-mt-28 gap-0 py-0">
+            <SettingsPanelHeader
+              id="ai-analysis-heading"
+              title="AI analysis"
+              description="Choose the default OpenRouter model for new reports."
+              icon={IconSparkles}
+            />
+            <CardContent
+              aria-labelledby="ai-analysis-heading"
+              className="space-y-1.5 px-4 py-3"
+            >
+              <Label htmlFor="default-ai-analysis-model" className="text-xs">
+                Default report model
+              </Label>
+              <AiModelSelect
+                id="default-ai-analysis-model"
+                value={aiAnalysisModel}
+                models={availableModels}
+                onValueChange={(value) => {
+                  setAiAnalysisModel(value);
+                  setSaveError(null);
+                }}
+                disabled={availableModels.length === 0}
+              />
+              {availableModels.length === 0 && (
+                <p role="alert" className="text-xs text-amber-700 dark:text-amber-400">
+                  OpenRouter’s model catalog is temporarily unavailable. Your saved preference has not changed.
+                </p>
+              )}
+              <p className="text-[0.6875rem] leading-4 text-muted-foreground">
+                You can override this model for an individual report from AI Analysis. Paid model prices are shown per one million tokens.
+              </p>
             </CardContent>
           </Card>
 

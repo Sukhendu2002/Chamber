@@ -5,6 +5,7 @@ import { db } from "@/lib/db";
 import { revalidatePath, revalidateTag } from "next/cache";
 import { unstable_cache } from "next/cache";
 import { z } from "zod";
+import { isValidAiModelId } from "@/lib/openrouter-models";
 import { DashboardWidgets, DEFAULT_DASHBOARD_WIDGETS } from "@/types/dashboard";
 
 const DashboardWidgetsSchema = z.object({
@@ -26,6 +27,7 @@ const UpdateUserSettingsSchema = z.object({
   savingsTargetPercent: z.number().nonnegative().max(100).optional(),
   monthlyIncome: z.number().nonnegative().optional(),
   salaryDay: z.number().int().min(1).max(28).optional(),
+  aiAnalysisModel: z.string().refine(isValidAiModelId).nullable().optional(),
 });
 
 // Free exchange rate API (no API key needed for basic usage)
@@ -96,6 +98,7 @@ export async function updateUserSettings(input: {
   savingsTargetPercent?: number;
   monthlyIncome?: number;
   salaryDay?: number;
+  aiAnalysisModel?: string | null;
 }) {
   const { userId } = await auth();
   if (!userId) throw new Error("Unauthorized");
@@ -161,6 +164,7 @@ export async function updateUserSettings(input: {
         savingsTargetPercent: validated.savingsTargetPercent || 20,
         monthlyIncome: validated.monthlyIncome || 0,
         salaryDay: validated.salaryDay || 1,
+        aiAnalysisModel: validated.aiAnalysisModel || null,
       },
     });
   });
@@ -169,6 +173,7 @@ export async function updateUserSettings(input: {
   revalidatePath("/settings");
   revalidatePath("/dashboard");
   revalidatePath("/expenses");
+  revalidatePath("/ai-analysis");
   return settings;
 }
 
@@ -339,6 +344,7 @@ export async function deleteAllUserData() {
       monthlyIncome: 0,
       salaryDay: 1,
       telegramChatId: null,
+      aiAnalysisModel: null,
     },
   });
 

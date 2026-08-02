@@ -482,3 +482,33 @@ model MonthlyPlan {
   @@unique([userId, month, year])
   @@index([userId])
 }
+
+enum AiReportType {
+  SPENDING_REVIEW
+  SAVINGS_REVIEW
+  DEEP_ANALYSIS
+}
+
+enum AiReportPeriod {
+  MONTHLY
+  YEARLY
+}
+
+model AiReport {
+  id               String         @id @default(uuid())
+  userId           String
+  type             AiReportType
+  period           AiReportPeriod
+  year             Int
+  month            Int?
+  periodStart      DateTime
+  periodEnd        DateTime
+  transactionCount Int
+  currency         String
+  reportJson       Json
+  model            String?
+  createdAt        DateTime       @default(now())
+
+  @@index([userId, createdAt])
+  @@index([userId, year, month])
+}

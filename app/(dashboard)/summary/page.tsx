@@ -1,6 +1,5 @@
 import { getMonthlyHistory } from "@/lib/actions/expenses";
 import { getUserSettings } from "@/lib/actions/settings";
-import { getAIMonthlyInsights } from "@/lib/actions/analytics";
 import { MonthlySummary } from "@/components/monthly-summary";
 import { MonthDetailPage } from "@/components/month-detail-page";
 import { PageHeader, PageShell } from "@/components/page-shell";
@@ -14,10 +13,9 @@ export default async function SummaryPage({
     const year = params.year ? parseInt(params.year, 10) : undefined;
     const monthParam = params.month !== undefined ? parseInt(params.month, 10) : null;
 
-    const [history, settings, aiInsights] = await Promise.all([
+    const [history, settings] = await Promise.all([
         getMonthlyHistory(year),
         getUserSettings(),
-        getAIMonthlyInsights(year).catch(() => ({} as Record<number, string>)),
     ]);
 
     const currentYear = year || new Date().getFullYear();
@@ -35,7 +33,6 @@ export default async function SummaryPage({
                         prevMonth={prevMonth}
                         currency={settings.currency}
                         budget={settings.monthlyBudget}
-                        aiInsight={aiInsights[monthParam] ?? null}
                         year={currentYear}
                     />
                 </PageShell>

@@ -425,7 +425,10 @@ export function AiAnalysisWorkspace({
   const reportOption = REPORT_OPTIONS.find((option) => option.type === reportType) || REPORT_OPTIONS[2];
   const selectedPeriodLabel = getPeriodLabel(period, year, month);
   const savingsNeedsIncome = reportType === "SAVINGS_REVIEW" && !preview.incomeReady;
-  const canGenerate = preview.transactionCount > 0 && !savingsNeedsIncome && !isPreviewLoading;
+  const canGenerate = data.reportStorageReady
+    && preview.transactionCount > 0
+    && !savingsNeedsIncome
+    && !isPreviewLoading;
 
   async function handleGenerate(override?: AiReportRequest) {
     const nextRequest = override || request;
@@ -489,6 +492,16 @@ export function AiAnalysisWorkspace({
     <div className="space-y-5">
       <section aria-labelledby="report-controls-title" className="space-y-3">
         <h2 id="report-controls-title" className="sr-only">Report controls</h2>
+
+        {!data.reportStorageReady && (
+          <div role="alert" className="flex items-start gap-2 rounded-md border border-amber-500/25 bg-amber-500/5 px-3 py-2 text-xs text-amber-800 dark:text-amber-300">
+            <IconAlertCircle aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
+            <span>
+              AI Analysis is temporarily unavailable while its database setup finishes.
+              Your existing financial data is unaffected.
+            </span>
+          </div>
+        )}
 
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
           <div className="inline-flex w-fit rounded-md border bg-muted/40 p-0.5" role="group" aria-label="Report period">

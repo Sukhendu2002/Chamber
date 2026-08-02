@@ -24,6 +24,7 @@ const pageData: AiAnalysisPageData = {
   currentYear,
   currentMonth,
   availableYears: [currentYear, currentYear - 1],
+  reportStorageReady: true,
   initialPreview: {
     transactionCount: 42,
     budgetReady: true,
@@ -119,6 +120,26 @@ describe("AiAnalysisWorkspace", () => {
 
     await waitFor(() => expect(mockGenerateAiReport).toHaveBeenCalledTimes(1));
     expect(await screen.findByText(`${MONTH_NAME()} ${currentYear} report`)).toBeTruthy();
+  });
+
+  it("disables generation when report storage is unavailable", () => {
+    render(
+      <AiAnalysisWorkspace
+        data={{ ...pageData, reportStorageReady: false }}
+        initialRequest={{
+          type: "DEEP_ANALYSIS",
+          period: "MONTHLY",
+          year: currentYear,
+          month: currentMonth,
+        }}
+        initialPreview={pageData.initialPreview}
+      />,
+    );
+
+    expect(screen.getByRole("alert").textContent).toContain("existing financial data is unaffected");
+    expect(
+      screen.getByRole("button", { name: "Generate deep analysis" }).hasAttribute("disabled"),
+    ).toBe(true);
   });
 });
 

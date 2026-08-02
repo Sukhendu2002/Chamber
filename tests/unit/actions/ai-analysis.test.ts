@@ -97,8 +97,20 @@ describe("AI analysis actions", () => {
     const result = await getAiAnalysisPageData();
 
     expect(result.initialPreview.transactionCount).toBe(4);
+    expect(result.reportStorageReady).toBe(true);
     expect(mockGenerateAiReportContent).not.toHaveBeenCalled();
     expect(mockDb.aiReport.create).not.toHaveBeenCalled();
+  });
+
+  it("keeps the page available while report storage is being deployed", async () => {
+    mockDb.aiReport.findMany.mockRejectedValue({ code: "P2021" });
+    const { getAiAnalysisPageData } = await import("@/lib/actions/ai-analysis");
+
+    const result = await getAiAnalysisPageData();
+
+    expect(result.reportStorageReady).toBe(false);
+    expect(result.recentReports).toEqual([]);
+    expect(result.latestReport).toBeNull();
   });
 
   it("generates and saves a report only after the generation action", async () => {

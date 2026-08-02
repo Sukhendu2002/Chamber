@@ -32,6 +32,22 @@ vi.mock("@/lib/rate-limit", () => ({
   checkRateLimit: vi.fn().mockReturnValue({ success: true, retryAfter: 0 }),
 }));
 
+vi.mock("@/lib/openrouter-models", () => ({
+  getOpenRouterAnalysisModels: vi.fn().mockResolvedValue([
+    {
+      id: "nvidia/nemotron-3-super-120b-a12b:free",
+      name: "NVIDIA: Nemotron 3 Super (free)",
+      group: "FREE",
+      contextLength: 1_000_000,
+      promptPricePerMillion: 0,
+      completionPricePerMillion: 0,
+      isFree: true,
+      supportsReasoningControl: true,
+    },
+  ]),
+  isValidAiModelId: (modelId: string) => modelId.includes("/"),
+}));
+
 vi.mock("@/lib/ai-analysis", async () => {
   const actual = await vi.importActual<typeof import("@/lib/ai-analysis")>("@/lib/ai-analysis");
   return {
@@ -81,6 +97,7 @@ describe("AI analysis actions", () => {
       monthlyBudget: 50000,
       monthlyIncome: 70000,
       savingsTargetPercent: 20,
+      aiAnalysisModel: "nvidia/nemotron-3-super-120b-a12b:free",
     });
     mockDb.aiReport.findMany.mockResolvedValue([]);
     mockDb.subscription.findMany.mockResolvedValue([]);
@@ -98,6 +115,7 @@ describe("AI analysis actions", () => {
 
     expect(result.initialPreview.transactionCount).toBe(4);
     expect(result.reportStorageReady).toBe(true);
+    expect(result.defaultModel).toBe("nvidia/nemotron-3-super-120b-a12b:free");
     expect(mockGenerateAiReportContent).not.toHaveBeenCalled();
     expect(mockDb.aiReport.create).not.toHaveBeenCalled();
   });
@@ -120,6 +138,7 @@ describe("AI analysis actions", () => {
       period: "MONTHLY" as const,
       year: now.getFullYear(),
       month: now.getMonth() + 1,
+      model: "nvidia/nemotron-3-super-120b-a12b:free",
     };
     const currentExpense = {
       amount: 10000,
@@ -158,6 +177,13 @@ describe("AI analysis actions", () => {
     const result = await generateAiReport(request);
 
     expect(mockGenerateAiReportContent).toHaveBeenCalledTimes(1);
+    expect(mockGenerateAiReportContent).toHaveBeenCalledWith(
+      expect.any(Object),
+      expect.objectContaining({
+        id: "nvidia/nemotron-3-super-120b-a12b:free",
+        supportsReasoningControl: true,
+      }),
+    );
     expect(mockDb.aiReport.create).toHaveBeenCalledWith({
       data: expect.objectContaining({
         userId: "test-user-id",
@@ -165,7 +191,10 @@ describe("AI analysis actions", () => {
         transactionCount: 1,
       }),
     });
-    expect(result.id).toBe(saved.id);
+    expect(result).toEqual({
+      success: true,
+      report: expect.objectContaining({ id: saved.id }),
+    });
   });
 
   it("scopes saved report lookup to the authenticated user", async () => {

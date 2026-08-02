@@ -141,9 +141,21 @@ describe("AI analysis", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    const result = await generateAiReportContent(context);
+    const result = await generateAiReportContent(context, {
+      id: "test/model",
+      supportsReasoningControl: true,
+    });
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
+    const fetchRequest = fetchMock.mock.calls[0][1] as RequestInit;
+    const requestBody = JSON.parse(fetchRequest.body as string) as {
+      model: string;
+      models?: string[];
+      response_format?: { type: string };
+    };
+    expect(requestBody.model).toBe("test/model");
+    expect(requestBody.models).toBeUndefined();
+    expect(requestBody.response_format?.type).toBe("json_schema");
     expect(result.model).toBe("test/model");
     expect(result.content.metrics).toEqual(context.metrics);
     expect(result.content.actionPlan).toHaveLength(3);

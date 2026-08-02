@@ -21,6 +21,7 @@ model UserSettings {
   savingsTargetPercent  Float    @default(20) // Target % of income to save
   monthlyIncome         Float    @default(0) // User's monthly cash inflow (salary, etc.)
   salaryDay             Int      @default(1) // Day of month salary arrives (1-28)
+  aiAnalysisModel       String?  // Preferred OpenRouter model for AI Analysis
   createdAt             DateTime @default(now())
   updatedAt             DateTime @updatedAt
 

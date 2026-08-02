@@ -46,6 +46,7 @@ export default async function AiAnalysisPage({ searchParams }: AiAnalysisPagePro
     period: requestedPeriod,
     year: selectedYear,
     month: requestedPeriod === "MONTHLY" ? selectedMonth : undefined,
+    model: data.defaultModel || undefined,
   };
   const isDefaultPeriod =
     initialRequest.period === "MONTHLY"

@@ -1,3 +1,5 @@
+import type { AiModelOption } from "@/types/ai-model";
+
 export const AI_REPORT_TYPES = [
   "SPENDING_REVIEW",
   "SAVINGS_REVIEW",
@@ -64,6 +66,7 @@ export interface AiReportRecord {
   periodEnd: string;
   transactionCount: number;
   currency: string;
+  model: string | null;
   content: AiReportContent;
   createdAt: string;
 }
@@ -74,6 +77,7 @@ export interface AiReportListItem {
   period: AiReportPeriod;
   year: number;
   month: number | null;
+  model: string | null;
   createdAt: string;
 }
 
@@ -87,6 +91,8 @@ export interface AiAnalysisPageData {
   currentYear: number;
   currentMonth: number;
   availableYears: number[];
+  availableModels: AiModelOption[];
+  defaultModel: string | null;
   reportStorageReady: boolean;
   initialPreview: AiPeriodPreview;
   recentReports: AiReportListItem[];
@@ -98,7 +104,16 @@ export interface AiReportRequest {
   period: AiReportPeriod;
   year: number;
   month?: number;
+  model?: string;
 }
+
+export interface AiReportGenerationRequest extends AiReportRequest {
+  model: string;
+}
+
+export type GenerateAiReportResult =
+  | { success: true; report: AiReportRecord }
+  | { success: false; error: string };
 
 export const AI_REPORT_TYPE_LABELS: Record<AiReportType, string> = {
   SPENDING_REVIEW: "Spending Review",

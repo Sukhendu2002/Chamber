@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import {
   IconAlertCircle,
   IconChartDots,
@@ -47,7 +48,6 @@ import {
 import { cn } from "@/lib/utils";
 import {
   deleteAllUserData,
-  exportExpensesCSV,
   updateUserSettings,
 } from "@/lib/actions/settings";
 import {
@@ -270,7 +270,6 @@ export function SettingsForm({ initialSettings, availableModels }: SettingsFormP
     useState<SettingsSectionId>("general");
   const [loading, setLoading] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
-  const [exporting, setExporting] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const { isDemoMode, toggleDemoMode } = useDemoMode();
 
@@ -298,42 +297,6 @@ export function SettingsForm({ initialSettings, availableModels }: SettingsFormP
 
   const handleSectionClick = (sectionId: SettingsSectionId) => {
     setActiveSection(sectionId);
-  };
-
-  const handleExport = async () => {
-    setExporting(true);
-    try {
-      const data = await exportExpensesCSV();
-
-      const expenseBlob = new Blob([data.expenses], { type: "text/csv" });
-      const expenseUrl = URL.createObjectURL(expenseBlob);
-      const expenseLink = document.createElement("a");
-      expenseLink.href = expenseUrl;
-      expenseLink.download = `expenses_${new Date().toISOString().split("T")[0]}.csv`;
-      expenseLink.click();
-      URL.revokeObjectURL(expenseUrl);
-
-      const subscriptionBlob = new Blob([data.subscriptions], {
-        type: "text/csv",
-      });
-      const subscriptionUrl = URL.createObjectURL(subscriptionBlob);
-      const subscriptionLink = document.createElement("a");
-      subscriptionLink.href = subscriptionUrl;
-      subscriptionLink.download = `subscriptions_${new Date().toISOString().split("T")[0]}.csv`;
-      subscriptionLink.click();
-      URL.revokeObjectURL(subscriptionUrl);
-
-      if (data.expensesTruncated) {
-        window.alert(
-          `The export contains the newest ${data.exportedExpenseCount.toLocaleString()} expenses. ` +
-            "Use a filtered export for older records."
-        );
-      }
-    } catch (error) {
-      console.error("Failed to export data:", error);
-    } finally {
-      setExporting(false);
-    }
   };
 
   const handleDeleteAll = async () => {
@@ -806,22 +769,14 @@ export function SettingsForm({ initialSettings, availableModels }: SettingsFormP
                 <div className="min-w-0">
                   <p className="text-xs font-medium">Export data</p>
                   <p className="mt-0.5 text-[0.6875rem] leading-4 text-muted-foreground">
-                    Expenses and subscriptions as CSV
+                    Full and selective exports in CSV, Excel, JSON, or PDF
                   </p>
                 </div>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="self-start sm:self-auto"
-                  onClick={handleExport}
-                  disabled={exporting}
-                >
-                  {exporting ? (
-                    <IconLoader2 className="animate-spin" />
-                  ) : (
+                <Button asChild variant="outline" size="sm" className="self-start sm:self-auto">
+                  <Link href="/import">
                     <IconDownload />
-                  )}
-                  {exporting ? "Exporting…" : "Export CSV"}
+                    Manage data
+                  </Link>
                 </Button>
               </div>
               <div className="flex min-h-16 flex-col gap-3 bg-destructive/[0.035] px-4 py-3 sm:flex-row sm:items-center sm:justify-between">

@@ -63,6 +63,7 @@ model Expense {
   repayment     Repayment?     @relation(fields: [repaymentId], references: [id], onDelete: SetNull)
   date          DateTime       @default(now())
   isVerified    Boolean        @default(false) // True if matched with Bank Statement
+  importFingerprint String?     // Stable fingerprint used to prevent duplicate bulk imports
   metadata      Json?          // Stores raw OCR text or debug info
   receiptUrl    String?        // Legacy single receipt URL (deprecated)
   receiptUrls   String[]       @default([]) // URLs to receipts/invoices stored in Cloudflare R2
@@ -74,6 +75,7 @@ model Expense {
   @@index([accountId])
   @@index([loanId])
   @@index([repaymentId])
+  @@unique([userId, importFingerprint])
 }
 
 model Tag {

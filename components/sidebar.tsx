@@ -68,7 +68,7 @@ const navGroups = [
     items: [
       { title: "Quick Capture", href: "/capture", icon: IconCamera },
       { title: "Receipts", href: "/receipts", icon: IconPhoto },
-      { title: "Import", href: "/import", icon: IconFileImport },
+      { title: "Data transfer", href: "/import", icon: IconFileImport },
       { title: "Telegram", href: "/telegram", icon: IconBrandTelegram },
     ],
   },
